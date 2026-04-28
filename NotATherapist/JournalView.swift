@@ -257,6 +257,7 @@ struct EntryDetailView: View {
     @EnvironmentObject private var appModel: AppViewModel
     let entry: JournalEntry
     @State private var activeDailyReview: DailyReview?
+    @State private var isReviewing = false
 
     var body: some View {
         ScrollView {
@@ -305,13 +306,18 @@ struct EntryDetailView: View {
                                     .foregroundStyle(.secondary)
                             }
                             Button {
-                                if let review = appModel.reviewDay(entry.date) {
-                                    activeDailyReview = review
+                                isReviewing = true
+                                Task {
+                                    if let review = await appModel.reviewDay(entry.date) {
+                                        activeDailyReview = review
+                                    }
+                                    isReviewing = false
                                 }
                             } label: {
-                                Label("Review this day", systemImage: "sparkle.magnifyingglass")
+                                Label(isReviewing ? "Reviewing" : "Review this day", systemImage: "sparkle.magnifyingglass")
                             }
                             .buttonStyle(PrimaryCapsuleButtonStyle())
+                            .disabled(isReviewing)
                         }
                     }
                 }

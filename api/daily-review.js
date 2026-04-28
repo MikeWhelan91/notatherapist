@@ -1,4 +1,4 @@
-const { createDailyReview } = require("../lib/api/reviewEngine");
+const { createAIDailyReview } = require("../lib/api/reviewEngine");
 const { handleEndpoint, readJSON, sendError, sendJSON } = require("../lib/api/response");
 const {
   normalizeDate,
@@ -16,7 +16,7 @@ module.exports = (req, res) => handleEndpoint(req, res, ["POST"], async () => {
     return;
   }
 
-  const review = createDailyReview({
+  const result = await createAIDailyReview({
     date: normalizeDate(body.date, new Date(entries[0].date)),
     entries,
     profile: normalizeProfile(body.profile),
@@ -25,6 +25,6 @@ module.exports = (req, res) => handleEndpoint(req, res, ["POST"], async () => {
 
   sendJSON(res, 200, {
     ok: true,
-    review
+    ...result
   });
 });

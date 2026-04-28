@@ -18,6 +18,7 @@ final class AppViewModel: ObservableObject {
     private let insightService = MockAIInsightService()
     private let weeklyReviewService = MockWeeklyReviewService()
     private let conversationService = MockConversationService()
+    private let apiService = NotATherapistAPIService()
 
     init(seedWithMockData: Bool = false) {
         let initialEntries = seedWithMockData ? MockData.entries : []
@@ -84,26 +85,41 @@ final class AppViewModel: ObservableObject {
     }
 
     @discardableResult
-    func reviewDay(_ date: Date) -> DailyReview? {
+    func reviewDay(_ date: Date) async -> DailyReview? {
         onboardingProfile = .current
         let dayEntries = entries(on: date)
-        guard var review = insightService.dailyReview(
-            for: date,
-            entries: dayEntries,
-            profile: onboardingProfile,
-            healthSummary: healthSummary
-        ) else { return nil }
+        guard dayEntries.isEmpty == false else { return nil }
 
-        if let existingIndex = dailyReviews.firstIndex(where: { Calendar.current.isDate($0.date, inSameDayAs: date) }) {
-            review.acceptedGoalID = dailyReviews[existingIndex].acceptedGoalID
-            dailyReviews[existingIndex] = review
-        } else {
-            dailyReviews.insert(review, at: 0)
+        let review: DailyReview
+        do {
+            review = try await apiService.dailyReview(
+                date: date,
+                entries: dayEntries,
+                profile: onboardingProfile,
+                healthSummary: healthSummary
+            )
+        } catch {
+            guard let fallback = insightService.dailyReview(
+                for: date,
+                entries: dayEntries,
+                profile: onboardingProfile,
+                healthSummary: healthSummary
+            ) else { return nil }
+            review = fallback
         }
 
-        replaceInsights(for: review)
-        weeklyReview = weeklyReviewService.latestReview(from: journalEntries, healthSummary: healthSummary)
-        return review
+        var storedReview = review
+
+        if let existingIndex = dailyReviews.firstIndex(where: { Calendar.current.isDate($0.date, inSameDayAs: date) }) {
+            storedReview.acceptedGoalID = dailyReviews[existingIndex].acceptedGoalID
+            dailyReviews[existingIndex] = storedReview
+        } else {
+            dailyReviews.insert(storedReview, at: 0)
+        }
+
+        replaceInsights(for: storedReview)
+        await refreshWeeklyReview()
+        return storedReview
     }
 
     @discardableResult
@@ -124,32 +140,90 @@ final class AppViewModel: ObservableObject {
         weeklyReview = weeklyReviewService.latestReview(from: journalEntries, healthSummary: summary)
     }
 
-    func startWeeklyConversation() -> Conversation {
+    func refreshWeeklyReview() async {
+        guard hasWeeklyReview else {
+            weeklyReview = weeklyReviewService.latestReview(from: journalEntries, healthSummary: healthSummary)
+            return
+        }
+
         onboardingProfile = .current
-        let conversation = conversationService.newWeeklyConversation(review: weeklyReview, profile: onboardingProfile)
+        do {
+            if let review = try await apiService.weeklyReview(
+                entries: journalEntries,
+                profile: onboardingProfile,
+                healthSummary: healthSummary
+            ) {
+                weeklyReview = review
+            }
+        } catch {
+            weeklyReview = weeklyReviewService.latestReview(from: journalEntries, healthSummary: healthSummary)
+        }
+    }
+
+    func startWeeklyConversation() async -> Conversation {
+        onboardingProfile = .current
+        await refreshWeeklyReview()
+
+        let conversation: Conversation
+        do {
+            conversation = try await apiService.startConversation(weeklyReview: weeklyReview, profile: onboardingProfile)
+        } catch {
+            conversation = conversationService.newWeeklyConversation(review: weeklyReview, profile: onboardingProfile)
+        }
+
         conversations.insert(conversation, at: 0)
         return conversation
     }
 
-    func sendMessage(_ text: String, in conversation: Conversation, action: String? = nil) -> Conversation {
+    func sendMessage(_ text: String, in conversation: Conversation, action: String? = nil) async -> Conversation {
         guard let index = conversations.firstIndex(where: { $0.id == conversation.id }) else { return conversation }
         var updated = conversations[index]
         guard updated.status == .active, updated.remainingTurns > 0 else { return updated }
 
         let displayText = action ?? text
         updated.messages.append(ConversationMessage(id: UUID(), sender: .user, text: displayText, date: Date()))
-        updated.remainingTurns -= 1
 
-        if action == "End for today" || updated.remainingTurns == 0 {
+        if action == "End for today" {
             updated.status = .ended
             updated.messages.append(ConversationMessage(id: UUID(), sender: .ai, text: "That's enough for today. Let it sit.", date: Date()))
         } else {
             onboardingProfile = .current
-            let reply = conversationService.reply(to: text, action: action, remainingTurns: updated.remainingTurns, profile: onboardingProfile)
+            let response: ConversationReplyResponse?
+            do {
+                response = try await apiService.reply(
+                    text: text,
+                    action: action,
+                    remainingTurns: updated.remainingTurns,
+                    conversation: updated,
+                    profile: onboardingProfile
+                )
+            } catch {
+                response = nil
+            }
+
+            let reply: String
+            if let response {
+                updated.remainingTurns = response.remainingTurns
+                updated.status = response.status
+                reply = response.reply
+                if let goal = response.suggestedGoal {
+                    reflectionGoals.insert(goal, at: 0)
+                    updated.preview = "Goal added: \(goal.title)"
+                }
+            } else {
+                updated.remainingTurns -= 1
+                if updated.remainingTurns == 0 {
+                    updated.status = .ended
+                    reply = "That's enough for today. Let it sit."
+                } else {
+                    reply = conversationService.reply(to: text, action: action, remainingTurns: updated.remainingTurns, profile: onboardingProfile)
+                }
+            }
+
             updated.messages.append(ConversationMessage(id: UUID(), sender: .ai, text: reply, date: Date()))
             updated.preview = reply
 
-            if action == "Give me one action" {
+            if action == "Give me one action", response?.suggestedGoal == nil {
                 let goal = addReflectionGoal(
                     title: "Finish one small unfinished thing",
                     reason: "Agreed during the weekly check-in.",

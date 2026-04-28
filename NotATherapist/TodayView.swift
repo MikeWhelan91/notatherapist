@@ -7,6 +7,7 @@ struct TodayView: View {
     @State private var showingWeekly = false
     @State private var showingSettings = false
     @State private var activeDailyReview: DailyReview?
+    @State private var isReviewingToday = false
 
     private var todayEntries: [JournalEntry] {
         appModel.entries(on: Date())
@@ -125,13 +126,22 @@ struct TodayView: View {
                                         .foregroundStyle(.secondary)
                                 }
                                 Button {
-                                    if let review = appModel.reviewDay(Date()) {
-                                        activeDailyReview = review
+                                    isReviewingToday = true
+                                    circleState = .thinking
+                                    Task {
+                                        if let review = await appModel.reviewDay(Date()) {
+                                            activeDailyReview = review
+                                        }
+                                        isReviewingToday = false
+                                        circleState = .responding
+                                        try? await Task.sleep(for: .milliseconds(450))
+                                        circleState = .idle
                                     }
                                 } label: {
-                                    Label("Review today", systemImage: "sparkle.magnifyingglass")
+                                    Label(isReviewingToday ? "Reviewing" : "Review today", systemImage: "sparkle.magnifyingglass")
                                 }
                                 .buttonStyle(PrimaryCapsuleButtonStyle())
+                                .disabled(isReviewingToday)
                             }
                         }
                     }

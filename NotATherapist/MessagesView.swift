@@ -4,6 +4,7 @@ struct MessagesView: View {
     @EnvironmentObject private var appModel: AppViewModel
     @EnvironmentObject private var router: AppRouter
     @State private var path: [Conversation] = []
+    @State private var isStartingConversation = false
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -34,11 +35,12 @@ struct MessagesView: View {
                                     .foregroundStyle(.secondary)
                                 if appModel.hasWeeklyReview {
                                     Button {
-                                        path.append(appModel.startWeeklyConversation())
+                                        startConversation()
                                     } label: {
-                                        Text("Start conversation")
+                                        Text(isStartingConversation ? "Starting" : "Start conversation")
                                     }
                                     .buttonStyle(PrimaryCapsuleButtonStyle())
+                                    .disabled(isStartingConversation)
                                 }
                             }
                         }
@@ -95,9 +97,21 @@ struct MessagesView: View {
             router.consumeWeeklyCheckIn()
             return
         }
-        let conversation = appModel.startWeeklyConversation()
-        path = [conversation]
-        router.consumeWeeklyCheckIn()
+        Task {
+            let conversation = await appModel.startWeeklyConversation()
+            path = [conversation]
+            router.consumeWeeklyCheckIn()
+        }
+    }
+
+    private func startConversation() {
+        guard isStartingConversation == false else { return }
+        isStartingConversation = true
+        Task {
+            let conversation = await appModel.startWeeklyConversation()
+            path.append(conversation)
+            isStartingConversation = false
+        }
     }
 }
 
@@ -225,7 +239,7 @@ struct ConversationView: View {
 
         Task {
             try? await Task.sleep(for: .milliseconds(450))
-            conversation = appModel.sendMessage(rawText, in: conversation, action: action)
+            conversation = await appModel.sendMessage(rawText, in: conversation, action: action)
             circleState = conversation.status == .ended ? .settled : .responding
             isGenerating = false
             if conversation.status == .active {

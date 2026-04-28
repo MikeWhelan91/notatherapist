@@ -128,6 +128,9 @@ private struct WeeklyReviewContainerView: View {
             }
         }
         .safeAreaPadding(.bottom, 86)
+        .task {
+            await appModel.refreshWeeklyReview()
+        }
     }
 }
 

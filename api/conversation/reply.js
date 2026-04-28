@@ -1,4 +1,4 @@
-const { replyToConversation } = require("../../lib/api/conversationEngine");
+const { replyToAIConversation } = require("../../lib/api/conversationEngine");
 const { handleEndpoint, readJSON, sendError, sendJSON } = require("../../lib/api/response");
 const { cleanString, normalizeProfile } = require("../../lib/api/validation");
 
@@ -12,11 +12,12 @@ module.exports = (req, res) => handleEndpoint(req, res, ["POST"], async () => {
     return;
   }
 
-  const result = replyToConversation({
+  const result = await replyToAIConversation({
     text,
     action,
     remainingTurns: body.remainingTurns,
-    profile: normalizeProfile(body.profile)
+    profile: normalizeProfile(body.profile),
+    conversation: body.conversation
   });
 
   sendJSON(res, 200, {
