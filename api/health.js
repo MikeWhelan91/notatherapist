@@ -6,7 +6,7 @@ const { hasKV } = require("../lib/api/kvStore");
 module.exports = (req, res) => handleEndpoint(req, res, ["GET"], async () => {
   sendJSON(res, 200, {
     ok: true,
-    service: "notatherapist-api",
+    service: "anchor-api",
     status: "healthy",
     ai: hasOpenAIConfig() ? "configured" : "fallback",
     model: modelName(),

@@ -58,7 +58,7 @@ struct LocalAppStore {
 
         let data = try encoder.encode(snapshot)
         let exportURL = fileManager.temporaryDirectory
-            .appending(path: "not-a-therapist-export-\(Int(Date().timeIntervalSince1970)).json")
+            .appending(path: "anchor-export-\(Int(Date().timeIntervalSince1970)).json")
         try data.write(to: exportURL, options: [.atomic])
         return exportURL
     }

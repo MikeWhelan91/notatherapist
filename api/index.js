@@ -5,7 +5,7 @@ const { appAttestEnabled } = require("../lib/api/appAttest");
 module.exports = (req, res) => handleEndpoint(req, res, ["GET"], async () => {
   sendJSON(res, 200, {
     ok: true,
-    service: "notatherapist-api",
+    service: "anchor-api",
     ai: hasOpenAIConfig() ? "configured" : "fallback",
     model: modelName(),
     appAttest: appAttestEnabled() ? "enforced" : "optional",

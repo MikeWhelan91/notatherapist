@@ -15,7 +15,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "68DB6128A93D1EE3A8284DC2"
-               BuildableName = "Not a Therapist.app"
+               BuildableName = "Anchor.app"
                BlueprintName = "NotATherapist"
                ReferencedContainer = "container:NotATherapist.xcodeproj">
             </BuildableReference>
@@ -31,7 +31,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "68DB6128A93D1EE3A8284DC2"
-            BuildableName = "Not a Therapist.app"
+            BuildableName = "Anchor.app"
             BlueprintName = "NotATherapist"
             ReferencedContainer = "container:NotATherapist.xcodeproj">
          </BuildableReference>
@@ -54,7 +54,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "68DB6128A93D1EE3A8284DC2"
-            BuildableName = "Not a Therapist.app"
+            BuildableName = "Anchor.app"
             BlueprintName = "NotATherapist"
             ReferencedContainer = "container:NotATherapist.xcodeproj">
          </BuildableReference>
@@ -71,7 +71,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "68DB6128A93D1EE3A8284DC2"
-            BuildableName = "Not a Therapist.app"
+            BuildableName = "Anchor.app"
             BlueprintName = "NotATherapist"
             ReferencedContainer = "container:NotATherapist.xcodeproj">
          </BuildableReference>

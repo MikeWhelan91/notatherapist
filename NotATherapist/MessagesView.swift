@@ -14,7 +14,7 @@ struct MessagesView: View {
                         HStack(spacing: 14) {
                             AICircleView(state: .idle, size: 48, strokeWidth: 2.2)
                             VStack(alignment: .leading, spacing: 3) {
-                                Text("Not a Therapist")
+                                Text("Anchor")
                                     .font(.headline)
                                 Text("A guided space to reflect")
                                     .font(.caption)
@@ -183,7 +183,7 @@ struct ConversationView: View {
         HStack(spacing: 12) {
             AICircleView(state: circleState, size: 36, strokeWidth: 2)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Not a Therapist")
+                Text("Anchor")
                     .font(.subheadline.weight(.semibold))
                 Text(conversation.status == .ended ? "Settled" : "\(conversation.remainingTurns) replies left today")
                     .font(.caption)

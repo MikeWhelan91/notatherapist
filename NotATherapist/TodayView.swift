@@ -284,7 +284,7 @@ struct SettingsView: View {
         NavigationStack {
             List {
                 Section("About") {
-                    LabeledContent("App", value: "Not a Therapist")
+                    LabeledContent("App", value: "Anchor")
                     LabeledContent("Mode", value: "Local-first")
                     LabeledContent("AI", value: appModel.aiConnection.label)
                     Button("Check AI connection") {

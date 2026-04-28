@@ -14,11 +14,11 @@ targets:
       - NotATherapist
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.notatherapist
-        PRODUCT_NAME: Not a Therapist
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.anchor
+        PRODUCT_NAME: Anchor
         CODE_SIGN_ENTITLEMENTS: NotATherapist/NotATherapist.entitlements
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: Not a Therapist
+        INFOPLIST_KEY_CFBundleDisplayName: Anchor
         INFOPLIST_KEY_NSHealthShareUsageDescription: Optional Apple Health access helps spot simple patterns between sleep, steps, mood, and journal entries.
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES

@@ -142,7 +142,7 @@ struct OnboardingView: View {
     private var welcomePage: some View {
         VStack(spacing: 8) {
             VStack(spacing: 8) {
-                Text("Not a Therapist")
+                Text("Anchor")
                     .font(.largeTitle.weight(.semibold))
                     .multilineTextAlignment(.center)
                 Text("A calmer way to reflect.")
