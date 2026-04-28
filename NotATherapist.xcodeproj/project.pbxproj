@@ -282,7 +282,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.anchor;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mikewhelan.anchor;
 				PRODUCT_NAME = Anchor;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -307,7 +307,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.anchor;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mikewhelan.anchor;
 				PRODUCT_NAME = Anchor;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;

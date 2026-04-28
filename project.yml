@@ -14,7 +14,7 @@ targets:
       - NotATherapist
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.anchor
+        PRODUCT_BUNDLE_IDENTIFIER: com.mikewhelan.anchor
         PRODUCT_NAME: Anchor
         CODE_SIGN_ENTITLEMENTS: NotATherapist/NotATherapist.entitlements
         GENERATE_INFOPLIST_FILE: YES
