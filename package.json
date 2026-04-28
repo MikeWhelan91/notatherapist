@@ -1,0 +1,12 @@
+{
+  "name": "notatherapist-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test": "node tests/api.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
