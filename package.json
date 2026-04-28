@@ -8,5 +8,8 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "node-app-attest": "^1.0.1"
   }
 }

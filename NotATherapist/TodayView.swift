@@ -319,6 +319,48 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("iCloud") {
+                    Toggle(
+                        "Sync with iCloud",
+                        isOn: Binding(
+                            get: { appModel.isICloudSyncEnabled },
+                            set: { enabled in
+                                appModel.isICloudSyncEnabled = enabled
+                                Task {
+                                    if enabled {
+                                        await appModel.refreshICloudStatus()
+                                        await appModel.pushToICloud()
+                                    }
+                                }
+                            }
+                        )
+                    )
+
+                    LabeledContent("Status", value: appModel.iCloudSyncState.label)
+
+                    HStack {
+                        Button("Pull from iCloud") {
+                            Task {
+                                await appModel.pullFromICloud()
+                            }
+                        }
+                        .disabled(appModel.isICloudSyncEnabled == false)
+
+                        Spacer()
+
+                        Button("Push now") {
+                            Task {
+                                await appModel.pushToICloud()
+                            }
+                        }
+                        .disabled(appModel.isICloudSyncEnabled == false)
+                    }
+
+                    Text("Uses your Apple Account and the app's private iCloud database. No app account is created.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 Section("Weekly review reminder") {
                     Toggle(
                         "Notify when review is ready",
@@ -391,6 +433,7 @@ struct SettingsView: View {
             .task {
                 await notificationService.refreshAuthorizationStatus()
                 await appModel.refreshAIConnection()
+                await appModel.refreshICloudStatus()
             }
             .confirmationDialog(
                 "Delete journal data?",

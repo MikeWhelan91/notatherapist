@@ -1,9 +1,11 @@
 const { replyToAIConversation } = require("../../lib/api/conversationEngine");
+const { verifyProtectedRequest } = require("../../lib/api/appAttest");
 const { handleEndpoint, readJSON, sendError, sendJSON } = require("../../lib/api/response");
 const { cleanString, normalizeProfile } = require("../../lib/api/validation");
 
 module.exports = (req, res) => handleEndpoint(req, res, ["POST"], async () => {
   const body = await readJSON(req);
+  await verifyProtectedRequest(req, req.rawBody, body);
   const text = cleanString(body.text);
   const action = cleanString(body.action);
 

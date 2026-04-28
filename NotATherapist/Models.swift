@@ -290,6 +290,24 @@ enum AIConnectionState: Equatable {
     }
 }
 
+enum ICloudSyncState: Equatable {
+    case off
+    case checking
+    case available
+    case synced(Date)
+    case unavailable(String)
+
+    var label: String {
+        switch self {
+        case .off: "Off"
+        case .checking: "Checking"
+        case .available: "Available"
+        case .synced(let date): "Synced \(date.formatted(date: .omitted, time: .shortened))"
+        case .unavailable(let reason): reason
+        }
+    }
+}
+
 extension Double {
     var cleanHours: String {
         "\(String(format: "%.1f", self))h"

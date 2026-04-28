@@ -3,6 +3,7 @@ xcuserdata/
 *.xcuserstate
 DerivedData/
 build/
+node_modules/
 *.moved-aside
 *.hmap
 *.ipa

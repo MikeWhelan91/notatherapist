@@ -15,12 +15,15 @@ final class AppViewModel: ObservableObject {
     @Published var reflectionGoals: [ReflectionGoal] = []
     @Published var dailyReviews: [DailyReview] = []
     @Published var aiConnection: AIConnectionState = .unknown
+    @Published var iCloudSyncState: ICloudSyncState = .off
 
     private let insightService = MockAIInsightService()
     private let weeklyReviewService = MockWeeklyReviewService()
     private let conversationService = MockConversationService()
     private let apiService = NotATherapistAPIService()
     private let localStore = LocalAppStore()
+    private let iCloudSyncService = ICloudSyncService.shared
+    private let iCloudSyncEnabledKey = "iCloudSyncEnabled"
 
     init(seedWithMockData: Bool = false) {
         if seedWithMockData {
@@ -327,6 +330,50 @@ final class AppViewModel: ObservableObject {
         localStore.delete()
     }
 
+    var isICloudSyncEnabled: Bool {
+        get { UserDefaults.standard.bool(forKey: iCloudSyncEnabledKey) }
+        set {
+            UserDefaults.standard.set(newValue, forKey: iCloudSyncEnabledKey)
+            iCloudSyncState = newValue ? .checking : .off
+        }
+    }
+
+    func refreshICloudStatus() async {
+        guard isICloudSyncEnabled else {
+            iCloudSyncState = .off
+            return
+        }
+        iCloudSyncState = .checking
+        iCloudSyncState = await iCloudSyncService.accountStatus()
+    }
+
+    func pushToICloud() async {
+        guard isICloudSyncEnabled else { return }
+        iCloudSyncState = .checking
+        do {
+            let date = try await iCloudSyncService.push(snapshot)
+            iCloudSyncState = .synced(date)
+        } catch {
+            iCloudSyncState = .unavailable("iCloud sync failed")
+        }
+    }
+
+    func pullFromICloud() async {
+        guard isICloudSyncEnabled else { return }
+        iCloudSyncState = .checking
+        do {
+            if let snapshot = try await iCloudSyncService.pull() {
+                apply(snapshot)
+                saveSnapshot()
+                iCloudSyncState = .synced(Date())
+            } else {
+                iCloudSyncState = .available
+            }
+        } catch {
+            iCloudSyncState = .unavailable("No iCloud data")
+        }
+    }
+
     private func checkForGoalProgress(in entry: JournalEntry) {
         let lowerText = entry.text.lowercased()
         let progressWords = ["done", "finished", "closed", "sorted", "sent", "completed"]
@@ -371,6 +418,22 @@ final class AppViewModel: ObservableObject {
 
     private func saveSnapshot() {
         localStore.save(snapshot)
+        if isICloudSyncEnabled {
+            Task {
+                await pushToICloud()
+            }
+        }
+    }
+
+    private func apply(_ snapshot: AppSnapshot) {
+        selectedMood = snapshot.selectedMood
+        journalEntries = snapshot.journalEntries
+        insights = snapshot.insights
+        conversations = snapshot.conversations
+        weeklyReview = snapshot.weeklyReview
+        healthSummary = snapshot.healthSummary
+        reflectionGoals = snapshot.reflectionGoals
+        dailyReviews = snapshot.dailyReviews
     }
 
     private func replaceInsights(for review: DailyReview) {

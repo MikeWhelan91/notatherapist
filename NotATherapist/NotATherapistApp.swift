@@ -59,6 +59,7 @@ struct MainTabView: View {
             await healthKitManager.refreshIfPossible()
             appModel.updateHealthSummary(healthKitManager.summary)
             await appModel.refreshAIConnection()
+            await appModel.refreshICloudStatus()
         }
         .onChange(of: healthKitManager.summary) { _, summary in
             appModel.updateHealthSummary(summary)

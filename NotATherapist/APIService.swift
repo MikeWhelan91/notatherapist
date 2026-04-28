@@ -8,9 +8,11 @@ enum NotATherapistAPIError: Error {
 struct NotATherapistAPIService {
     private let baseURL = URL(string: "https://notatherapist.vercel.app")!
     private let session: URLSession
+    private let appAttestService: AppAttestService
 
-    init(session: URLSession = .shared) {
+    init(session: URLSession = .shared, appAttestService: AppAttestService = .shared) {
         self.session = session
+        self.appAttestService = appAttestService
     }
 
     func dailyReview(date: Date, entries: [JournalEntry], profile: OnboardingProfile, healthSummary: HealthSummary?) async throws -> DailyReview {
@@ -70,9 +72,17 @@ struct NotATherapistAPIService {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 20
 
+        let requestBody = try await attestableBody(body)
+
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        request.httpBody = try encoder.encode(body)
+        let payload = try encoder.encode(requestBody)
+        request.httpBody = payload
+
+        let attestHeaders = await appAttestService.assertionHeaders(for: payload)
+        attestHeaders.forEach { key, value in
+            request.setValue(value, forHTTPHeaderField: key)
+        }
 
         let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -90,6 +100,26 @@ struct NotATherapistAPIService {
         }
 
         return try decoder.decode(ResponseBody.self, from: data)
+    }
+
+    private func attestableBody<RequestBody: Encodable>(_ body: RequestBody) async throws -> AttestableRequest<RequestBody> {
+        let challenge = try? await appAttestService.challenge()
+        return AttestableRequest(attestChallenge: challenge, payload: body)
+    }
+}
+
+private struct AttestableRequest<Payload: Encodable>: Encodable {
+    let attestChallenge: String?
+    let payload: Payload
+
+    func encode(to encoder: Encoder) throws {
+        try payload.encode(to: encoder)
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(attestChallenge, forKey: .attestChallenge)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case attestChallenge
     }
 }
 
