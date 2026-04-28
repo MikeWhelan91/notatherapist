@@ -3,6 +3,7 @@ const { handleEndpoint, readJSON, sendError, sendJSON } = require("../lib/api/re
 const {
   normalizeDate,
   normalizeEntries,
+  normalizeGoals,
   normalizeHealthSummary,
   normalizeProfile
 } = require("../lib/api/validation");
@@ -20,7 +21,8 @@ module.exports = (req, res) => handleEndpoint(req, res, ["POST"], async () => {
     date: normalizeDate(body.date, new Date(entries[0].date)),
     entries,
     profile: normalizeProfile(body.profile),
-    healthSummary: normalizeHealthSummary(body.healthSummary)
+    healthSummary: normalizeHealthSummary(body.healthSummary),
+    goals: normalizeGoals(body.goals)
   });
 
   sendJSON(res, 200, {

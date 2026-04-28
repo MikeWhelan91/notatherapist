@@ -14,15 +14,36 @@ struct NotATherapistAPIService {
     }
 
     func dailyReview(date: Date, entries: [JournalEntry], profile: OnboardingProfile, healthSummary: HealthSummary?) async throws -> DailyReview {
-        let request = DailyReviewRequest(date: date, entries: entries, profile: profile, healthSummary: healthSummary)
+        let request = DailyReviewRequest(date: date, entries: entries, profile: profile, healthSummary: healthSummary, goals: [])
         let response: DailyReviewResponse = try await post("/api/daily-review", body: request)
         return response.review
     }
 
-    func weeklyReview(entries: [JournalEntry], profile: OnboardingProfile, healthSummary: HealthSummary?) async throws -> WeeklyReview? {
-        let request = WeeklyReviewRequest(entries: entries, profile: profile, healthSummary: healthSummary)
+    func dailyReview(date: Date, entries: [JournalEntry], profile: OnboardingProfile, healthSummary: HealthSummary?, goals: [ReflectionGoal]) async throws -> DailyReview {
+        let request = DailyReviewRequest(date: date, entries: entries, profile: profile, healthSummary: healthSummary, goals: goals)
+        let response: DailyReviewResponse = try await post("/api/daily-review", body: request)
+        return response.review
+    }
+
+    func weeklyReview(entries: [JournalEntry], profile: OnboardingProfile, healthSummary: HealthSummary?, goals: [ReflectionGoal]) async throws -> WeeklyReview? {
+        let request = WeeklyReviewRequest(entries: entries, profile: profile, healthSummary: healthSummary, goals: goals)
         let response: WeeklyReviewResponse = try await post("/api/weekly-review", body: request)
         return response.weeklyReview
+    }
+
+    func health() async throws -> APIHealthResponse {
+        var request = URLRequest(url: baseURL.appending(path: "/api/health"))
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.timeoutInterval = 12
+
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, (200..<300).contains(httpResponse.statusCode) else {
+            throw NotATherapistAPIError.invalidResponse
+        }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(APIHealthResponse.self, from: data)
     }
 
     func startConversation(weeklyReview: WeeklyReview, profile: OnboardingProfile) async throws -> Conversation {
@@ -77,6 +98,7 @@ private struct DailyReviewRequest: Encodable {
     let entries: [JournalEntry]
     let profile: OnboardingProfile
     let healthSummary: HealthSummary?
+    let goals: [ReflectionGoal]
 }
 
 private struct DailyReviewResponse: Decodable {
@@ -89,6 +111,7 @@ private struct WeeklyReviewRequest: Encodable {
     let entries: [JournalEntry]
     let profile: OnboardingProfile
     let healthSummary: HealthSummary?
+    let goals: [ReflectionGoal]
 }
 
 private struct WeeklyReviewResponse: Decodable {
@@ -128,6 +151,15 @@ struct ConversationReplyResponse: Decodable {
     let userMessage: String?
     let suggestedGoal: ReflectionGoal?
     let actions: [String]
+}
+
+struct APIHealthResponse: Decodable {
+    let ok: Bool
+    let service: String
+    let status: String
+    let ai: String
+    let model: String
+    let timestamp: Date
 }
 
 private struct APIErrorResponse: Decodable {

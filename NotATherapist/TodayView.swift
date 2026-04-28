@@ -277,13 +277,21 @@ struct SettingsView: View {
     @EnvironmentObject private var healthKitManager: HealthKitManager
     @EnvironmentObject private var notificationService: NotificationService
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = true
+    @State private var exportURL: URL?
+    @State private var showingDeleteConfirmation = false
 
     var body: some View {
         NavigationStack {
             List {
                 Section("About") {
                     LabeledContent("App", value: "Not a Therapist")
-                    LabeledContent("Mode", value: "Local prototype")
+                    LabeledContent("Mode", value: "Local-first")
+                    LabeledContent("AI", value: appModel.aiConnection.label)
+                    Button("Check AI connection") {
+                        Task {
+                            await appModel.refreshAIConnection()
+                        }
+                    }
                 }
 
                 Section("Scope") {
@@ -357,11 +365,45 @@ struct SettingsView: View {
                         dismiss()
                     }
                 }
+
+                Section("Privacy") {
+                    Text("Journal data is stored locally on this device. Reviews are sent to the API only when you request them.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Button("Export local data") {
+                        exportURL = appModel.exportLocalData()
+                    }
+
+                    if let exportURL {
+                        ShareLink(item: exportURL) {
+                            Label("Share export", systemImage: "square.and.arrow.up")
+                        }
+                    }
+
+                    Button("Delete journal data", role: .destructive) {
+                        showingDeleteConfirmation = true
+                    }
+                }
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .task {
                 await notificationService.refreshAuthorizationStatus()
+                await appModel.refreshAIConnection()
+            }
+            .confirmationDialog(
+                "Delete journal data?",
+                isPresented: $showingDeleteConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Delete journal data", role: .destructive) {
+                    appModel.deleteLocalData()
+                    exportURL = nil
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This removes entries, reviews, goals, conversations, insights, and saved Health context from this device.")
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {

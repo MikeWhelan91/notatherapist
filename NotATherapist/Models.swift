@@ -272,6 +272,24 @@ enum AICircleState: Equatable {
     case settled
 }
 
+enum AIConnectionState: Equatable {
+    case unknown
+    case checking
+    case connected(model: String)
+    case fallback(model: String)
+    case unavailable
+
+    var label: String {
+        switch self {
+        case .unknown: "Not checked"
+        case .checking: "Checking"
+        case .connected(let model): "Connected · \(model)"
+        case .fallback(let model): "Fallback · \(model)"
+        case .unavailable: "Unavailable"
+        }
+    }
+}
+
 extension Double {
     var cleanHours: String {
         "\(String(format: "%.1f", self))h"

@@ -14,17 +14,34 @@ final class AppViewModel: ObservableObject {
     @Published var healthSummary: HealthSummary?
     @Published var reflectionGoals: [ReflectionGoal] = []
     @Published var dailyReviews: [DailyReview] = []
+    @Published var aiConnection: AIConnectionState = .unknown
 
     private let insightService = MockAIInsightService()
     private let weeklyReviewService = MockWeeklyReviewService()
     private let conversationService = MockConversationService()
     private let apiService = NotATherapistAPIService()
+    private let localStore = LocalAppStore()
 
     init(seedWithMockData: Bool = false) {
-        let initialEntries = seedWithMockData ? MockData.entries : []
-        journalEntries = initialEntries
-        insights = seedWithMockData ? MockData.insights : []
-        weeklyReview = weeklyReviewService.latestReview(from: initialEntries)
+        if seedWithMockData {
+            let initialEntries = MockData.entries
+            journalEntries = initialEntries
+            insights = MockData.insights
+            weeklyReview = weeklyReviewService.latestReview(from: initialEntries)
+        } else if let snapshot = localStore.load() {
+            selectedMood = snapshot.selectedMood
+            journalEntries = snapshot.journalEntries
+            insights = snapshot.insights
+            conversations = snapshot.conversations
+            weeklyReview = snapshot.weeklyReview
+            healthSummary = snapshot.healthSummary
+            reflectionGoals = snapshot.reflectionGoals
+            dailyReviews = snapshot.dailyReviews
+        } else {
+            journalEntries = []
+            insights = []
+            weeklyReview = weeklyReviewService.latestReview(from: [])
+        }
     }
 
     var latestInsight: Insight? {
@@ -77,6 +94,7 @@ final class AppViewModel: ObservableObject {
         checkForGoalProgress(in: entry)
         weeklyReview = weeklyReviewService.latestReview(from: journalEntries, healthSummary: healthSummary)
         selectedMood = mood
+        saveSnapshot()
         return entry
     }
 
@@ -96,7 +114,8 @@ final class AppViewModel: ObservableObject {
                 date: date,
                 entries: dayEntries,
                 profile: onboardingProfile,
-                healthSummary: healthSummary
+                healthSummary: healthSummary,
+                goals: reflectionGoals
             )
         } catch {
             guard let fallback = insightService.dailyReview(
@@ -119,6 +138,7 @@ final class AppViewModel: ObservableObject {
 
         replaceInsights(for: storedReview)
         await refreshWeeklyReview()
+        saveSnapshot()
         return storedReview
     }
 
@@ -132,12 +152,14 @@ final class AppViewModel: ObservableObject {
         if let index = dailyReviews.firstIndex(where: { $0.id == review.id }) {
             dailyReviews[index].acceptedGoalID = goal.id
         }
+        saveSnapshot()
         return goal
     }
 
     func updateHealthSummary(_ summary: HealthSummary?) {
         healthSummary = summary
         weeklyReview = weeklyReviewService.latestReview(from: journalEntries, healthSummary: summary)
+        saveSnapshot()
     }
 
     func refreshWeeklyReview() async {
@@ -151,13 +173,15 @@ final class AppViewModel: ObservableObject {
             if let review = try await apiService.weeklyReview(
                 entries: journalEntries,
                 profile: onboardingProfile,
-                healthSummary: healthSummary
+                healthSummary: healthSummary,
+                goals: reflectionGoals
             ) {
                 weeklyReview = review
             }
         } catch {
             weeklyReview = weeklyReviewService.latestReview(from: journalEntries, healthSummary: healthSummary)
         }
+        saveSnapshot()
     }
 
     func startWeeklyConversation() async -> Conversation {
@@ -172,6 +196,7 @@ final class AppViewModel: ObservableObject {
         }
 
         conversations.insert(conversation, at: 0)
+        saveSnapshot()
         return conversation
     }
 
@@ -242,6 +267,7 @@ final class AppViewModel: ObservableObject {
         }
 
         conversations[index] = updated
+        saveSnapshot()
         return updated
     }
 
@@ -265,12 +291,40 @@ final class AppViewModel: ObservableObject {
             checkInPrompt: "How did this go: \(title.lowercased())?"
         )
         reflectionGoals.insert(goal, at: 0)
+        saveSnapshot()
         return goal
     }
 
     func toggleGoal(_ goal: ReflectionGoal) {
         guard let index = reflectionGoals.firstIndex(where: { $0.id == goal.id }) else { return }
         reflectionGoals[index].status = reflectionGoals[index].status == .active ? .completed : .active
+        saveSnapshot()
+    }
+
+    func refreshAIConnection() async {
+        aiConnection = .checking
+        do {
+            let health = try await apiService.health()
+            aiConnection = health.ai == "configured" ? .connected(model: health.model) : .fallback(model: health.model)
+        } catch {
+            aiConnection = .unavailable
+        }
+    }
+
+    func exportLocalData() -> URL? {
+        try? localStore.export(snapshot)
+    }
+
+    func deleteLocalData() {
+        journalEntries = []
+        insights = []
+        conversations = []
+        weeklyReview = weeklyReviewService.latestReview(from: [])
+        healthSummary = nil
+        reflectionGoals = []
+        dailyReviews = []
+        selectedMood = .okay
+        localStore.delete()
     }
 
     private func checkForGoalProgress(in entry: JournalEntry) {
@@ -300,6 +354,23 @@ final class AppViewModel: ObservableObject {
             ),
             at: 0
         )
+    }
+
+    private var snapshot: AppSnapshot {
+        AppSnapshot(
+            selectedMood: selectedMood,
+            journalEntries: journalEntries,
+            insights: insights,
+            conversations: conversations,
+            weeklyReview: weeklyReview,
+            healthSummary: healthSummary,
+            reflectionGoals: reflectionGoals,
+            dailyReviews: dailyReviews
+        )
+    }
+
+    private func saveSnapshot() {
+        localStore.save(snapshot)
     }
 
     private func replaceInsights(for review: DailyReview) {
