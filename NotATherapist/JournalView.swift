@@ -1,0 +1,342 @@
+import SwiftUI
+
+struct JournalView: View {
+    @EnvironmentObject private var appModel: AppViewModel
+    @State private var showingNewEntry = false
+
+    var selectedEntries: [JournalEntry] {
+        appModel.entries(on: appModel.selectedJournalDate)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: AppSpacing.section) {
+                    WeekCalendarStripView(selectedDate: $appModel.selectedJournalDate, dates: appModel.currentWeekDates)
+                        .padding(.horizontal, -AppSpacing.page)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        SectionLabel(title: "Entries")
+                        if selectedEntries.isEmpty {
+                            ReferenceCard {
+                                ContentUnavailableView("No entries", systemImage: "book.closed", description: Text("Add a note for this date."))
+                                    .font(.subheadline)
+                            }
+                        } else {
+                            VStack(spacing: 10) {
+                                ForEach(selectedEntries) { entry in
+                                    NavigationLink {
+                                        EntryDetailView(entry: entry)
+                                    } label: {
+                                        ReferenceCard {
+                                            EntryRowView(entry: entry)
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(AppSpacing.page)
+                .padding(.bottom, 86)
+            }
+            .navigationTitle(appModel.selectedJournalDate.dayTitle)
+            .overlay(alignment: .bottomTrailing) {
+                Button {
+                    showingNewEntry = true
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(Color(.systemBackground))
+                        .frame(width: 54, height: 54)
+                        .background(Color.primary, in: Circle())
+                }
+                .padding(.trailing, 22)
+                .padding(.bottom, 22)
+                .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
+                .accessibilityLabel("New entry")
+            }
+            .sheet(isPresented: $showingNewEntry) {
+                NewEntryView(initialMood: appModel.selectedMood, date: appModel.selectedJournalDate)
+                    .presentationCornerRadius(28)
+            }
+        }
+    }
+}
+
+struct NewEntryView: View {
+    @EnvironmentObject private var appModel: AppViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var text = ""
+    @State private var mood: MoodLevel
+    @State private var entryType: EntryType = .quickThought
+    @State private var circleState: AICircleState = .idle
+    @State private var isSaving = false
+    @FocusState private var editorFocused: Bool
+
+    private let date: Date
+
+    init(initialMood: MoodLevel, date: Date = Date()) {
+        _mood = State(initialValue: initialMood)
+        self.date = date
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 16) {
+                HStack {
+                    Spacer()
+                    AICircleView(state: circleState, size: 92, strokeWidth: 3)
+                    Spacer()
+                }
+                .padding(.top, -10)
+                .padding(.bottom, -4)
+
+                MoodSelectorView(selectedMood: $mood)
+                    .padding(.top, -2)
+
+                EntryTypeSelectorView(selection: $entryType)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Label(entryType.label, systemImage: entryType.icon)
+                        .font(.subheadline.weight(.semibold))
+                    Text(entryTypePrompt)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                TextEditor(text: $text)
+                    .focused($editorFocused)
+                    .font(.body)
+                    .scrollContentBackground(.hidden)
+                    .padding(12)
+                    .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(AppSurface.stroke, lineWidth: 0.5)
+                    }
+                    .frame(minHeight: 260)
+                    .onChange(of: text) { _, newValue in
+                        guard isSaving == false else { return }
+                        circleState = newValue.isEmpty ? .idle : .typing
+                    }
+
+            }
+            .padding(AppSpacing.page)
+            .background(Color(.secondarySystemBackground))
+            .navigationTitle("What's on your mind?")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Close") { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Save") {
+                        save()
+                    }
+                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving)
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        editorFocused = false
+                    }
+                }
+            }
+        }
+    }
+
+    private var entryTypePrompt: String {
+        switch entryType {
+        case .quickThought: "A short note. No need to explain everything."
+        case .rant: "Write it raw. This is for getting it out, not making it tidy."
+        case .reflection: "Look at what happened and what it might mean."
+        case .win: "Record something that worked, however small."
+        }
+    }
+
+    private func save() {
+        editorFocused = false
+        isSaving = true
+        circleState = .thinking
+        Task {
+            try? await Task.sleep(for: .milliseconds(550))
+            _ = appModel.addEntry(text: text, mood: mood, type: entryType, date: date)
+            circleState = .responding
+            try? await Task.sleep(for: .milliseconds(300))
+            dismiss()
+        }
+    }
+}
+
+struct EntryTypeSelectorView: View {
+    @Binding var selection: EntryType
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(EntryType.allCases) { type in
+                Button {
+                    selection = type
+                } label: {
+                    VStack(spacing: 7) {
+                        Image(systemName: type.icon)
+                            .font(.subheadline.weight(.semibold))
+                        Text(type.label)
+                            .font(.caption.weight(.semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 62)
+                    .foregroundStyle(selection == type ? Color(.systemBackground) : .primary)
+                    .background(selection == type ? Color.primary : AppSurface.fill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(selection == type ? Color.primary : AppSurface.stroke, lineWidth: 0.5)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(type.label)
+            }
+        }
+    }
+}
+
+struct EntryTypePickerView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var selection: EntryType
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(EntryType.allCases) { type in
+                    Button {
+                        selection = type
+                        dismiss()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: type.icon)
+                                .font(.headline)
+                                .frame(width: 32, height: 32)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(type.label)
+                                    .font(.subheadline.weight(.semibold))
+                                Text(typeSubtitle(type))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if selection == type {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(.primary)
+                            }
+                        }
+                        .foregroundStyle(.primary)
+                    }
+                }
+            }
+            .navigationTitle("Entry type")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    private func typeSubtitle(_ type: EntryType) -> String {
+        switch type {
+        case .quickThought: "Capture a short thought"
+        case .rant: "Get something off your chest"
+        case .reflection: "Look at the day clearly"
+        case .win: "Record something that worked"
+        }
+    }
+}
+
+struct EntryDetailView: View {
+    @EnvironmentObject private var appModel: AppViewModel
+    let entry: JournalEntry
+    @State private var activeDailyReview: DailyReview?
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: AppSpacing.section) {
+                ReferenceCard {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(entry.date.formatted(date: .abbreviated, time: .shortened))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(entry.text)
+                            .font(.body)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        if let healthContext {
+                            Divider()
+                                .padding(.vertical, 2)
+                            Label(healthContext, systemImage: "moon")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                ReferenceCard {
+                    VStack(alignment: .leading, spacing: 12) {
+                        if let review = appModel.dailyReview(on: entry.date) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Included in daily review")
+                                    .font(.subheadline.weight(.semibold))
+                                Text(review.summary)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Button {
+                                activeDailyReview = review
+                            } label: {
+                                Label("Open review", systemImage: "doc.text.magnifyingglass")
+                            }
+                            .buttonStyle(PrimaryCapsuleButtonStyle())
+                        } else {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Saved")
+                                    .font(.subheadline.weight(.semibold))
+                                Text("Review this day when you are done writing.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Button {
+                                if let review = appModel.reviewDay(entry.date) {
+                                    activeDailyReview = review
+                                }
+                            } label: {
+                                Label("Review this day", systemImage: "sparkle.magnifyingglass")
+                            }
+                            .buttonStyle(PrimaryCapsuleButtonStyle())
+                        }
+                    }
+                }
+            }
+            .padding(AppSpacing.page)
+        }
+        .navigationTitle(entry.entryType.label)
+        .toolbar(.hidden, for: .tabBar)
+        .sheet(item: $activeDailyReview) { review in
+            NavigationStack {
+                DailyReviewView(review: review)
+            }
+            .presentationCornerRadius(28)
+        }
+    }
+
+    private var healthContext: String? {
+        let sleep = entry.sleepHours.map { "Slept \($0.cleanHours)" }
+        let steps = entry.steps.map { "\($0.formatted()) steps" }
+        let parts = [sleep, steps].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+}
+
+#Preview {
+    JournalView()
+        .environmentObject(AppViewModel())
+}
