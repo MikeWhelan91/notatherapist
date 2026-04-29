@@ -15,14 +15,14 @@ struct NotATherapistAPIService {
         self.appAttestService = appAttestService
     }
 
-    func dailyReview(date: Date, entries: [JournalEntry], profile: OnboardingProfile, healthSummary: HealthSummary?) async throws -> DailyReview {
-        let request = DailyReviewRequest(date: date, entries: entries, profile: profile, healthSummary: healthSummary, goals: [])
+    func dailyReview(date: Date, entries: [JournalEntry], recentEntries: [JournalEntry], profile: OnboardingProfile, healthSummary: HealthSummary?) async throws -> DailyReview {
+        let request = DailyReviewRequest(date: date, entries: entries, recentEntries: recentEntries, profile: profile, healthSummary: healthSummary, goals: [])
         let response: DailyReviewResponse = try await post("/api/daily-review", body: request)
         return response.review
     }
 
-    func dailyReview(date: Date, entries: [JournalEntry], profile: OnboardingProfile, healthSummary: HealthSummary?, goals: [ReflectionGoal]) async throws -> DailyReview {
-        let request = DailyReviewRequest(date: date, entries: entries, profile: profile, healthSummary: healthSummary, goals: goals)
+    func dailyReview(date: Date, entries: [JournalEntry], recentEntries: [JournalEntry], profile: OnboardingProfile, healthSummary: HealthSummary?, goals: [ReflectionGoal]) async throws -> DailyReview {
+        let request = DailyReviewRequest(date: date, entries: entries, recentEntries: recentEntries, profile: profile, healthSummary: healthSummary, goals: goals)
         let response: DailyReviewResponse = try await post("/api/daily-review", body: request)
         return response.review
     }
@@ -126,6 +126,7 @@ private struct AttestableRequest<Payload: Encodable>: Encodable {
 private struct DailyReviewRequest: Encodable {
     let date: Date
     let entries: [JournalEntry]
+    let recentEntries: [JournalEntry]
     let profile: OnboardingProfile
     let healthSummary: HealthSummary?
     let goals: [ReflectionGoal]

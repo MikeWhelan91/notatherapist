@@ -13,6 +13,7 @@ module.exports = (req, res) => handleEndpoint(req, res, ["POST"], async () => {
   const body = await readJSON(req);
   await verifyProtectedRequest(req, req.rawBody, body);
   const entries = normalizeEntries(body.entries || []);
+  const recentEntries = normalizeEntries(body.recentEntries || []);
 
   if (!entries.length) {
     sendError(res, 422, "no_entries", "Daily review needs at least one entry.");
@@ -22,6 +23,7 @@ module.exports = (req, res) => handleEndpoint(req, res, ["POST"], async () => {
   const result = await createAIDailyReview({
     date: normalizeDate(body.date, new Date(entries[0].date)),
     entries,
+    recentEntries,
     profile: normalizeProfile(body.profile),
     healthSummary: normalizeHealthSummary(body.healthSummary),
     goals: normalizeGoals(body.goals)

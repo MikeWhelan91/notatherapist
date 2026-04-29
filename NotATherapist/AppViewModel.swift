@@ -161,6 +161,7 @@ final class AppViewModel: ObservableObject {
         onboardingProfile = .current
         let dayEntries = entries(on: date)
         guard dayEntries.isEmpty == false else { return nil }
+        let recentEntries = recentContextEntries(for: date)
 
         let review: DailyReview
         if planTier == .premium {
@@ -168,6 +169,7 @@ final class AppViewModel: ObservableObject {
                 review = try await apiService.dailyReview(
                     date: date,
                     entries: dayEntries,
+                    recentEntries: recentEntries,
                     profile: onboardingProfile,
                     healthSummary: healthSummary,
                     goals: reflectionGoals
@@ -206,6 +208,17 @@ final class AppViewModel: ObservableObject {
         await refreshWeeklyReview()
         saveSnapshot()
         return storedReview
+    }
+
+    private func recentContextEntries(for date: Date) -> [JournalEntry] {
+        let start = Calendar.current.date(byAdding: .day, value: -14, to: date) ?? date
+        return journalEntries
+            .filter { entry in
+                entry.date >= start &&
+                entry.date <= date &&
+                Calendar.current.isDate(entry.date, inSameDayAs: date) == false
+            }
+            .sorted { $0.date < $1.date }
     }
 
     @discardableResult
