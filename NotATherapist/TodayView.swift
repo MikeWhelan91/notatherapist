@@ -294,6 +294,20 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("Plan") {
+                    LabeledContent("Weekly AI review", value: "Included")
+                    Toggle(
+                        "AI daily reviews",
+                        isOn: Binding(
+                            get: { appModel.isPremiumDailyReviewsEnabled },
+                            set: { appModel.isPremiumDailyReviewsEnabled = $0 }
+                        )
+                    )
+                    Text("When off, daily reviews stay on-device.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 Section("Scope") {
                     Text("This is a reflection tool. It is not therapy, and it does not diagnose, treat, cure, or replace professional help.")
                         .font(.subheadline)

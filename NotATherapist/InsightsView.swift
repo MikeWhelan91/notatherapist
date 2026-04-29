@@ -52,7 +52,7 @@ private struct InsightFeedView: View {
 
     var body: some View {
         ScrollView {
-            if appModel.insights.isEmpty {
+            if appModel.hasInsightContent == false {
                 ContentUnavailableView(
                     "No insights yet",
                     systemImage: "chart.line.uptrend.xyaxis",
@@ -64,6 +64,7 @@ private struct InsightFeedView: View {
                     insightSection("Recent insights", filter: { $0.category == "Recent" })
                     insightSection("Keep in mind", filter: { $0.category == "Patterns" })
                     insightSection("Suggestions", filter: { $0.category == "Suggestions" })
+                    localSignalsSection
                 }
                 .padding(AppSpacing.page)
             }
@@ -103,6 +104,35 @@ private struct InsightFeedView: View {
                             }
                         }
                         .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private var localSignalsSection: some View {
+        let signals = appModel.localSignals
+        return VStack(alignment: .leading, spacing: 8) {
+            if signals.isEmpty == false {
+                SectionLabel(title: "Local signals")
+                VStack(spacing: 10) {
+                    ForEach(signals) { insight in
+                        ReferenceCard {
+                            HStack(spacing: 12) {
+                                Image(systemName: insight.type.symbol)
+                                    .font(.body)
+                                    .frame(width: 28)
+                                    .foregroundStyle(.primary)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(insight.title)
+                                        .font(.subheadline.weight(.semibold))
+                                    Text(insight.body)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                            }
+                        }
                     }
                 }
             }
@@ -215,14 +245,66 @@ private struct AnalyticsView: View {
                 .padding(.top, 80)
             } else {
                 VStack(alignment: .leading, spacing: AppSpacing.section) {
+                    analyticsSummary
+                    localSignalSummary
+                    moodTrendChart
+                    checkInConsistencyChart
+                    moodDistributionChart
+                    topThemesChart
+                    entryTypeBreakdownChart
+                    reviewCadenceChart
+                    healthContextChart
+                }
+                .padding(AppSpacing.page)
+            }
+        }
+        .safeAreaPadding(.bottom, 86)
+    }
+
+    private var analyticsSummary: some View {
+        ReferenceCard {
+            HStack(spacing: 12) {
+                metric("Entries", value: "\(sortedEntries.count)")
+                Divider()
+                metric("Days", value: "\(uniqueDayCount)")
+                Divider()
+                metric("Mood", value: averageMoodLabel)
+                Divider()
+                metric("Reviews", value: "\(appModel.dailyReviews.count)")
+            }
+        }
+    }
+
+    private var localSignalSummary: some View {
+        let signals = appModel.localSignals
+        return Group {
+            if signals.isEmpty == false {
                 VStack(alignment: .leading, spacing: 8) {
-                    SectionLabel(title: "Mood trend")
+                    SectionLabel(title: "What Anchor can see offline")
                     ReferenceCard {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(signals.prefix(3)) { signal in
+                                Label(signal.body, systemImage: signal.type.symbol)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var moodTrendChart: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel(title: "Mood trend")
+            ReferenceCard {
                 Chart(sortedEntries) { entry in
                     LineMark(
                         x: .value("Date", entry.date),
                         y: .value("Mood", entry.mood.score)
                     )
+                    .interpolationMethod(.catmullRom)
                     PointMark(
                         x: .value("Date", entry.date),
                         y: .value("Mood", entry.mood.score)
@@ -231,12 +313,14 @@ private struct AnalyticsView: View {
                 .chartYScale(domain: 1...5)
                 .chartXAxis(.hidden)
                 .frame(height: 150)
-                    }
-                }
+            }
+        }
+    }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    SectionLabel(title: "Check-in consistency")
-                    ReferenceCard {
+    private var checkInConsistencyChart: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel(title: "Check-in consistency")
+            ReferenceCard {
                 Chart(appModel.currentWeekDates, id: \.self) { date in
                     BarMark(
                         x: .value("Day", date.shortDay),
@@ -246,12 +330,31 @@ private struct AnalyticsView: View {
                 }
                 .chartYAxis(.hidden)
                 .frame(height: 120)
-                    }
-                }
+            }
+        }
+    }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    SectionLabel(title: "Top themes")
-                    ReferenceCard {
+    private var moodDistributionChart: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel(title: "Mood spread")
+            ReferenceCard {
+                Chart(moodCounts, id: \.name) { item in
+                    BarMark(
+                        x: .value("Mood", item.name),
+                        y: .value("Entries", item.count)
+                    )
+                    .foregroundStyle(Color.primary)
+                }
+                .chartYAxis(.hidden)
+                .frame(height: 120)
+            }
+        }
+    }
+
+    private var topThemesChart: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel(title: "Top themes")
+            ReferenceCard {
                 Chart(themeCounts, id: \.name) { item in
                     BarMark(
                         x: .value("Count", item.count),
@@ -260,12 +363,14 @@ private struct AnalyticsView: View {
                     .foregroundStyle(Color.primary)
                 }
                 .frame(height: 140)
-                    }
-                }
+            }
+        }
+    }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    SectionLabel(title: "Entry type breakdown")
-                    ReferenceCard {
+    private var entryTypeBreakdownChart: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel(title: "Entry type breakdown")
+            ReferenceCard {
                 Chart(entryTypeCounts, id: \.name) { item in
                     BarMark(
                         x: .value("Type", item.name),
@@ -274,13 +379,81 @@ private struct AnalyticsView: View {
                     .foregroundStyle(Color.primary)
                 }
                 .frame(height: 130)
+            }
+        }
+    }
+
+    private var reviewCadenceChart: some View {
+        Group {
+            if appModel.dailyReviews.isEmpty == false {
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionLabel(title: "Review cadence")
+                    ReferenceCard {
+                        Chart(appModel.dailyReviews.sorted { $0.date < $1.date }) { review in
+                            BarMark(
+                                x: .value("Date", review.date.compactDate),
+                                y: .value("Reviewed", 1)
+                            )
+                            .foregroundStyle(Color.primary)
+                        }
+                        .chartYAxis(.hidden)
+                        .frame(height: 110)
                     }
                 }
             }
-            .padding(AppSpacing.page)
+        }
+    }
+
+    private var healthContextChart: some View {
+        let entries = sortedEntries.filter { $0.sleepHours != nil }
+        return Group {
+            if entries.count >= 2 {
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionLabel(title: "Health context")
+                    ReferenceCard {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Chart(entries) { entry in
+                                if let sleep = entry.sleepHours {
+                                    PointMark(
+                                        x: .value("Sleep", sleep),
+                                        y: .value("Mood", entry.mood.score)
+                                    )
+                                    .foregroundStyle(Color.primary)
+                                }
+                            }
+                            .chartYScale(domain: 1...5)
+                            .frame(height: 130)
+
+                            Text("Sleep and steps stay quiet here. They only add context when there is enough data.")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
             }
         }
-        .safeAreaPadding(.bottom, 86)
+    }
+
+    private func metric(_ title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(value)
+                .font(.headline)
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var uniqueDayCount: Int {
+        Set(sortedEntries.map { Calendar.current.startOfDay(for: $0.date) }).count
+    }
+
+    private var averageMoodLabel: String {
+        guard sortedEntries.isEmpty == false else { return "-" }
+        let total = sortedEntries.map(\.mood.score).reduce(0, +)
+        let average = Double(total) / Double(sortedEntries.count)
+        return String(format: "%.1f", average)
     }
 
     private var themeCounts: [(name: String, count: Int)] {
@@ -293,6 +466,12 @@ private struct AnalyticsView: View {
             (name: key, count: value)
         }
         return Array(mapped.sorted { $0.count > $1.count }.prefix(5))
+    }
+
+    private var moodCounts: [(name: String, count: Int)] {
+        MoodLevel.allCases.map { mood in
+            (name: mood.label, count: sortedEntries.filter { $0.mood == mood }.count)
+        }
     }
 
     private var entryTypeCounts: [(name: String, count: Int)] {

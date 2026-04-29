@@ -168,23 +168,147 @@ struct MockAIInsightService {
         let lower = text.lowercased()
         var themes: [String] = []
 
-        if lower.contains("work") || lower.contains("meeting") || lower.contains("deadline") {
+        if lower.contains("work") || lower.contains("meeting") || lower.contains("deadline") || lower.contains("manager") || lower.contains("client") || lower.contains("email") {
             themes.append("Work")
         }
-        if lower.contains("sleep") || lower.contains("tired") || lower.contains("night") {
+        if lower.contains("sleep") || lower.contains("tired") || lower.contains("night") || lower.contains("exhausted") || lower.contains("drained") {
             themes.append("Sleep")
         }
-        if lower.contains("run") || lower.contains("walk") || lower.contains("gym") || lower.contains("movement") {
+        if lower.contains("run") || lower.contains("walk") || lower.contains("gym") || lower.contains("movement") || lower.contains("exercise") || lower.contains("outside") {
             themes.append("Movement")
         }
-        if lower.contains("friend") || lower.contains("family") || lower.contains("message") {
+        if lower.contains("friend") || lower.contains("family") || lower.contains("message") || lower.contains("partner") || lower.contains("relationship") {
             themes.append("Relationships")
+        }
+        if lower.contains("anxiety") || lower.contains("anxious") || lower.contains("panic") || lower.contains("worry") || lower.contains("worried") {
+            themes.append("Anxiety")
+        }
+        if lower.contains("sad") || lower.contains("low mood") || lower.contains("depressed") || lower.contains("flat") || lower.contains("empty") {
+            themes.append("Low mood")
+        }
+        if lower.contains("adhd") || lower.contains("focus") || lower.contains("distracted") || lower.contains("attention") || lower.contains("procrastinat") {
+            themes.append("Focus")
+        }
+        if lower.contains("stuck") || lower.contains("loop") || lower.contains("decision") || lower.contains("unfinished") || lower.contains("again") {
+            themes.append("Open loops")
+        }
+        if lower.contains("stress") || lower.contains("overwhelm") || lower.contains("too much") || lower.contains("burnout") {
+            themes.append("Stress")
         }
         if entryType == .win {
             themes.append("Progress")
         }
 
         return themes.isEmpty ? ["Reflection"] : Array(Set(themes)).sorted()
+    }
+
+    func localSignals(
+        from entries: [JournalEntry],
+        dailyReviews: [DailyReview],
+        goals: [ReflectionGoal],
+        healthSummary: HealthSummary?
+    ) -> [Insight] {
+        guard entries.count >= 2 else { return [] }
+
+        let recent = entries
+            .sorted { $0.date > $1.date }
+            .prefix(30)
+        var signals: [Insight] = []
+        let now = Date()
+
+        let themeCounts = Dictionary(grouping: recent.flatMap(\.themes), by: { $0 }).mapValues(\.count)
+        if let topTheme = themeCounts
+            .filter({ $0.key != "Reflection" && $0.value >= 2 })
+            .max(by: { $0.value < $1.value }) {
+            signals.append(
+                Insight(
+                    id: UUID(),
+                    title: "\(topTheme.key) is repeating",
+                    body: "\(topTheme.key) has appeared in \(topTheme.value) recent entries.",
+                    category: "Local signals",
+                    date: now,
+                    type: .pattern
+                )
+            )
+        }
+
+        let lowMoodEntries = recent.filter { $0.mood.score <= 2 }
+        if lowMoodEntries.count >= 2 {
+            signals.append(
+                Insight(
+                    id: UUID(),
+                    title: "Lower mood repeated",
+                    body: "Lower mood appears more than once in recent entries.",
+                    category: "Local signals",
+                    date: lowMoodEntries.first?.date ?? now,
+                    type: .emotionalRead
+                )
+            )
+        }
+
+        let movementGoodDays = recent.filter { $0.mood.score >= 4 && $0.themes.contains("Movement") }
+        if movementGoodDays.count >= 2 {
+            signals.append(
+                Insight(
+                    id: UUID(),
+                    title: "Movement may help",
+                    body: "Better mood tends to show up on movement days.",
+                    category: "Local signals",
+                    date: movementGoodDays.first?.date ?? now,
+                    type: .suggestion
+                )
+            )
+        }
+
+        if let healthSummary {
+            let lowSleepLowMood = recent.filter { entry in
+                (entry.sleepHours ?? healthSummary.lastNightSleep) < 6.25 && entry.mood.score <= 3
+            }
+            if lowSleepLowMood.count >= 2 {
+                signals.append(
+                    Insight(
+                        id: UUID(),
+                        title: "Sleep and energy",
+                        body: "Lower sleep may be linked with heavier entries.",
+                        category: "Local signals",
+                        date: lowSleepLowMood.first?.date ?? now,
+                        type: .pattern
+                    )
+                )
+            }
+
+            let activeGoodEntries = recent.filter { entry in
+                (entry.steps ?? healthSummary.averageSteps) >= healthSummary.averageSteps && entry.mood.score >= 4
+            }
+            if activeGoodEntries.count >= 2 {
+                signals.append(
+                    Insight(
+                        id: UUID(),
+                        title: "Activity context",
+                        body: "Steadier moods often appear on more active days.",
+                        category: "Local signals",
+                        date: activeGoodEntries.first?.date ?? now,
+                        type: .suggestion
+                    )
+                )
+            }
+        }
+
+        let activeGoals = goals.filter { $0.status == .active }
+        if activeGoals.isEmpty == false, dailyReviews.isEmpty == false {
+            signals.append(
+                Insight(
+                    id: UUID(),
+                    title: "Open next step",
+                    body: "\(activeGoals.count) agreed next \(activeGoals.count == 1 ? "step is" : "steps are") still active.",
+                    category: "Local signals",
+                    date: activeGoals.first?.createdAt ?? now,
+                    type: .action
+                )
+            )
+        }
+
+        return Array(signals.prefix(5))
     }
 }
 

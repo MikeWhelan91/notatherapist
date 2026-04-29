@@ -16,6 +16,7 @@ final class AppViewModel: ObservableObject {
     @Published var dailyReviews: [DailyReview] = []
     @Published var aiConnection: AIConnectionState = .unknown
     @Published var iCloudSyncState: ICloudSyncState = .off
+    @Published var premiumDailyReviewsEnabled: Bool = UserDefaults.standard.bool(forKey: "premiumDailyReviewsEnabled")
 
     private let insightService = MockAIInsightService()
     private let weeklyReviewService = MockWeeklyReviewService()
@@ -24,6 +25,7 @@ final class AppViewModel: ObservableObject {
     private let localStore = LocalAppStore()
     private let iCloudSyncService = ICloudSyncService.shared
     private let iCloudSyncEnabledKey = "iCloudSyncEnabled"
+    private let premiumDailyReviewsKey = "premiumDailyReviewsEnabled"
 
     init(seedWithMockData: Bool = false) {
         if seedWithMockData {
@@ -49,6 +51,27 @@ final class AppViewModel: ObservableObject {
 
     var latestInsight: Insight? {
         insights.sorted { $0.date > $1.date }.first
+    }
+
+    var localSignals: [Insight] {
+        insightService.localSignals(
+            from: journalEntries,
+            dailyReviews: dailyReviews,
+            goals: reflectionGoals,
+            healthSummary: healthSummary
+        )
+    }
+
+    var hasInsightContent: Bool {
+        insights.isEmpty == false || localSignals.isEmpty == false
+    }
+
+    var isPremiumDailyReviewsEnabled: Bool {
+        get { premiumDailyReviewsEnabled }
+        set {
+            premiumDailyReviewsEnabled = newValue
+            UserDefaults.standard.set(newValue, forKey: premiumDailyReviewsKey)
+        }
     }
 
     var latestDailyReview: DailyReview? {
@@ -112,15 +135,25 @@ final class AppViewModel: ObservableObject {
         guard dayEntries.isEmpty == false else { return nil }
 
         let review: DailyReview
-        do {
-            review = try await apiService.dailyReview(
-                date: date,
-                entries: dayEntries,
-                profile: onboardingProfile,
-                healthSummary: healthSummary,
-                goals: reflectionGoals
-            )
-        } catch {
+        if isPremiumDailyReviewsEnabled {
+            do {
+                review = try await apiService.dailyReview(
+                    date: date,
+                    entries: dayEntries,
+                    profile: onboardingProfile,
+                    healthSummary: healthSummary,
+                    goals: reflectionGoals
+                )
+            } catch {
+                guard let fallback = insightService.dailyReview(
+                    for: date,
+                    entries: dayEntries,
+                    profile: onboardingProfile,
+                    healthSummary: healthSummary
+                ) else { return nil }
+                review = fallback
+            }
+        } else {
             guard let fallback = insightService.dailyReview(
                 for: date,
                 entries: dayEntries,
