@@ -18,13 +18,17 @@ struct NotATherapistAPIService {
     func dailyReview(date: Date, entries: [JournalEntry], recentEntries: [JournalEntry], profile: OnboardingProfile, healthSummary: HealthSummary?) async throws -> DailyReview {
         let request = DailyReviewRequest(date: date, entries: entries, recentEntries: recentEntries, profile: profile, healthSummary: healthSummary, goals: [])
         let response: DailyReviewResponse = try await post("/api/daily-review", body: request)
-        return response.review
+        var review = response.review
+        review.source = response.source
+        return review
     }
 
     func dailyReview(date: Date, entries: [JournalEntry], recentEntries: [JournalEntry], profile: OnboardingProfile, healthSummary: HealthSummary?, goals: [ReflectionGoal]) async throws -> DailyReview {
         let request = DailyReviewRequest(date: date, entries: entries, recentEntries: recentEntries, profile: profile, healthSummary: healthSummary, goals: goals)
         let response: DailyReviewResponse = try await post("/api/daily-review", body: request)
-        return response.review
+        var review = response.review
+        review.source = response.source
+        return review
     }
 
     func weeklyReview(entries: [JournalEntry], profile: OnboardingProfile, healthSummary: HealthSummary?, goals: [ReflectionGoal], planTier: AppPlanTier) async throws -> WeeklyReview? {

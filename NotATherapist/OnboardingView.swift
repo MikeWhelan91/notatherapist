@@ -9,12 +9,14 @@ struct OnboardingView: View {
     @AppStorage("onboardingAgeRange") private var storedAgeRange = ""
     @AppStorage("onboardingLifeContext") private var storedLifeContext = ""
     @AppStorage("onboardingReflectionGoal") private var storedReflectionGoal = ""
+    @AppStorage("onboardingPersonalStory") private var storedPersonalStory = ""
 
     @State private var page = 0
     @State private var preferredName = ""
     @State private var ageRange = ""
     @State private var lifeContext: Set<String> = []
     @State private var reflectionGoal = ""
+    @State private var personalStory = ""
     @State private var wantsWeeklyReviewReminder = true
     @State private var customIssue = ""
     @State private var healthChoice: OnboardingHealthChoice?
@@ -231,12 +233,31 @@ struct OnboardingView: View {
             title: "What do you want from journaling?",
             subtitle: "This is more useful than asking for a writing schedule."
         ) {
-            VStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 12) {
                 singleChoice("Get thoughts out", subtitle: "A place to put what is noisy", symbol: "square.and.pencil", selection: $reflectionGoal)
                 singleChoice("Understand patterns", subtitle: "Notice what repeats over time", symbol: "point.3.connected.trianglepath.dotted", selection: $reflectionGoal)
                 singleChoice("Make decisions", subtitle: "Turn loops into next steps", symbol: "arrow.triangle.branch", selection: $reflectionGoal)
                 singleChoice("Feel more settled", subtitle: "Close the day cleanly", symbol: "circle", selection: $reflectionGoal)
                 singleChoice("Track wins", subtitle: "Notice what is working", symbol: "checkmark.seal", selection: $reflectionGoal)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Your story (optional)")
+                        .font(.subheadline.weight(.semibold))
+                    Text("One or two lines on what you have been struggling with lately.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    TextEditor(text: $personalStory)
+                        .scrollContentBackground(.hidden)
+                        .font(.subheadline)
+                        .frame(minHeight: 96)
+                        .padding(10)
+                        .background(AppSurface.fill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(AppSurface.stroke, lineWidth: 0.5)
+                        }
+                }
             }
         }
     }
@@ -260,6 +281,7 @@ struct OnboardingView: View {
                         setupSummary("Age", values: [ageRange])
                         setupSummary("Issues", values: selectedIssues)
                         setupSummary("Goal", values: [reflectionGoal])
+                        setupSummary("Story", values: [personalStory])
                         setupSummary("Reminder", values: [wantsWeeklyReviewReminder ? "Sunday 18:00" : "Off"])
                         setupSummary("Voice", values: ["Factual, calm, contemplative, kind"])
                     }
@@ -382,11 +404,13 @@ struct OnboardingView: View {
         storedAgeRange = ageRange
         storedLifeContext = issues.joined(separator: "|")
         storedReflectionGoal = reflectionGoal
+        storedPersonalStory = personalStory
         appModel.updateOnboardingProfile(
             preferredName: trimmedName,
             ageRange: ageRange,
             lifeContext: issues,
-            reflectionGoal: reflectionGoal
+            reflectionGoal: reflectionGoal,
+            personalStory: personalStory
         )
         hasCompletedOnboarding = true
         Task {

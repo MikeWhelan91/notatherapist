@@ -84,12 +84,13 @@ final class AppViewModel: ObservableObject {
         onboardingProfile = .current
     }
 
-    func updateOnboardingProfile(preferredName: String, ageRange: String, lifeContext: [String], reflectionGoal: String) {
+    func updateOnboardingProfile(preferredName: String, ageRange: String, lifeContext: [String], reflectionGoal: String, personalStory: String) {
         let defaults = UserDefaults.standard
         defaults.set(preferredName, forKey: "onboardingPreferredName")
         defaults.set(ageRange, forKey: "onboardingAgeRange")
         defaults.set(lifeContext.joined(separator: "|"), forKey: "onboardingLifeContext")
         defaults.set(reflectionGoal, forKey: "onboardingReflectionGoal")
+        defaults.set(personalStory, forKey: "onboardingPersonalStory")
         onboardingProfile = .current
         saveSnapshot()
     }
@@ -174,15 +175,13 @@ final class AppViewModel: ObservableObject {
                     healthSummary: healthSummary,
                     goals: reflectionGoals
                 )
+                if review.source != "openai" {
+                    aiConnection = .unavailable
+                    return nil
+                }
             } catch {
-                guard let fallback = insightService.dailyReview(
-                    for: date,
-                    entries: dayEntries,
-                    recentEntries: journalEntries,
-                    profile: onboardingProfile,
-                    healthSummary: healthSummary
-                ) else { return nil }
-                review = fallback
+                aiConnection = .unavailable
+                return nil
             }
         } else {
             guard let fallback = insightService.dailyReview(

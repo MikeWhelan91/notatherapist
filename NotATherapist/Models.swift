@@ -32,11 +32,21 @@ enum MoodLevel: String, CaseIterable, Identifiable, Codable {
 
     var symbol: String {
         switch self {
-        case .terrible: "exclamationmark"
+        case .terrible: "face.dashed"
         case .low: "minus"
         case .okay: "face.smiling"
-        case .good: "face.smiling.fill"
+        case .good: "face.smiling.inverse"
         case .great: "sparkles"
+        }
+    }
+
+    var emoji: String {
+        switch self {
+        case .terrible: "😣"
+        case .low: "😐"
+        case .okay: "🙂"
+        case .good: "😊"
+        case .great: "😄"
         }
     }
 
@@ -259,6 +269,7 @@ struct OnboardingProfile: Codable, Hashable {
     var lifeContext: [String]
     var focusAreas: [String]
     var reflectionGoal: String
+    var personalStory: String
 
     static var current: OnboardingProfile {
         let defaults = UserDefaults.standard
@@ -267,7 +278,8 @@ struct OnboardingProfile: Codable, Hashable {
             ageRange: defaults.string(forKey: "onboardingAgeRange") ?? "",
             lifeContext: split(defaults.string(forKey: "onboardingLifeContext")),
             focusAreas: split(defaults.string(forKey: "onboardingFocusAreas")),
-            reflectionGoal: defaults.string(forKey: "onboardingReflectionGoal") ?? ""
+            reflectionGoal: defaults.string(forKey: "onboardingReflectionGoal") ?? "",
+            personalStory: defaults.string(forKey: "onboardingPersonalStory") ?? ""
         )
     }
 
@@ -278,6 +290,7 @@ struct OnboardingProfile: Codable, Hashable {
             lifeContext.isEmpty ? nil : "Life context: \(lifeContext.joined(separator: ", "))",
             focusAreas.isEmpty ? nil : "Focus: \(focusAreas.joined(separator: ", "))",
             reflectionGoal.isEmpty ? nil : "Goal: \(reflectionGoal)",
+            personalStory.isEmpty ? nil : "Story: \(personalStory)",
             "Voice: factual, calm, contemplative, empathetic, kind"
         ]
         .compactMap { $0 }

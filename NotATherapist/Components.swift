@@ -383,9 +383,8 @@ struct MoodSelectorView: View {
                     selectedMood = mood
                 } label: {
                     VStack(spacing: 7) {
-                        Image(systemName: mood.symbol)
-                            .font(.system(size: size * 0.38, weight: .semibold))
-                            .foregroundStyle(selectedMood == mood ? Color(.systemBackground) : .primary)
+                        Text(mood.emoji)
+                            .font(.system(size: size * 0.42))
                             .frame(width: size, height: size)
                             .background(selectedMood == mood ? Color.primary : AppSurface.fill, in: Circle())
                             .overlay {
@@ -417,7 +416,6 @@ struct WeekCalendarStripView: View {
             HStack(spacing: 8) {
                 ForEach(dates, id: \.self) { date in
                     let isSelected = Calendar.current.isDate(date, inSameDayAs: selectedDate)
-                    let isToday = Calendar.current.isDateInToday(date)
                     let hasSavedEntry = hasEntry(date)
                     Button {
                         selectedDate = date
@@ -429,44 +427,35 @@ struct WeekCalendarStripView: View {
                             Text(date.dayNumber)
                                 .font(.subheadline.weight(.semibold))
                                 .frame(width: 32, height: 32)
-                                .foregroundStyle(hasSavedEntry ? (colorScheme == .dark ? Color.black : Color.white) : .primary)
+                                .foregroundStyle(hasSavedEntry ? Color.black : .primary)
                                 .background(hasSavedEntry ? Color.primary : Color.clear, in: Circle())
                                 .overlay {
                                     if hasSavedEntry == false {
                                         Circle()
-                                            .stroke(Color.primary.opacity(0.95), lineWidth: isToday ? 1.8 : 1.1)
+                                            .stroke(Color.primary.opacity(0.95), lineWidth: 1.2)
                                     }
                                 }
                                 .overlay {
                                     if isSelected {
                                         Circle()
-                                            .stroke(Color.primary, lineWidth: 2)
-                                            .scaleEffect(1.18)
-                                    }
-                                }
-                                .overlay {
-                                    if isToday {
+                                            .stroke(hasSavedEntry ? Color.black.opacity(0.85) : Color.primary, lineWidth: hasSavedEntry ? 1.8 : 2.0)
+                                            .scaleEffect(hasSavedEntry ? 1.01 : 1.08)
                                         Circle()
-                                            .stroke(Color.primary.opacity(0.35), lineWidth: 2.6)
-                                            .scaleEffect(1.12)
+                                            .stroke(Color.white.opacity(0.92), lineWidth: 1.8)
+                                            .scaleEffect(1.2)
                                     }
                                 }
                                 .overlay(alignment: .bottom) {
                                     if hasSavedEntry {
                                         Circle()
-                                            .fill(colorScheme == .dark ? Color.black : Color.white)
+                                            .fill(Color.black)
                                             .frame(width: 4, height: 4)
                                             .offset(y: -3)
                                     }
                                 }
                         }
                         .overlay(alignment: .bottom) {
-                            if isSelected {
-                                Capsule()
-                                    .fill(Color.primary)
-                                    .frame(width: 18, height: 2.5)
-                                    .offset(y: 10)
-                            }
+                            EmptyView()
                         }
                         .scaleEffect(isSelected ? 1.04 : 1.0)
                         .frame(width: 46)
@@ -533,10 +522,10 @@ struct EntryRowView: View {
 
             Spacer(minLength: 8)
 
-            Image(systemName: entry.mood.symbol)
-                .font(.system(size: 15, weight: .semibold))
-                .frame(width: 34, height: 34)
-                .foregroundStyle(Color(.systemBackground))
+            Text(entry.mood.emoji)
+                .font(.system(size: 19))
+                .frame(width: 36, height: 36)
+                .foregroundStyle(Color.black)
                 .background(Color.primary, in: Circle())
 
             Image(systemName: "chevron.right")

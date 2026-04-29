@@ -27,7 +27,7 @@ struct DailyReviewView: View {
                         Text(currentReview.date.formatted(date: .complete, time: .omitted))
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text(appModel.planTier.dailyReviewLabel)
+                        Text(reviewSourceLabel)
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     }
@@ -46,7 +46,7 @@ struct DailyReviewView: View {
                             InsightSectionView(title: "What stood out", bodyText: currentReview.insight.emotionalRead, symbol: "sparkle.magnifyingglass")
                         }
                         ReferenceCard {
-                            InsightSectionView(title: "Issue signal", bodyText: currentReview.insight.pattern, symbol: InsightType.pattern.symbol)
+                            InsightSectionView(title: "What came up most", bodyText: currentReview.insight.pattern, symbol: InsightType.pattern.symbol)
                         }
                         ReferenceCard {
                             InsightSectionView(title: "One useful next step", bodyText: currentReview.insight.action, symbol: InsightType.action.symbol)
@@ -56,7 +56,7 @@ struct DailyReviewView: View {
 
                 ReferenceCard {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Optional next step")
+                        Text("Suggested next step")
                             .font(.subheadline.weight(.semibold))
                         if currentReview.suggestedGoalTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             Text("No clear next step was suggested yet. Review again after another entry.")
@@ -97,7 +97,10 @@ struct DailyReviewView: View {
                 }
             }
             .padding(AppSpacing.page)
-            .padding(.bottom, embedded ? 0 : 24)
+            .padding(.bottom, embedded ? 0 : 180)
+        }
+        .safeAreaInset(edge: .bottom) {
+            Color.clear.frame(height: embedded ? 0 : 18)
         }
         .navigationTitle("Review")
         .navigationBarTitleDisplayMode(.inline)
@@ -108,6 +111,17 @@ struct DailyReviewView: View {
                     Button("Done") { dismiss() }
                 }
             }
+        }
+    }
+
+    private var reviewSourceLabel: String {
+        switch currentReview.source {
+        case "openai":
+            "AI daily review"
+        case "fallback":
+            "Local review"
+        default:
+            appModel.planTier.dailyReviewLabel
         }
     }
 }
