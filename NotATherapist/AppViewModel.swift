@@ -84,6 +84,16 @@ final class AppViewModel: ObservableObject {
         onboardingProfile = .current
     }
 
+    func updateOnboardingProfile(preferredName: String, ageRange: String, lifeContext: [String], reflectionGoal: String) {
+        let defaults = UserDefaults.standard
+        defaults.set(preferredName, forKey: "onboardingPreferredName")
+        defaults.set(ageRange, forKey: "onboardingAgeRange")
+        defaults.set(lifeContext.joined(separator: "|"), forKey: "onboardingLifeContext")
+        defaults.set(reflectionGoal, forKey: "onboardingReflectionGoal")
+        onboardingProfile = .current
+        saveSnapshot()
+    }
+
     var latestDailyReview: DailyReview? {
         dailyReviews.sorted { $0.createdAt > $1.createdAt }.first
     }

@@ -190,7 +190,7 @@ struct APIHealthResponse: Decodable {
     let status: String
     let ai: String
     let model: String
-    let timestamp: Date
+    let timestamp: String
 }
 
 private struct APIErrorResponse: Decodable {
