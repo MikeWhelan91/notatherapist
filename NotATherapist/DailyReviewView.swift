@@ -56,29 +56,42 @@ struct DailyReviewView: View {
 
                 ReferenceCard {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Suggested next step")
+                        Text("Optional next step")
                             .font(.subheadline.weight(.semibold))
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(currentReview.suggestedGoalTitle)
-                                .font(.body.weight(.semibold))
-                            Text(currentReview.suggestedGoalReason)
+                        if currentReview.suggestedGoalTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Text("No clear next step was suggested yet. Review again after another entry.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                        }
-
-                        if let acceptedGoal {
-                            Label("\(acceptedGoal.title) was added to Today.", systemImage: "checkmark.circle.fill")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
                         } else {
-                            Button {
-                                withAnimation(.snappy(duration: 0.22)) {
-                                    _ = appModel.acceptGoal(from: currentReview)
-                                }
-                            } label: {
-                                Label("Add to Today", systemImage: "plus")
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(currentReview.suggestedGoalTitle)
+                                    .font(.body.weight(.semibold))
+                                Text(currentReview.suggestedGoalReason)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                             }
-                            .buttonStyle(PrimaryCapsuleButtonStyle())
+
+                            if let acceptedGoal {
+                                Label("\(acceptedGoal.title) was saved in Next steps.", systemImage: "checkmark.circle.fill")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                HStack(spacing: 10) {
+                                    Button {
+                                        withAnimation(.snappy(duration: 0.22)) {
+                                            _ = appModel.acceptGoal(from: currentReview)
+                                        }
+                                    } label: {
+                                        Label("Save next step", systemImage: "plus")
+                                    }
+                                    .buttonStyle(PrimaryCapsuleButtonStyle())
+
+                                    Button("Skip for now") {}
+                                        .buttonStyle(.plain)
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
                         }
                     }
                 }

@@ -211,8 +211,16 @@ final class AppViewModel: ObservableObject {
     @discardableResult
     func acceptGoal(from review: DailyReview) -> ReflectionGoal {
         let review = sanitizedReview(review)
+        let title = review.suggestedGoalTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if title.isEmpty {
+            return addReflectionGoal(
+                title: "One small next step",
+                reason: "Saved from your daily review.",
+                sourceConversationID: nil
+            )
+        }
         let goal = addReflectionGoal(
-            title: review.suggestedGoalTitle,
+            title: title,
             reason: review.suggestedGoalReason,
             sourceConversationID: nil
         )
@@ -228,15 +236,6 @@ final class AppViewModel: ObservableObject {
 
         if review.insight.emotionalRead == "Today reads steadier than usual." {
             review.insight.emotionalRead = "There is a steady moment in today's entries."
-        }
-        if review.suggestedGoalTitle == "Record one useful condition" {
-            review.suggestedGoalTitle = "Write down what helped"
-        }
-        if review.suggestedGoalReason == "Wins are easier to repeat when the conditions are clear." {
-            review.suggestedGoalReason = "A short note can make the useful part easier to remember."
-        }
-        if review.suggestedGoalReason == "Your review pointed to a specific useful moment." {
-            review.suggestedGoalReason = "This can help you recognise what supported a better moment."
         }
 
         return review

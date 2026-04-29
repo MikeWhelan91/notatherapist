@@ -498,6 +498,7 @@ private struct Arc: Shape {
 }
 
 struct WeekCalendarStripView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Binding var selectedDate: Date
     let dates: [Date]
     var hasEntry: (Date) -> Bool = { _ in false }
@@ -519,7 +520,7 @@ struct WeekCalendarStripView: View {
                             Text(date.dayNumber)
                                 .font(.subheadline.weight(.semibold))
                                 .frame(width: 32, height: 32)
-                                .foregroundStyle(hasSavedEntry ? Color(.systemBackground) : .primary)
+                                .foregroundStyle(hasSavedEntry ? (colorScheme == .dark ? Color.black : Color.white) : .primary)
                                 .background(hasSavedEntry ? Color.primary : Color.clear, in: Circle())
                                 .overlay {
                                     if hasSavedEntry == false {
@@ -532,6 +533,14 @@ struct WeekCalendarStripView: View {
                                         Circle()
                                             .stroke(Color.primary.opacity(0.35), lineWidth: 2.6)
                                             .scaleEffect(1.12)
+                                    }
+                                }
+                                .overlay(alignment: .bottom) {
+                                    if hasSavedEntry {
+                                        Circle()
+                                            .fill(colorScheme == .dark ? Color.black : Color.white)
+                                            .frame(width: 4, height: 4)
+                                            .offset(y: -3)
                                     }
                                 }
                         }

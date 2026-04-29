@@ -67,21 +67,25 @@ struct MockAIInsightService {
         let goalTitle: String
         let goalReason: String
         if lowerText.contains("drove") || lowerText.contains("driving") {
-            action = "Write one thing that helped the drive feel manageable."
-            goalTitle = "Notice what helped today"
-            goalReason = "This can help you recognise what supported a better moment."
+            action = "If the drive feels tense again, name one thing that helped today before leaving."
+            goalTitle = "Capture one driving anchor"
+            goalReason = "You referenced driving directly, so this can be tested tomorrow."
         } else if sortedEntries.contains(where: { $0.entryType == .win }) {
-            action = "Name what made the win possible and leave it there."
-            goalTitle = "Write down what helped"
-            goalReason = "A short note can make the useful part easier to remember."
+            action = "If a good moment appears tomorrow, write one line on what made it possible."
+            goalTitle = "Repeat one useful condition"
+            goalReason = "Today's win gives a concrete condition you can repeat."
         } else if themes.contains("Work") {
-            action = "Pick one work decision to finish or park tomorrow."
-            goalTitle = "Choose one work decision"
-            goalReason = "Work was the clearest theme in today's entries."
+            action = "If work loops start spinning tomorrow, close or park one decision in under 10 minutes."
+            goalTitle = "Close one work loop"
+            goalReason = "Work showed up repeatedly, so one clear closure is measurable."
+        } else if themes.contains("Anxiety") {
+            action = "If anxiety rises tomorrow, do a 60-second reset before deciding what to do next."
+            goalTitle = "Use a 60-second reset once"
+            goalReason = "Anxiety appeared in today's entries, so this is a direct test."
         } else {
-            action = "Choose one small thing to carry into tomorrow."
-            goalTitle = "Choose one small next step"
-            goalReason = "Today's entries suggest keeping the next step small."
+            action = "If the same thought comes back tomorrow, write one next action and stop there."
+            goalTitle = ""
+            goalReason = ""
         }
 
         return DailyReview(
