@@ -513,18 +513,30 @@ struct SettingsView: View {
                 await appModel.refreshAIConnection()
                 await appModel.refreshICloudStatus()
             }
-            .confirmationDialog(
-                "Delete journal data?",
-                isPresented: $showingDeleteConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("Delete journal data", role: .destructive) {
-                    appModel.deleteLocalData()
-                    exportURL = nil
+            .sheet(isPresented: $showingDeleteConfirmation) {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Delete journal data?")
+                        .font(.headline)
+                    Text("This removes entries, reviews, goals, conversations, insights, and saved Health context from this device.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    Button("Delete journal data", role: .destructive) {
+                        appModel.deleteLocalData()
+                        exportURL = nil
+                        showingDeleteConfirmation = false
+                    }
+                    .buttonStyle(PrimaryCapsuleButtonStyle())
+
+                    Button("Cancel") {
+                        showingDeleteConfirmation = false
+                    }
+                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity)
                 }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("This removes entries, reviews, goals, conversations, insights, and saved Health context from this device.")
+                .padding(AppSpacing.page)
+                .presentationDetents([.height(260)])
+                .presentationDragIndicator(.visible)
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {

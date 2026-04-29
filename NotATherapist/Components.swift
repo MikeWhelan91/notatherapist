@@ -383,7 +383,9 @@ struct MoodSelectorView: View {
                     selectedMood = mood
                 } label: {
                     VStack(spacing: 7) {
-                        MoodFaceIcon(mood: mood, color: selectedMood == mood ? Color(.systemBackground) : .primary)
+                        Image(systemName: mood.symbol)
+                            .font(.system(size: size * 0.38, weight: .semibold))
+                            .foregroundStyle(selectedMood == mood ? Color(.systemBackground) : .primary)
                             .frame(width: size, height: size)
                             .background(selectedMood == mood ? Color.primary : AppSurface.fill, in: Circle())
                             .overlay {
@@ -401,99 +403,6 @@ struct MoodSelectorView: View {
                 .accessibilityLabel(mood.label)
             }
         }
-    }
-}
-
-private struct MoodFaceIcon: View {
-    let mood: MoodLevel
-    let color: Color
-
-    var body: some View {
-        ZStack {
-            eyeView
-            mouthView
-        }
-        .foregroundStyle(color)
-        .accessibilityHidden(true)
-    }
-
-    @ViewBuilder
-    private var eyeView: some View {
-        switch mood {
-        case .terrible:
-            HStack(spacing: 10) {
-                Capsule()
-                    .frame(width: 7, height: 2)
-                    .rotationEffect(.degrees(28))
-                Capsule()
-                    .frame(width: 7, height: 2)
-                    .rotationEffect(.degrees(-28))
-            }
-            .offset(y: -7)
-        case .low:
-            HStack(spacing: 8) {
-                Capsule().frame(width: 7, height: 2)
-                Capsule().frame(width: 7, height: 2)
-            }
-            .offset(y: -7)
-        default:
-            HStack(spacing: 8) {
-                Circle().frame(width: 3.5, height: 3.5)
-                Circle().frame(width: 3.5, height: 3.5)
-            }
-            .offset(y: -7)
-        }
-    }
-
-    @ViewBuilder
-    private var mouthView: some View {
-        switch mood {
-        case .terrible:
-            Arc(startAngle: .degrees(205), endAngle: .degrees(335))
-                .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                .frame(width: 18, height: 13)
-                .rotationEffect(.degrees(180))
-                .offset(y: 7)
-        case .low:
-            Capsule()
-                .frame(width: 15, height: 2)
-                .offset(y: 7)
-        case .okay:
-            Arc(startAngle: .degrees(205), endAngle: .degrees(335))
-                .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                .frame(width: 17, height: 12)
-                .offset(y: 4)
-        case .good:
-            Arc(startAngle: .degrees(200), endAngle: .degrees(340))
-                .stroke(color, style: StrokeStyle(lineWidth: 2.4, lineCap: .round))
-                .frame(width: 22, height: 15)
-                .offset(y: 3)
-        case .great:
-            Capsule()
-                .frame(width: 14, height: 9)
-                .offset(y: 6)
-            Arc(startAngle: .degrees(198), endAngle: .degrees(342))
-                .stroke(color, style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
-                .frame(width: 24, height: 17)
-                .offset(y: 2)
-        }
-    }
-}
-
-private struct Arc: Shape {
-    var startAngle: Angle
-    var endAngle: Angle
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.addArc(
-            center: CGPoint(x: rect.midX, y: rect.midY),
-            radius: min(rect.width, rect.height) / 2,
-            startAngle: startAngle,
-            endAngle: endAngle,
-            clockwise: false
-        )
-        return path
     }
 }
 
@@ -516,7 +425,7 @@ struct WeekCalendarStripView: View {
                         VStack(spacing: 6) {
                             Text(date.shortDay)
                                 .font(.caption2)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(isSelected ? .primary : .secondary)
                             Text(date.dayNumber)
                                 .font(.subheadline.weight(.semibold))
                                 .frame(width: 32, height: 32)
@@ -526,6 +435,13 @@ struct WeekCalendarStripView: View {
                                     if hasSavedEntry == false {
                                         Circle()
                                             .stroke(Color.primary.opacity(0.95), lineWidth: isToday ? 1.8 : 1.1)
+                                    }
+                                }
+                                .overlay {
+                                    if isSelected {
+                                        Circle()
+                                            .stroke(Color.primary, lineWidth: 2)
+                                            .scaleEffect(1.18)
                                     }
                                 }
                                 .overlay {
@@ -548,7 +464,7 @@ struct WeekCalendarStripView: View {
                             if isSelected {
                                 Capsule()
                                     .fill(Color.primary)
-                                    .frame(width: 14, height: 2)
+                                    .frame(width: 18, height: 2.5)
                                     .offset(y: 10)
                             }
                         }
@@ -594,7 +510,7 @@ struct EntryRowView: View {
     let entry: JournalEntry
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .center, spacing: 12) {
             Text(entry.date.compactTime)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -605,20 +521,21 @@ struct EntryRowView: View {
                 .frame(width: 24)
                 .foregroundStyle(.primary)
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(entry.text)
                     .font(.subheadline)
                     .lineLimit(2)
                 Text(entry.entryType.label)
-                    .font(.caption)
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
 
             Spacer(minLength: 8)
 
             Image(systemName: entry.mood.symbol)
-                .font(.caption2.weight(.semibold))
-                .frame(width: 24, height: 24)
+                .font(.system(size: 15, weight: .semibold))
+                .frame(width: 34, height: 34)
                 .foregroundStyle(Color(.systemBackground))
                 .background(Color.primary, in: Circle())
 

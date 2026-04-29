@@ -32,8 +32,8 @@ enum MoodLevel: String, CaseIterable, Identifiable, Codable {
 
     var symbol: String {
         switch self {
-        case .terrible: "face.dashed"
-        case .low: "face.smiling.inverse"
+        case .terrible: "exclamationmark"
+        case .low: "minus"
         case .okay: "face.smiling"
         case .good: "face.smiling.fill"
         case .great: "sparkles"
