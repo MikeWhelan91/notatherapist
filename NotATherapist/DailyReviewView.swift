@@ -27,6 +27,9 @@ struct DailyReviewView: View {
                         Text(currentReview.date.formatted(date: .complete, time: .omitted))
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        Text(appModel.isPremiumDailyReviewsEnabled ? "AI review when available" : "On-device review")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
                     }
                 }
 
@@ -53,7 +56,7 @@ struct DailyReviewView: View {
 
                 ReferenceCard {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Carry this forward?")
+                        Text("Suggested next step")
                             .font(.subheadline.weight(.semibold))
                         VStack(alignment: .leading, spacing: 4) {
                             Text(currentReview.suggestedGoalTitle)
@@ -64,7 +67,7 @@ struct DailyReviewView: View {
                         }
 
                         if let acceptedGoal {
-                            Label("\(acceptedGoal.title) is on Today.", systemImage: "checkmark.circle.fill")
+                            Label("\(acceptedGoal.title) was added to Today.", systemImage: "checkmark.circle.fill")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
                         } else {
@@ -73,7 +76,7 @@ struct DailyReviewView: View {
                                     _ = appModel.acceptGoal(from: currentReview)
                                 }
                             } label: {
-                                Label("Add next step", systemImage: "plus")
+                                Label("Add to Today", systemImage: "plus")
                             }
                             .buttonStyle(PrimaryCapsuleButtonStyle())
                         }

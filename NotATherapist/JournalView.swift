@@ -18,6 +18,27 @@ struct JournalView: View {
                     WeekCalendarStripView(selectedDate: $appModel.selectedJournalDate, dates: appModel.currentWeekDates)
                         .padding(.horizontal, -AppSpacing.page)
 
+                    if appModel.reflectionGoals.isEmpty == false {
+                        VStack(alignment: .leading, spacing: 8) {
+                            SectionLabel(title: "Next steps")
+                            ReferenceCard {
+                                VStack(spacing: 0) {
+                                    ForEach(appModel.reflectionGoals.prefix(3)) { goal in
+                                        JournalGoalRow(goal: goal) {
+                                            withAnimation(.snappy(duration: 0.22)) {
+                                                appModel.toggleGoal(goal)
+                                            }
+                                        }
+
+                                        if goal.id != appModel.reflectionGoals.prefix(3).last?.id {
+                                            Divider()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     VStack(alignment: .leading, spacing: 8) {
                         SectionLabel(title: "Entries")
                         if selectedEntries.isEmpty {
@@ -147,6 +168,36 @@ struct JournalView: View {
                 }
             }
         }
+    }
+}
+
+private struct JournalGoalRow: View {
+    let goal: ReflectionGoal
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: goal.status == .completed ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(.primary)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(goal.title)
+                        .font(.subheadline.weight(.semibold))
+                        .strikethrough(goal.status == .completed)
+                    Text(goal.status == .completed ? "Marked done" : goal.reason)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                Spacer()
+            }
+            .padding(.vertical, 9)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 

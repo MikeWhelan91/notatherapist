@@ -4,6 +4,7 @@ struct MockAIInsightService {
     func dailyReview(
         for date: Date,
         entries: [JournalEntry],
+        recentEntries: [JournalEntry] = [],
         profile: OnboardingProfile = .current,
         healthSummary: HealthSummary? = nil
     ) -> DailyReview? {
@@ -18,6 +19,7 @@ struct MockAIInsightService {
             .mapValues(\.count)
             .max { $0.value < $1.value }?
             .key
+        let hasPreviousData = recentEntries.contains { Calendar.current.isDate($0.date, inSameDayAs: date) == false }
 
         let summary: String
         if sortedEntries.count == 1, let entry = sortedEntries.first {
@@ -27,10 +29,12 @@ struct MockAIInsightService {
         }
 
         let emotionalRead: String
-        if sortedEntries.contains(where: { $0.entryType == .win }) || averageMood >= 4 {
-            emotionalRead = "Today reads steadier than usual."
+        if (lowerText.contains("anxiety") || lowerText.contains("anxious")) && sortedEntries.contains(where: { $0.entryType == .win }) {
+            emotionalRead = "You noted anxiety, and also recorded something that went well."
         } else if lowerText.contains("anxiety") || lowerText.contains("anxious") {
             emotionalRead = "Anxiety seems to be part of today's context."
+        } else if sortedEntries.contains(where: { $0.entryType == .win }) || averageMood >= 4 {
+            emotionalRead = hasPreviousData ? "Today includes a steadier note." : "There is a steady moment in today's entries."
         } else if lowerText.contains("overwhel") || lowerText.contains("too much") || averageMood <= 2.4 {
             emotionalRead = "Today sounds heavy and a little crowded."
         } else {
@@ -65,11 +69,11 @@ struct MockAIInsightService {
         if lowerText.contains("drove") || lowerText.contains("driving") {
             action = "Write one thing that helped the drive feel manageable."
             goalTitle = "Notice what helped today"
-            goalReason = "Your review pointed to a specific useful moment."
+            goalReason = "This can help you recognise what supported a better moment."
         } else if sortedEntries.contains(where: { $0.entryType == .win }) {
             action = "Name what made the win possible and leave it there."
-            goalTitle = "Record one useful condition"
-            goalReason = "Wins are easier to repeat when the conditions are clear."
+            goalTitle = "Write down what helped"
+            goalReason = "A short note can make the useful part easier to remember."
         } else if themes.contains("Work") {
             action = "Pick one work decision to finish or park tomorrow."
             goalTitle = "Choose one work decision"

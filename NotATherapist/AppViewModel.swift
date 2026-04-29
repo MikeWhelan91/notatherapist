@@ -130,7 +130,9 @@ final class AppViewModel: ObservableObject {
     }
 
     func dailyReview(on date: Date) -> DailyReview? {
-        dailyReviews.first { Calendar.current.isDate($0.date, inSameDayAs: date) }
+        dailyReviews
+            .first { Calendar.current.isDate($0.date, inSameDayAs: date) }
+            .map(sanitizedReview)
     }
 
     @discardableResult
@@ -153,6 +155,7 @@ final class AppViewModel: ObservableObject {
                 guard let fallback = insightService.dailyReview(
                     for: date,
                     entries: dayEntries,
+                    recentEntries: journalEntries,
                     profile: onboardingProfile,
                     healthSummary: healthSummary
                 ) else { return nil }
@@ -162,13 +165,14 @@ final class AppViewModel: ObservableObject {
             guard let fallback = insightService.dailyReview(
                 for: date,
                 entries: dayEntries,
+                recentEntries: journalEntries,
                 profile: onboardingProfile,
                 healthSummary: healthSummary
             ) else { return nil }
             review = fallback
         }
 
-        var storedReview = review
+        var storedReview = sanitizedReview(review)
 
         if let existingIndex = dailyReviews.firstIndex(where: { Calendar.current.isDate($0.date, inSameDayAs: date) }) {
             storedReview.acceptedGoalID = dailyReviews[existingIndex].acceptedGoalID
@@ -185,6 +189,7 @@ final class AppViewModel: ObservableObject {
 
     @discardableResult
     func acceptGoal(from review: DailyReview) -> ReflectionGoal {
+        let review = sanitizedReview(review)
         let goal = addReflectionGoal(
             title: review.suggestedGoalTitle,
             reason: review.suggestedGoalReason,
@@ -195,6 +200,25 @@ final class AppViewModel: ObservableObject {
         }
         saveSnapshot()
         return goal
+    }
+
+    private func sanitizedReview(_ review: DailyReview) -> DailyReview {
+        var review = review
+
+        if review.insight.emotionalRead == "Today reads steadier than usual." {
+            review.insight.emotionalRead = "There is a steady moment in today's entries."
+        }
+        if review.suggestedGoalTitle == "Record one useful condition" {
+            review.suggestedGoalTitle = "Write down what helped"
+        }
+        if review.suggestedGoalReason == "Wins are easier to repeat when the conditions are clear." {
+            review.suggestedGoalReason = "A short note can make the useful part easier to remember."
+        }
+        if review.suggestedGoalReason == "Your review pointed to a specific useful moment." {
+            review.suggestedGoalReason = "This can help you recognise what supported a better moment."
+        }
+
+        return review
     }
 
     func updateHealthSummary(_ summary: HealthSummary?) {
