@@ -46,7 +46,7 @@ struct DailyReviewView: View {
                             InsightSectionView(title: "What stood out", bodyText: currentReview.insight.emotionalRead, symbol: "sparkle.magnifyingglass")
                         }
                         ReferenceCard {
-                            InsightSectionView(title: "Theme", bodyText: currentReview.insight.pattern, symbol: InsightType.pattern.symbol)
+                            InsightSectionView(title: "Issue signal", bodyText: currentReview.insight.pattern, symbol: InsightType.pattern.symbol)
                         }
                         ReferenceCard {
                             InsightSectionView(title: "One useful next step", bodyText: currentReview.insight.action, symbol: InsightType.action.symbol)

@@ -1,6 +1,52 @@
 import Foundation
 
 struct MockAIInsightService {
+    private func hasAnxietySignal(in text: String) -> Bool {
+        let lower = text.lowercased()
+        let negativePhrases = [
+            "no anxiety", "not anxious", "without anxiety", "no panic", "not panicking",
+            "no worry", "no worries", "not worried"
+        ]
+        if negativePhrases.contains(where: { lower.contains($0) }) {
+            return false
+        }
+        return lower.contains("anxiety") || lower.contains("anxious") || lower.contains("panic") || lower.contains("worry") || lower.contains("worried")
+    }
+
+    private struct IssueSignal {
+        let label: String
+        let count: Int
+    }
+
+    private func detectIssueSignals(in entries: [JournalEntry]) -> [IssueSignal] {
+        let rules: [(label: String, includes: [String], excludes: [String])] = [
+            ("Anxiety", ["anxiety", "anxious"], ["no anxiety", "not anxious", "without anxiety"]),
+            ("Low mood", ["low mood", "flat", "empty", "down", "depressed"], ["not depressed"]),
+            ("Stress load", ["stress", "overwhelm", "overwhelmed", "burnout", "too much"], []),
+            ("Panic signal", ["panic", "panicky"], ["no panic", "not panicking", "without panic"]),
+            ("Sleep disruption", ["sleep", "insomnia", "woke", "waking", "tired", "exhausted"], []),
+            ("Focus friction", ["focus", "distracted", "attention", "procrastinat", "adhd"], []),
+            ("Social tension", ["social", "people", "friend", "family", "partner", "relationship"], []),
+            ("Work pressure", ["work", "deadline", "meeting", "manager", "client", "email"], [])
+        ]
+
+        var counts: [String: Int] = [:]
+        for entry in entries {
+            let lower = entry.text.lowercased()
+            for rule in rules {
+                let excluded = rule.excludes.contains { lower.contains($0) }
+                let included = rule.includes.contains { lower.contains($0) }
+                if excluded == false && included {
+                    counts[rule.label, default: 0] += 1
+                }
+            }
+        }
+
+        return counts
+            .map { IssueSignal(label: $0.key, count: $0.value) }
+            .sorted { $0.count > $1.count }
+    }
+
     func dailyReview(
         for date: Date,
         entries: [JournalEntry],
@@ -20,6 +66,7 @@ struct MockAIInsightService {
             .max { $0.value < $1.value }?
             .key
         let hasPreviousData = recentEntries.contains { Calendar.current.isDate($0.date, inSameDayAs: date) == false }
+        let topIssue = detectIssueSignals(in: sortedEntries).first
 
         let summary: String
         if sortedEntries.count == 1, let entry = sortedEntries.first {
@@ -29,12 +76,25 @@ struct MockAIInsightService {
         }
 
         let emotionalRead: String
-        if (lowerText.contains("anxiety") || lowerText.contains("anxious")) && sortedEntries.contains(where: { $0.entryType == .win }) {
+        let anxietySignal = hasAnxietySignal(in: lowerText)
+        if let topIssue {
+            emotionalRead = "\(topIssue.label) appears as a key issue in today's entries."
+        } else if anxietySignal && topTheme == "Anxiety" && sortedEntries.contains(where: { $0.entryType == .win }) {
             emotionalRead = "You noted anxiety, and also recorded something that went well."
-        } else if lowerText.contains("anxiety") || lowerText.contains("anxious") {
+        } else if anxietySignal && topTheme == "Anxiety" {
             emotionalRead = "Anxiety seems to be part of today's context."
         } else if sortedEntries.contains(where: { $0.entryType == .win }) || averageMood >= 4 {
             emotionalRead = hasPreviousData ? "Today includes a steadier note." : "There is a steady moment in today's entries."
+        } else if topTheme == "Work" {
+            emotionalRead = "Work seems to have taken a lot of attention today."
+        } else if topTheme == "Sleep" {
+            emotionalRead = "Energy and sleep look relevant to today's tone."
+        } else if topTheme == "Focus" {
+            emotionalRead = "Focus and attention seem to have taken effort today."
+        } else if topTheme == "Relationships" {
+            emotionalRead = "People and relationships seem central in today's entries."
+        } else if topTheme == "Open loops" {
+            emotionalRead = "Unfinished decisions seem to be taking up space."
         } else if lowerText.contains("overwhel") || lowerText.contains("too much") || averageMood <= 2.4 {
             emotionalRead = "Today sounds heavy and a little crowded."
         } else {
@@ -42,7 +102,10 @@ struct MockAIInsightService {
         }
 
         let pattern: String
-        if let sleepHours = sortedEntries.first(where: { $0.sleepHours != nil })?.sleepHours, sleepHours < 6.25, averageMood <= 3.2 {
+        if let topIssue {
+            let countText = topIssue.count > 1 ? "\(topIssue.count) entries" : "1 entry"
+            pattern = "\(topIssue.label) was mentioned in \(countText)."
+        } else if let sleepHours = sortedEntries.first(where: { $0.sleepHours != nil })?.sleepHours, sleepHours < 6.25, averageMood <= 3.2 {
             pattern = "Lower sleep may have shaped the tone of the day."
         } else if let steps = sortedEntries.first(where: { $0.steps != nil })?.steps, steps >= 7500, averageMood >= 3.5 {
             pattern = "More movement may be linked with a steadier day."
@@ -188,7 +251,13 @@ struct MockAIInsightService {
         if lower.contains("friend") || lower.contains("family") || lower.contains("message") || lower.contains("partner") || lower.contains("relationship") {
             themes.append("Relationships")
         }
-        if lower.contains("anxiety") || lower.contains("anxious") || lower.contains("panic") || lower.contains("worry") || lower.contains("worried") {
+        if lower.contains("focus") || lower.contains("distracted") || lower.contains("attention") || lower.contains("procrastinat") || lower.contains("adhd") {
+            themes.append("Focus")
+        }
+        if lower.contains("stress") || lower.contains("overwhelm") || lower.contains("burnout") {
+            themes.append("Stress")
+        }
+        if hasAnxietySignal(in: lower) {
             themes.append("Anxiety")
         }
         if lower.contains("sad") || lower.contains("low mood") || lower.contains("depressed") || lower.contains("flat") || lower.contains("empty") {

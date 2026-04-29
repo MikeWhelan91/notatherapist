@@ -149,6 +149,7 @@ struct DailyReview: Identifiable, Codable, Hashable {
     var acceptedGoalID: UUID?
     var entryIDs: [UUID]
     var createdAt: Date
+    var source: String? = nil
 }
 
 enum AppPlanTier: String, CaseIterable, Identifiable, Codable {
