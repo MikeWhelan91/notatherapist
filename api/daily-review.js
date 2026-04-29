@@ -26,7 +26,10 @@ module.exports = (req, res) => handleEndpoint(req, res, ["POST"], async () => {
     recentEntries,
     profile: normalizeProfile(body.profile),
     healthSummary: normalizeHealthSummary(body.healthSummary),
-    goals: normalizeGoals(body.goals)
+    goals: normalizeGoals(body.goals),
+    context: {
+      onboardingFirstCheckIn: body?.context?.onboardingFirstCheckIn === true
+    }
   });
 
   sendJSON(res, 200, {

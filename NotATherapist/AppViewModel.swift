@@ -270,7 +270,7 @@ final class AppViewModel: ObservableObject {
 
         let review: DailyReview
         do {
-            review = try await apiService.dailyReview(
+            review = try await apiService.onboardingDailyReview(
                 date: date,
                 entries: dayEntries,
                 recentEntries: recentEntries,

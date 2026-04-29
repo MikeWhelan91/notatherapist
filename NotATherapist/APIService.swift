@@ -16,7 +16,7 @@ struct NotATherapistAPIService {
     }
 
     func dailyReview(date: Date, entries: [JournalEntry], recentEntries: [JournalEntry], profile: OnboardingProfile, healthSummary: HealthSummary?) async throws -> DailyReview {
-        let request = DailyReviewRequest(date: date, entries: entries, recentEntries: recentEntries, profile: profile, healthSummary: healthSummary, goals: [])
+        let request = DailyReviewRequest(date: date, entries: entries, recentEntries: recentEntries, profile: profile, healthSummary: healthSummary, goals: [], context: nil)
         let response: DailyReviewResponse = try await post("/api/daily-review", body: request)
         var review = response.review
         review.source = response.source
@@ -24,7 +24,23 @@ struct NotATherapistAPIService {
     }
 
     func dailyReview(date: Date, entries: [JournalEntry], recentEntries: [JournalEntry], profile: OnboardingProfile, healthSummary: HealthSummary?, goals: [ReflectionGoal]) async throws -> DailyReview {
-        let request = DailyReviewRequest(date: date, entries: entries, recentEntries: recentEntries, profile: profile, healthSummary: healthSummary, goals: goals)
+        let request = DailyReviewRequest(date: date, entries: entries, recentEntries: recentEntries, profile: profile, healthSummary: healthSummary, goals: goals, context: nil)
+        let response: DailyReviewResponse = try await post("/api/daily-review", body: request)
+        var review = response.review
+        review.source = response.source
+        return review
+    }
+
+    func onboardingDailyReview(date: Date, entries: [JournalEntry], recentEntries: [JournalEntry], profile: OnboardingProfile, healthSummary: HealthSummary?, goals: [ReflectionGoal]) async throws -> DailyReview {
+        let request = DailyReviewRequest(
+            date: date,
+            entries: entries,
+            recentEntries: recentEntries,
+            profile: profile,
+            healthSummary: healthSummary,
+            goals: goals,
+            context: DailyReviewRequestContext(onboardingFirstCheckIn: true)
+        )
         let response: DailyReviewResponse = try await post("/api/daily-review", body: request)
         var review = response.review
         review.source = response.source
@@ -135,6 +151,11 @@ private struct DailyReviewRequest: Encodable {
     let profile: OnboardingProfile
     let healthSummary: HealthSummary?
     let goals: [ReflectionGoal]
+    let context: DailyReviewRequestContext?
+}
+
+private struct DailyReviewRequestContext: Encodable {
+    let onboardingFirstCheckIn: Bool
 }
 
 private struct DailyReviewResponse: Decodable {
