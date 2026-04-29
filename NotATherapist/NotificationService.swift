@@ -34,17 +34,23 @@ final class NotificationService: ObservableObject {
     @Published private(set) var authorizationStatus: UNAuthorizationStatus = .notDetermined
     @Published private(set) var isWeeklyReminderEnabled: Bool
     @Published private(set) var weeklyReminderWeekday: Int
+    @Published private(set) var weeklyReminderTime: Date
 
     private let center = UNUserNotificationCenter.current()
     private let weeklyReviewIdentifier = "weekly-review-check-in"
     private let enabledKey = "weeklyReviewReminderEnabled"
     private let weekdayKey = "weeklyReviewReminderWeekday"
+    private let hourKey = "weeklyReviewReminderHour"
+    private let minuteKey = "weeklyReviewReminderMinute"
 
     private init() {
         let defaults = UserDefaults.standard
         isWeeklyReminderEnabled = defaults.bool(forKey: enabledKey)
         let savedWeekday = defaults.integer(forKey: weekdayKey)
         weeklyReminderWeekday = savedWeekday == 0 ? ReminderWeekday.sunday.rawValue : savedWeekday
+        let hour = defaults.object(forKey: hourKey) == nil ? 18 : defaults.integer(forKey: hourKey)
+        let minute = defaults.integer(forKey: minuteKey)
+        weeklyReminderTime = Calendar.current.date(from: DateComponents(hour: hour, minute: minute)) ?? Date()
     }
 
     var authorizationLabel: String {
@@ -99,6 +105,17 @@ final class NotificationService: ObservableObject {
         }
     }
 
+    func updateWeeklyReminderTime(_ time: Date) async {
+        let components = Calendar.current.dateComponents([.hour, .minute], from: time)
+        weeklyReminderTime = time
+        UserDefaults.standard.set(components.hour ?? 18, forKey: hourKey)
+        UserDefaults.standard.set(components.minute ?? 0, forKey: minuteKey)
+
+        if isWeeklyReminderEnabled {
+            try? await scheduleWeeklyReviewReminder()
+        }
+    }
+
     private func requestAuthorizationIfNeeded() async throws -> Bool {
         await refreshAuthorizationStatus()
 
@@ -127,8 +144,9 @@ final class NotificationService: ObservableObject {
 
         var components = DateComponents()
         components.weekday = weeklyReminderWeekday
-        components.hour = 18
-        components.minute = 0
+        let timeComponents = Calendar.current.dateComponents([.hour, .minute], from: weeklyReminderTime)
+        components.hour = timeComponents.hour ?? 18
+        components.minute = timeComponents.minute ?? 0
 
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
         let request = UNNotificationRequest(identifier: weeklyReviewIdentifier, content: content, trigger: trigger)

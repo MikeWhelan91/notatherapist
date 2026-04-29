@@ -373,6 +373,8 @@ private struct AICircleProfile {
 
 struct MoodSelectorView: View {
     @Binding var selectedMood: MoodLevel
+    var size: CGFloat = 54
+    var labelFont: Font = .caption
 
     var body: some View {
         HStack(spacing: 10) {
@@ -382,14 +384,14 @@ struct MoodSelectorView: View {
                 } label: {
                     VStack(spacing: 7) {
                         MoodFaceIcon(mood: mood, color: selectedMood == mood ? Color(.systemBackground) : .primary)
-                            .frame(width: 54, height: 54)
+                            .frame(width: size, height: size)
                             .background(selectedMood == mood ? Color.primary : AppSurface.fill, in: Circle())
                             .overlay {
                                 Circle()
                                     .stroke(AppSurface.stroke, lineWidth: 0.5)
                             }
                         Text(mood.label)
-                            .font(.caption)
+                            .font(labelFont)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }

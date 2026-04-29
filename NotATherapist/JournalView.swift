@@ -3,6 +3,9 @@ import SwiftUI
 struct JournalView: View {
     @EnvironmentObject private var appModel: AppViewModel
     @State private var showingNewEntry = false
+    @State private var showingSettings = false
+    @State private var activeDailyReview: DailyReview?
+    @State private var isReviewingDay = false
 
     var selectedEntries: [JournalEntry] {
         appModel.entries(on: appModel.selectedJournalDate)
@@ -37,11 +40,23 @@ struct JournalView: View {
                             }
                         }
                     }
+
+                    dayReviewSection
                 }
                 .padding(AppSpacing.page)
                 .padding(.bottom, 86)
             }
             .navigationTitle(appModel.selectedJournalDate.dayTitle)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                    }
+                    .accessibilityLabel("Settings")
+                }
+            }
             .overlay(alignment: .bottomTrailing) {
                 Button {
                     showingNewEntry = true
@@ -60,6 +75,76 @@ struct JournalView: View {
             .sheet(isPresented: $showingNewEntry) {
                 NewEntryView(initialMood: appModel.selectedMood, date: appModel.selectedJournalDate)
                     .presentationCornerRadius(28)
+            }
+            .sheet(isPresented: $showingSettings) {
+                SettingsView()
+                    .presentationCornerRadius(28)
+            }
+            .sheet(item: $activeDailyReview) { review in
+                NavigationStack {
+                    DailyReviewView(review: review)
+                }
+                .presentationCornerRadius(28)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var dayReviewSection: some View {
+        if selectedEntries.isEmpty == false {
+            if let review = appModel.dailyReview(on: appModel.selectedJournalDate) {
+                ReferenceCard {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 12) {
+                            AICircleView(state: .settled, size: 44, strokeWidth: 2)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Day reviewed")
+                                    .font(.subheadline.weight(.semibold))
+                                Text(review.summary)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                            }
+                            Spacer()
+                        }
+
+                        Button {
+                            activeDailyReview = review
+                        } label: {
+                            Label("Open review", systemImage: "doc.text.magnifyingglass")
+                        }
+                        .buttonStyle(PrimaryCapsuleButtonStyle())
+                    }
+                }
+            } else {
+                ReferenceCard {
+                    HStack(spacing: 12) {
+                        AICircleView(state: isReviewingDay ? .thinking : .idle, size: 44, strokeWidth: 2)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Save the day")
+                                .font(.subheadline.weight(.semibold))
+                            Text("When you are done writing, review this date once.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button {
+                            isReviewingDay = true
+                            Task {
+                                if let review = await appModel.reviewDay(appModel.selectedJournalDate) {
+                                    activeDailyReview = review
+                                }
+                                isReviewingDay = false
+                            }
+                        } label: {
+                            Text(isReviewingDay ? "Saving" : "Review")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.primary)
+                        .foregroundStyle(Color(.systemBackground))
+                        .disabled(isReviewingDay)
+                    }
+                }
             }
         }
     }
@@ -94,7 +179,7 @@ struct NewEntryView: View {
                 .padding(.top, -10)
                 .padding(.bottom, -4)
 
-                MoodSelectorView(selectedMood: $mood)
+                MoodSelectorView(selectedMood: $mood, size: 44, labelFont: .caption2)
                     .padding(.top, -2)
 
                 EntryTypeSelectorView(selection: $entryType)
@@ -257,7 +342,6 @@ struct EntryDetailView: View {
     @EnvironmentObject private var appModel: AppViewModel
     let entry: JournalEntry
     @State private var activeDailyReview: DailyReview?
-    @State private var isReviewing = false
 
     var body: some View {
         ScrollView {
@@ -281,44 +365,29 @@ struct EntryDetailView: View {
                     }
                 }
 
-                ReferenceCard {
-                    VStack(alignment: .leading, spacing: 12) {
-                        if let review = appModel.dailyReview(on: entry.date) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Included in daily review")
-                                    .font(.subheadline.weight(.semibold))
-                                Text(review.summary)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Button {
-                                activeDailyReview = review
-                            } label: {
-                                Label("Open review", systemImage: "doc.text.magnifyingglass")
-                            }
-                            .buttonStyle(PrimaryCapsuleButtonStyle())
-                        } else {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Saved")
-                                    .font(.subheadline.weight(.semibold))
-                                Text("Review this day when you are done writing.")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Button {
-                                isReviewing = true
-                                Task {
-                                    if let review = await appModel.reviewDay(entry.date) {
-                                        activeDailyReview = review
-                                    }
-                                    isReviewing = false
+                if let review = appModel.dailyReview(on: entry.date) {
+                    ReferenceCard {
+                        Button {
+                            activeDailyReview = review
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "checkmark.circle")
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text("Included in day review")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text(review.summary)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
                                 }
-                            } label: {
-                                Label(isReviewing ? "Reviewing" : "Review this day", systemImage: "sparkle.magnifyingglass")
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.tertiary)
                             }
-                            .buttonStyle(PrimaryCapsuleButtonStyle())
-                            .disabled(isReviewing)
+                            .foregroundStyle(.primary)
                         }
+                        .buttonStyle(.plain)
                     }
                 }
             }

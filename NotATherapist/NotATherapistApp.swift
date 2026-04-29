@@ -34,12 +34,8 @@ struct MainTabView: View {
 
     var body: some View {
         TabView(selection: $router.selectedTab) {
-            TodayView()
-                .tabItem { Label("Today", systemImage: "sun.max") }
-                .tag(MainTab.today)
-
             JournalView()
-                .tabItem { Label("Journal", systemImage: "book.closed") }
+                .tabItem { Label("Today", systemImage: "book.closed") }
                 .tag(MainTab.journal)
 
             InsightsView()

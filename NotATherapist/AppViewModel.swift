@@ -74,6 +74,11 @@ final class AppViewModel: ObservableObject {
         }
     }
 
+    func updatePreferredName(_ name: String) {
+        UserDefaults.standard.set(name, forKey: "onboardingPreferredName")
+        onboardingProfile = .current
+    }
+
     var latestDailyReview: DailyReview? {
         dailyReviews.sorted { $0.createdAt > $1.createdAt }.first
     }

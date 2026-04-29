@@ -1,7 +1,6 @@
 import Foundation
 
 enum MainTab: Hashable {
-    case today
     case journal
     case insights
     case messages
@@ -12,7 +11,7 @@ enum MainTab: Hashable {
 final class AppRouter: ObservableObject {
     static let shared = AppRouter()
 
-    @Published var selectedTab: MainTab = .today
+    @Published var selectedTab: MainTab = .journal
     @Published var pendingWeeklyCheckIn = false
 
     private init() {}

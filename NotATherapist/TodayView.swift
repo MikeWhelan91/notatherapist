@@ -283,19 +283,53 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("About") {
-                    LabeledContent("App", value: "Anchor")
-                    LabeledContent("Mode", value: "Local-first")
-                    LabeledContent("AI", value: appModel.aiConnection.label)
-                    Button("Check AI connection") {
-                        Task {
-                            await appModel.refreshAIConnection()
-                        }
+                Section {
+                    HStack {
+                        Text("AI connection")
+                        Spacer()
+                        Text(appModel.aiConnection.label)
+                            .foregroundStyle(.secondary)
                     }
+
+                    Button {
+                        Task { await appModel.refreshAIConnection() }
+                    } label: {
+                        Label("Check connection", systemImage: "arrow.clockwise")
+                    }
+                } header: {
+                    Text("About")
+                } footer: {
+                    Text("Anchor is local-first. AI is used only when a review needs it.")
                 }
 
-                Section("Plan") {
-                    LabeledContent("Weekly AI review", value: "Included")
+                Section {
+                    TextField(
+                        "Name or nickname",
+                        text: Binding(
+                            get: { appModel.onboardingProfile.preferredName },
+                            set: { appModel.updatePreferredName($0) }
+                        )
+                    )
+                    .textInputAutocapitalization(.words)
+
+                    HStack {
+                        Text("Age range")
+                        Spacer()
+                        Text(appModel.onboardingProfile.ageRange.isEmpty ? "Not set" : appModel.onboardingProfile.ageRange)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Button("Review onboarding answers") {
+                        hasCompletedOnboarding = false
+                        dismiss()
+                    }
+                } header: {
+                    Text("Profile")
+                } footer: {
+                    Text("This context helps reviews sound less generic. It can be skipped.")
+                }
+
+                Section {
                     Toggle(
                         "AI daily reviews",
                         isOn: Binding(
@@ -303,9 +337,17 @@ struct SettingsView: View {
                             set: { appModel.isPremiumDailyReviewsEnabled = $0 }
                         )
                     )
-                    Text("When off, daily reviews stay on-device.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Weekly review")
+                        Spacer()
+                        Text("Included")
+                            .foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("Plan")
+                } footer: {
+                    Text("When AI daily reviews are off, day reviews stay on-device. Weekly review can use AI when available.")
                 }
 
                 Section("Scope") {
@@ -405,20 +447,26 @@ struct SettingsView: View {
                     }
                     .disabled(notificationService.isWeeklyReminderEnabled == false)
 
-                    LabeledContent("Time", value: "18:00")
+                    DatePicker(
+                        "Time",
+                        selection: Binding(
+                            get: { notificationService.weeklyReminderTime },
+                            set: { time in
+                                Task {
+                                    await notificationService.updateWeeklyReminderTime(time)
+                                }
+                            }
+                        ),
+                        displayedComponents: .hourAndMinute
+                    )
+                    .disabled(notificationService.isWeeklyReminderEnabled == false)
+
                     LabeledContent("Permission", value: notificationService.authorizationLabel)
 
                     if notificationService.authorizationStatus == .denied {
                         Button("Open iOS Settings") {
                             notificationService.openAppSettings()
                         }
-                    }
-                }
-
-                Section {
-                    Button("Show onboarding again") {
-                        hasCompletedOnboarding = false
-                        dismiss()
                     }
                 }
 
