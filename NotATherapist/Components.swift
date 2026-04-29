@@ -507,6 +507,7 @@ struct WeekCalendarStripView: View {
             HStack(spacing: 8) {
                 ForEach(dates, id: \.self) { date in
                     let isSelected = Calendar.current.isDate(date, inSameDayAs: selectedDate)
+                    let isToday = Calendar.current.isDateInToday(date)
                     let hasSavedEntry = hasEntry(date)
                     Button {
                         selectedDate = date
@@ -518,15 +519,31 @@ struct WeekCalendarStripView: View {
                             Text(date.dayNumber)
                                 .font(.subheadline.weight(.semibold))
                                 .frame(width: 32, height: 32)
-                                .foregroundStyle(isSelected ? Color(.systemBackground) : .primary)
-                                .background((isSelected || hasSavedEntry) ? Color.primary : Color.clear, in: Circle())
+                                .foregroundStyle(hasSavedEntry ? Color(.systemBackground) : .primary)
+                                .background(hasSavedEntry ? Color.primary : Color.clear, in: Circle())
                                 .overlay {
-                                    if isSelected == false && hasSavedEntry == false {
+                                    if hasSavedEntry == false {
                                         Circle()
-                                            .stroke(Color.primary.opacity(0.9), lineWidth: 1)
+                                            .stroke(Color.primary.opacity(0.95), lineWidth: isToday ? 1.8 : 1.1)
+                                    }
+                                }
+                                .overlay {
+                                    if isToday {
+                                        Circle()
+                                            .stroke(Color.primary.opacity(0.35), lineWidth: 2.6)
+                                            .scaleEffect(1.12)
                                     }
                                 }
                         }
+                        .overlay(alignment: .bottom) {
+                            if isSelected {
+                                Capsule()
+                                    .fill(Color.primary)
+                                    .frame(width: 14, height: 2)
+                                    .offset(y: 10)
+                            }
+                        }
+                        .scaleEffect(isSelected ? 1.04 : 1.0)
                         .frame(width: 46)
                     }
                     .buttonStyle(.plain)

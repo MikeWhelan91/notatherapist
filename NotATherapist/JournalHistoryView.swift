@@ -23,13 +23,15 @@ struct JournalHistoryView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     SectionLabel(title: appModel.selectedJournalDate.formatted(date: .complete, time: .omitted))
                     if selectedEntries.isEmpty {
-                        VStack(alignment: .leading, spacing: 10) {
+                        VStack(spacing: 10) {
                             Text("No entries on this date.")
                                 .font(.headline)
                             Text("Pick another day to view entries.")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
                         }
+                        .frame(maxWidth: .infinity)
                     } else {
                         VStack(spacing: 10) {
                             ForEach(selectedEntries) { entry in
