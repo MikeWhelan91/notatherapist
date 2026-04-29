@@ -114,7 +114,7 @@ private struct InsightFeedView: View {
         let signals = appModel.localSignals
         return VStack(alignment: .leading, spacing: 8) {
             if signals.isEmpty == false {
-                SectionLabel(title: "Local signals")
+                SectionLabel(title: "What I am noticing")
                 VStack(spacing: 10) {
                     ForEach(signals) { insight in
                         ReferenceCard {
@@ -204,7 +204,7 @@ struct WeeklyReviewView: View {
 
             if appModel.isPremium {
                 ReferenceCard {
-                    InsightSectionView(title: "Potential risk", bodyText: review.risk, symbol: InsightType.risk.symbol)
+                    InsightSectionView(title: "Watchpoint", bodyText: review.risk, symbol: InsightType.risk.symbol)
                 }
             }
             if appModel.isPremium, review.patternShift.isEmpty == false {

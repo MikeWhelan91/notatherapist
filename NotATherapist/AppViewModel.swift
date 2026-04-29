@@ -136,11 +136,19 @@ final class AppViewModel: ObservableObject {
         }
     }
 
-    func updateOnboardingProfile(preferredName: String, ageRange: String, lifeContext: [String], reflectionGoal: String, personalStory: String) {
+    func updateOnboardingProfile(
+        preferredName: String,
+        ageRange: String,
+        lifeContext: [String],
+        focusAreas: [String],
+        reflectionGoal: String,
+        personalStory: String
+    ) {
         let defaults = UserDefaults.standard
         defaults.set(preferredName, forKey: "onboardingPreferredName")
         defaults.set(ageRange, forKey: "onboardingAgeRange")
         defaults.set(lifeContext.joined(separator: "|"), forKey: "onboardingLifeContext")
+        defaults.set(focusAreas.joined(separator: "|"), forKey: "onboardingFocusAreas")
         defaults.set(reflectionGoal, forKey: "onboardingReflectionGoal")
         defaults.set(personalStory, forKey: "onboardingPersonalStory")
         onboardingProfile = .current
@@ -778,7 +786,7 @@ final class AppViewModel: ObservableObject {
         }
 
         if issue.contains("anxiety") {
-            options.append("Anxiety is a signal, not a verdict.")
+            options.append("Anxiety is a feeling, not a verdict.")
         }
         if issue.contains("sleep") {
             options.append("Protecting sleep is an act of care.")

@@ -123,7 +123,7 @@ enum InsightType: String, CaseIterable, Identifiable, Codable {
         case .pattern: "Pattern"
         case .reframe: "Reframe"
         case .action: "Action"
-        case .risk: "Potential risk"
+        case .risk: "Watchpoint"
         case .suggestion: "Suggestion"
         }
     }
@@ -317,8 +317,7 @@ struct OnboardingProfile: Codable, Hashable {
             lifeContext.isEmpty ? nil : "Life context: \(lifeContext.joined(separator: ", "))",
             focusAreas.isEmpty ? nil : "Focus: \(focusAreas.joined(separator: ", "))",
             reflectionGoal.isEmpty ? nil : "Goal: \(reflectionGoal)",
-            personalStory.isEmpty ? nil : "Story: \(personalStory)",
-            "Voice: factual, calm, contemplative, empathetic, kind"
+            personalStory.isEmpty ? nil : "Story: \(personalStory)"
         ]
         .compactMap { $0 }
         .joined(separator: "\n")

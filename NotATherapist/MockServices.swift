@@ -23,7 +23,7 @@ struct MockAIInsightService {
             ("Anxiety", ["anxiety", "anxious"], ["no anxiety", "not anxious", "without anxiety"]),
             ("Low mood", ["low mood", "flat", "empty", "down", "depressed"], ["not depressed"]),
             ("Stress load", ["stress", "overwhelm", "overwhelmed", "burnout", "too much"], []),
-            ("Panic signal", ["panic", "panicky"], ["no panic", "not panicking", "without panic"]),
+            ("Panic pattern", ["panic", "panicky"], ["no panic", "not panicking", "without panic"]),
             ("Sleep disruption", ["sleep", "insomnia", "woke", "waking", "tired", "exhausted"], []),
             ("Focus friction", ["focus", "distracted", "attention", "procrastinat", "adhd"], []),
             ("Social tension", ["social", "people", "friend", "family", "partner", "relationship"], []),
@@ -114,7 +114,7 @@ struct MockAIInsightService {
         } else if let topTheme {
             pattern = "\(topTheme) was the clearest theme today."
         } else {
-            pattern = "The useful signal is still early."
+            pattern = "A clearer pattern will emerge as you keep checking in."
         }
 
         let reframe: String
@@ -302,7 +302,7 @@ struct MockAIInsightService {
                     id: UUID(),
                     title: "\(topTheme.key) is repeating",
                     body: "\(topTheme.key) has appeared in \(topTheme.value) recent entries.",
-                    category: "Local signals",
+                    category: "What I am noticing",
                     date: now,
                     type: .pattern
                 )
@@ -316,7 +316,7 @@ struct MockAIInsightService {
                     id: UUID(),
                     title: "Lower mood repeated",
                     body: "Lower mood appears more than once in recent entries.",
-                    category: "Local signals",
+                    category: "What I am noticing",
                     date: lowMoodEntries.first?.date ?? now,
                     type: .emotionalRead
                 )
@@ -330,7 +330,7 @@ struct MockAIInsightService {
                     id: UUID(),
                     title: "Movement may help",
                     body: "Better mood tends to show up on movement days.",
-                    category: "Local signals",
+                    category: "What I am noticing",
                     date: movementGoodDays.first?.date ?? now,
                     type: .suggestion
                 )
@@ -347,7 +347,7 @@ struct MockAIInsightService {
                         id: UUID(),
                         title: "Sleep and energy",
                         body: "Lower sleep may be linked with heavier entries.",
-                        category: "Local signals",
+                        category: "What I am noticing",
                         date: lowSleepLowMood.first?.date ?? now,
                         type: .pattern
                     )
@@ -363,7 +363,7 @@ struct MockAIInsightService {
                         id: UUID(),
                         title: "Activity context",
                         body: "Steadier moods often appear on more active days.",
-                        category: "Local signals",
+                        category: "What I am noticing",
                         date: activeGoodEntries.first?.date ?? now,
                         type: .suggestion
                     )
@@ -378,7 +378,7 @@ struct MockAIInsightService {
                     id: UUID(),
                     title: "Open next step",
                     body: "\(activeGoals.count) agreed next \(activeGoals.count == 1 ? "step is" : "steps are") still active.",
-                    category: "Local signals",
+                    category: "What I am noticing",
                     date: activeGoals.first?.createdAt ?? now,
                     type: .action
                 )
