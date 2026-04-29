@@ -24,6 +24,7 @@
 		727BD42F3D031075B07B83A3 /* APIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A041E831CBDEEC99815BE259 /* APIService.swift */; };
 		77BE28E7E63CF8229DAE7C95 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DE6E81A3EC973E2AC9DF78C /* NotificationService.swift */; };
 		930A745C1E157C1E0D3CD7E3 /* CalmView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8623EAE818E0A35718FAD110 /* CalmView.swift */; };
+		936A3D0C4C1E4F74A2D52D88 /* JournalHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C882D5CC2AB04555AB6712F3 /* JournalHistoryView.swift */; };
 		9D19D981C15874DAFD3CE618 /* DailyReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B29BFF9D7AE483A323F3EFE /* DailyReviewView.swift */; };
 		A4732372156A976A36CFB3CD /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A4B528419784EBC6ADC1296 /* Components.swift */; };
 		ACE515FE6CBF1109C9C30ED4 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97B9AA6C3315067AAD058A50 /* Models.swift */; };
@@ -53,6 +54,7 @@
 		A041E831CBDEEC99815BE259 /* APIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIService.swift; sourceTree = "<group>"; };
 		BE282B22439564477927FDB4 /* HealthKitManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitManager.swift; sourceTree = "<group>"; };
 		C75BC9CA126A05BF22517BEC /* MockServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockServices.swift; sourceTree = "<group>"; };
+		C882D5CC2AB04555AB6712F3 /* JournalHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JournalHistoryView.swift; sourceTree = "<group>"; };
 		CF4164741B6CEEAF043F3B68 /* NotATherapistApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotATherapistApp.swift; sourceTree = "<group>"; };
 		DB7F4C6E8831537A418BD44E /* HealthConnectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthConnectView.swift; sourceTree = "<group>"; };
 		ECEEDCC536C1CF382A1A0BC1 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
@@ -93,6 +95,7 @@
 				BE282B22439564477927FDB4 /* HealthKitManager.swift */,
 				4526177357FDDD334C4B7A82 /* ICloudSyncService.swift */,
 				4B2A86DD82E5AEA38D2581EF /* InsightsView.swift */,
+				C882D5CC2AB04555AB6712F3 /* JournalHistoryView.swift */,
 				F48090E8FBC274AA5AC7FEF0 /* JournalView.swift */,
 				82855229C977B660683AA568 /* LocalAppStore.swift */,
 				806DEB02C67230523F0AA151 /* MessagesView.swift */,
@@ -184,6 +187,7 @@
 				2B9DC282FB0999E0BBE93305 /* HealthKitManager.swift in Sources */,
 				259C274EAC3EE4BCDF735712 /* ICloudSyncService.swift in Sources */,
 				C15B7D62FC2F6B3EC607C6DB /* InsightsView.swift in Sources */,
+				936A3D0C4C1E4F74A2D52D88 /* JournalHistoryView.swift in Sources */,
 				05318CCA12581DD266B17D5B /* JournalView.swift in Sources */,
 				652C2C72A60CF787391116AE /* LocalAppStore.swift in Sources */,
 				44DFAD53D5424FC9BF7AFE18 /* MessagesView.swift in Sources */,

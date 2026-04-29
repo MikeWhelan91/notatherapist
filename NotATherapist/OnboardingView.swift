@@ -376,10 +376,18 @@ struct OnboardingView: View {
     }
 
     private func finish() {
-        storedPreferredName = preferredName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedName = preferredName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let issues = selectedIssues
+        storedPreferredName = trimmedName
         storedAgeRange = ageRange
-        storedLifeContext = selectedIssues.joined(separator: "|")
+        storedLifeContext = issues.joined(separator: "|")
         storedReflectionGoal = reflectionGoal
+        appModel.updateOnboardingProfile(
+            preferredName: trimmedName,
+            ageRange: ageRange,
+            lifeContext: issues,
+            reflectionGoal: reflectionGoal
+        )
         hasCompletedOnboarding = true
         Task {
             if wantsWeeklyReviewReminder == false {

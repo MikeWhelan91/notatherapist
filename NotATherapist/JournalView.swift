@@ -4,19 +4,47 @@ struct JournalView: View {
     @EnvironmentObject private var appModel: AppViewModel
     @State private var showingNewEntry = false
     @State private var showingSettings = false
+    @State private var showingHistory = false
     @State private var activeDailyReview: DailyReview?
     @State private var isReviewingDay = false
 
-    var selectedEntries: [JournalEntry] {
-        appModel.entries(on: appModel.selectedJournalDate)
+    private var todayDate: Date { Date() }
+
+    var todayEntries: [JournalEntry] {
+        appModel.entries(on: todayDate)
+    }
+
+    private var preferredName: String {
+        appModel.onboardingProfile.preferredName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var greetingTitle: String {
+        preferredName.isEmpty ? "Welcome" : "Welcome, \(preferredName)"
     }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: AppSpacing.section) {
-                    WeekCalendarStripView(selectedDate: $appModel.selectedJournalDate, dates: appModel.currentWeekDates)
-                        .padding(.horizontal, -AppSpacing.page)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(greetingTitle)
+                            .font(.largeTitle.weight(.semibold))
+                        Text("How are you feeling today?")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    HStack {
+                        Spacer()
+                        AICircleView(state: .idle, size: 120, strokeWidth: 3)
+                        Spacer()
+                    }
+                    .padding(.vertical, 4)
+
+                    MoodSelectorView(selectedMood: $appModel.selectedMood, size: 52, labelFont: .caption)
+                    Text(todayDate.formatted(date: .complete, time: .omitted))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
 
                     if appModel.reflectionGoals.isEmpty == false {
                         VStack(alignment: .leading, spacing: 8) {
@@ -41,14 +69,36 @@ struct JournalView: View {
 
                     VStack(alignment: .leading, spacing: 8) {
                         SectionLabel(title: "Entries")
-                        if selectedEntries.isEmpty {
-                            ReferenceCard {
-                                ContentUnavailableView("No entries", systemImage: "book.closed", description: Text("Add a note for this date."))
+                        HStack {
+                            Text("\(todayEntries.count) \(todayEntries.count == 1 ? "entry" : "entries") today")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Button {
+                                showingHistory = true
+                            } label: {
+                                Label("Browse dates", systemImage: "calendar")
+                                    .font(.caption.weight(.semibold))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        if todayEntries.isEmpty {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Start with one note today.")
+                                    .font(.headline)
+                                Text("A short check-in is enough. The review appears after you write.")
                                     .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                Button {
+                                    showingNewEntry = true
+                                } label: {
+                                    Label("Log now", systemImage: "square.and.pencil")
+                                }
+                                .buttonStyle(PrimaryCapsuleButtonStyle())
                             }
                         } else {
                             VStack(spacing: 10) {
-                                ForEach(selectedEntries) { entry in
+                                ForEach(todayEntries) { entry in
                                     NavigationLink {
                                         EntryDetailView(entry: entry)
                                     } label: {
@@ -67,7 +117,7 @@ struct JournalView: View {
                 .padding(AppSpacing.page)
                 .padding(.bottom, 86)
             }
-            .navigationTitle(appModel.selectedJournalDate.dayTitle)
+            .navigationTitle("Today")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -77,16 +127,25 @@ struct JournalView: View {
                     }
                     .accessibilityLabel("Settings")
                 }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showingHistory = true
+                    } label: {
+                        Image(systemName: "calendar")
+                    }
+                    .accessibilityLabel("Browse dates")
+                }
             }
             .overlay(alignment: .bottomTrailing) {
                 Button {
                     showingNewEntry = true
                 } label: {
-                    Image(systemName: "plus")
-                        .font(.title3.weight(.semibold))
+                    Label("New entry", systemImage: "square.and.pencil")
+                        .font(.headline.weight(.semibold))
                         .foregroundStyle(Color(.systemBackground))
-                        .frame(width: 54, height: 54)
-                        .background(Color.primary, in: Circle())
+                        .padding(.horizontal, 16)
+                        .frame(height: 52)
+                        .background(Color.primary, in: Capsule())
                 }
                 .padding(.trailing, 22)
                 .padding(.bottom, 22)
@@ -94,12 +153,18 @@ struct JournalView: View {
                 .accessibilityLabel("New entry")
             }
             .sheet(isPresented: $showingNewEntry) {
-                NewEntryView(initialMood: appModel.selectedMood, date: appModel.selectedJournalDate)
+                NewEntryView(initialMood: appModel.selectedMood, date: todayDate)
                     .presentationCornerRadius(28)
             }
             .sheet(isPresented: $showingSettings) {
                 SettingsView()
                     .presentationCornerRadius(28)
+            }
+            .sheet(isPresented: $showingHistory) {
+                NavigationStack {
+                    JournalHistoryView()
+                }
+                .presentationCornerRadius(28)
             }
             .sheet(item: $activeDailyReview) { review in
                 NavigationStack {
@@ -112,8 +177,8 @@ struct JournalView: View {
 
     @ViewBuilder
     private var dayReviewSection: some View {
-        if selectedEntries.isEmpty == false {
-            if let review = appModel.dailyReview(on: appModel.selectedJournalDate) {
+        if todayEntries.isEmpty == false {
+            if let review = appModel.dailyReview(on: todayDate) {
                 ReferenceCard {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(spacing: 12) {
@@ -152,7 +217,7 @@ struct JournalView: View {
                         Button {
                             isReviewingDay = true
                             Task {
-                                if let review = await appModel.reviewDay(appModel.selectedJournalDate) {
+                                if let review = await appModel.reviewDay(todayDate) {
                                     activeDailyReview = review
                                 }
                                 isReviewingDay = false
