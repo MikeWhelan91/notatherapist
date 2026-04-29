@@ -500,12 +500,14 @@ private struct Arc: Shape {
 struct WeekCalendarStripView: View {
     @Binding var selectedDate: Date
     let dates: [Date]
+    var hasEntry: (Date) -> Bool = { _ in false }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(dates, id: \.self) { date in
                     let isSelected = Calendar.current.isDate(date, inSameDayAs: selectedDate)
+                    let hasSavedEntry = hasEntry(date)
                     Button {
                         selectedDate = date
                     } label: {
@@ -517,7 +519,13 @@ struct WeekCalendarStripView: View {
                                 .font(.subheadline.weight(.semibold))
                                 .frame(width: 32, height: 32)
                                 .foregroundStyle(isSelected ? Color(.systemBackground) : .primary)
-                                .background(isSelected ? Color.primary : Color.clear, in: Circle())
+                                .background((isSelected || hasSavedEntry) ? Color.primary : Color.clear, in: Circle())
+                                .overlay {
+                                    if isSelected == false && hasSavedEntry == false {
+                                        Circle()
+                                            .stroke(Color.primary.opacity(0.9), lineWidth: 1)
+                                    }
+                                }
                         }
                         .frame(width: 46)
                     }

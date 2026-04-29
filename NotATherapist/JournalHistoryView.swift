@@ -15,7 +15,10 @@ struct JournalHistoryView: View {
             VStack(alignment: .leading, spacing: AppSpacing.section) {
                 WeekCalendarStripView(
                     selectedDate: $appModel.selectedJournalDate,
-                    dates: appModel.currentWeekDates
+                    dates: appModel.currentWeekDates,
+                    hasEntry: { date in
+                        appModel.entries(on: date).isEmpty == false
+                    }
                 )
                 .padding(.horizontal, -AppSpacing.page)
 
@@ -68,4 +71,3 @@ struct JournalHistoryView: View {
         }
     }
 }
-

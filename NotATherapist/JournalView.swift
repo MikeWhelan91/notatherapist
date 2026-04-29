@@ -22,6 +22,11 @@ struct JournalView: View {
         preferredName.isEmpty ? "Welcome" : "Welcome, \(preferredName)"
     }
 
+    private var todayTitle: String {
+        let dateText = todayDate.formatted(.dateTime.day().month(.wide))
+        return "Today \(dateText)"
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -41,7 +46,25 @@ struct JournalView: View {
                     }
                     .padding(.vertical, 4)
 
-                    WeekCalendarStripView(selectedDate: $appModel.selectedJournalDate, dates: appModel.currentWeekDates)
+                    HStack {
+                        Text("This week")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("History") {
+                            showingHistory = true
+                        }
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    }
+
+                    WeekCalendarStripView(
+                        selectedDate: $appModel.selectedJournalDate,
+                        dates: appModel.currentWeekDates,
+                        hasEntry: { date in
+                            appModel.entries(on: date).isEmpty == false
+                        }
+                    )
                         .padding(.horizontal, -AppSpacing.page)
 
                     if appModel.reflectionGoals.isEmpty == false {
@@ -67,19 +90,6 @@ struct JournalView: View {
 
                     VStack(alignment: .leading, spacing: 8) {
                         SectionLabel(title: "Entries")
-                        HStack {
-                            Text("\(todayEntries.count) \(todayEntries.count == 1 ? "entry" : "entries") on this date")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Button {
-                                showingHistory = true
-                            } label: {
-                                Label("Browse dates", systemImage: "calendar")
-                                    .font(.caption.weight(.semibold))
-                            }
-                            .buttonStyle(.plain)
-                        }
                         if todayEntries.isEmpty {
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("Start with one note today.")
@@ -109,7 +119,7 @@ struct JournalView: View {
                 .padding(AppSpacing.page)
                 .padding(.bottom, 86)
             }
-            .navigationTitle("Today")
+            .navigationTitle(todayTitle)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -118,14 +128,6 @@ struct JournalView: View {
                         Image(systemName: "gearshape")
                     }
                     .accessibilityLabel("Settings")
-                }
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        showingHistory = true
-                    } label: {
-                        Image(systemName: "calendar")
-                    }
-                    .accessibilityLabel("Browse dates")
                 }
             }
             .overlay(alignment: .bottomTrailing) {
