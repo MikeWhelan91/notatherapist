@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import WidgetKit
 
 @MainActor
 final class AppViewModel: ObservableObject {
@@ -17,21 +18,31 @@ final class AppViewModel: ObservableObject {
     @Published var aiConnection: AIConnectionState = .unknown
     @Published var iCloudSyncState: ICloudSyncState = .off
     @Published var planTier: AppPlanTier
+    @Published var widgetStylePreset: WidgetStylePreset
+    @Published var widgetAffirmationCategories: Set<WidgetAffirmationCategory>
 
     private let insightService = MockAIInsightService()
     private let weeklyReviewService = MockWeeklyReviewService()
     private let conversationService = MockConversationService()
     private let apiService = NotATherapistAPIService()
     private let localStore = LocalAppStore()
+    private let widgetPayloadStore = WidgetPayloadStore()
     private let iCloudSyncService = ICloudSyncService.shared
     private let iCloudSyncEnabledKey = "iCloudSyncEnabled"
     private let planTierKey = "appPlanTier"
+    private let widgetStylePresetKey = "widgetStylePreset"
+    private let widgetAffirmationCategoriesKey = "widgetAffirmationCategories"
+    private let widgetAffirmationIndexKey = "widgetAffirmationIndex"
 
     init(seedWithMockData: Bool = false) {
         let defaults = UserDefaults.standard
         let savedTier = defaults.string(forKey: planTierKey)
         let migratedPremium = defaults.bool(forKey: "premiumDailyReviewsEnabled")
         _planTier = Published(initialValue: AppPlanTier(rawValue: savedTier ?? "") ?? (migratedPremium ? .premium : .free))
+        _widgetStylePreset = Published(initialValue: WidgetStylePreset(rawValue: defaults.string(forKey: widgetStylePresetKey) ?? "") ?? .minimal)
+        let storedCategoryIDs = defaults.stringArray(forKey: widgetAffirmationCategoriesKey) ?? []
+        let storedCategories = Set(storedCategoryIDs.compactMap(WidgetAffirmationCategory.init(rawValue:)))
+        _widgetAffirmationCategories = Published(initialValue: storedCategories.isEmpty ? Set(WidgetAffirmationCategory.allCases) : storedCategories)
 
         if seedWithMockData {
             let initialEntries = MockData.entries
@@ -52,6 +63,7 @@ final class AppViewModel: ObservableObject {
             insights = []
             weeklyReview = weeklyReviewService.latestReview(from: [])
         }
+        refreshWidgetPayload()
     }
 
     var latestInsight: Insight? {
@@ -76,12 +88,52 @@ final class AppViewModel: ObservableObject {
         set {
             planTier = newValue ? .premium : .free
             UserDefaults.standard.set(planTier.rawValue, forKey: planTierKey)
+            refreshWidgetPayload()
         }
     }
 
     func updatePreferredName(_ name: String) {
         UserDefaults.standard.set(name, forKey: "onboardingPreferredName")
         onboardingProfile = .current
+        refreshWidgetPayload()
+    }
+
+    func updateWidgetStylePreset(_ style: WidgetStylePreset) {
+        widgetStylePreset = style
+        UserDefaults.standard.set(style.rawValue, forKey: widgetStylePresetKey)
+        refreshWidgetPayload()
+    }
+
+    func setWidgetAffirmationCategory(_ category: WidgetAffirmationCategory, enabled: Bool) {
+        if enabled {
+            widgetAffirmationCategories.insert(category)
+        } else if widgetAffirmationCategories.count > 1 {
+            widgetAffirmationCategories.remove(category)
+        }
+        UserDefaults.standard.set(widgetAffirmationCategories.map(\.rawValue), forKey: widgetAffirmationCategoriesKey)
+        refreshWidgetPayload()
+    }
+
+    func cycleWidgetAffirmation() {
+        let defaults = UserDefaults.standard
+        let options = widgetAffirmationOptions()
+        guard options.isEmpty == false else { return }
+        let next = (defaults.integer(forKey: widgetAffirmationIndexKey) + 1) % options.count
+        defaults.set(next, forKey: widgetAffirmationIndexKey)
+        refreshWidgetPayload()
+    }
+
+    func handle(_ command: AnchorAppCommand, router: AppRouter) {
+        switch command {
+        case .newQuickThought:
+            router.openNewQuickThought()
+        case .runDailyReview:
+            router.runDailyReview()
+        case .startWeeklyCheckIn:
+            router.openWeeklyCheckIn()
+        case .nextAffirmation:
+            cycleWidgetAffirmation()
+        }
     }
 
     func updateOnboardingProfile(preferredName: String, ageRange: String, lifeContext: [String], reflectionGoal: String, personalStory: String) {
@@ -162,7 +214,7 @@ final class AppViewModel: ObservableObject {
         onboardingProfile = .current
         let dayEntries = entries(on: date)
         guard dayEntries.isEmpty == false else { return nil }
-        let recentEntries = recentContextEntries(for: date)
+        let recentEntries = dailyContextEntries(for: date)
 
         let review: DailyReview
         if planTier == .premium {
@@ -187,7 +239,7 @@ final class AppViewModel: ObservableObject {
             guard let fallback = insightService.dailyReview(
                 for: date,
                 entries: dayEntries,
-                recentEntries: journalEntries,
+                recentEntries: recentEntries,
                 profile: onboardingProfile,
                 healthSummary: healthSummary
             ) else { return nil }
@@ -209,15 +261,79 @@ final class AppViewModel: ObservableObject {
         return storedReview
     }
 
-    private func recentContextEntries(for date: Date) -> [JournalEntry] {
-        let start = Calendar.current.date(byAdding: .day, value: -14, to: date) ?? date
-        return journalEntries
+    @discardableResult
+    func generateOnboardingFirstReflection(for date: Date) async -> DailyReview? {
+        onboardingProfile = .current
+        let dayEntries = entries(on: date)
+        guard dayEntries.isEmpty == false else { return nil }
+        let recentEntries = dailyContextEntries(for: date)
+
+        let review: DailyReview
+        do {
+            review = try await apiService.dailyReview(
+                date: date,
+                entries: dayEntries,
+                recentEntries: recentEntries,
+                profile: onboardingProfile,
+                healthSummary: healthSummary,
+                goals: reflectionGoals
+            )
+            aiConnection = review.source == "openai" ? .connected(model: "openai") : .unknown
+        } catch {
+            guard let fallback = insightService.dailyReview(
+                for: date,
+                entries: dayEntries,
+                recentEntries: recentEntries,
+                profile: onboardingProfile,
+                healthSummary: healthSummary
+            ) else { return nil }
+            review = fallback
+            aiConnection = .unavailable
+        }
+
+        var storedReview = sanitizedReview(review)
+        if let existingIndex = dailyReviews.firstIndex(where: { Calendar.current.isDate($0.date, inSameDayAs: date) }) {
+            storedReview.acceptedGoalID = dailyReviews[existingIndex].acceptedGoalID
+            dailyReviews[existingIndex] = storedReview
+        } else {
+            dailyReviews.insert(storedReview, at: 0)
+        }
+
+        replaceInsights(for: storedReview)
+        await refreshWeeklyReview()
+        saveSnapshot()
+        return storedReview
+    }
+
+    private func dailyContextEntries(for date: Date) -> [JournalEntry] {
+        let windowDays = planTier == .premium ? 21 : 5
+        let maxEntries = planTier == .premium ? 90 : 20
+        return contextEntries(for: date, windowDays: windowDays, maxEntries: maxEntries)
+    }
+
+    private func weeklyContextEntries(for date: Date = Date()) -> [JournalEntry] {
+        let windowDays = planTier == .premium ? 120 : 30
+        let maxEntries = planTier == .premium ? 220 : 45
+        let scoped = contextEntries(for: date, windowDays: windowDays, maxEntries: maxEntries, includeSameDay: true)
+        if scoped.count >= 5 {
+            return scoped
+        }
+        return journalEntries.sorted { $0.date < $1.date }
+    }
+
+    private func contextEntries(for date: Date, windowDays: Int, maxEntries: Int, includeSameDay: Bool = false) -> [JournalEntry] {
+        let start = Calendar.current.date(byAdding: .day, value: -windowDays, to: date) ?? date
+        let filtered = journalEntries
             .filter { entry in
                 entry.date >= start &&
                 entry.date <= date &&
-                Calendar.current.isDate(entry.date, inSameDayAs: date) == false
+                (includeSameDay || Calendar.current.isDate(entry.date, inSameDayAs: date) == false)
             }
             .sorted { $0.date < $1.date }
+        if filtered.count <= maxEntries {
+            return filtered
+        }
+        return Array(filtered.suffix(maxEntries))
     }
 
     @discardableResult
@@ -260,15 +376,16 @@ final class AppViewModel: ObservableObject {
     }
 
     func refreshWeeklyReview() async {
+        let scopedEntries = weeklyContextEntries()
         guard hasWeeklyReview else {
-            weeklyReview = weeklyReviewService.latestReview(from: journalEntries, healthSummary: healthSummary)
+            weeklyReview = weeklyReviewService.latestReview(from: scopedEntries, healthSummary: healthSummary)
             return
         }
 
         onboardingProfile = .current
         do {
             if let review = try await apiService.weeklyReview(
-                entries: journalEntries,
+                entries: scopedEntries,
                 profile: onboardingProfile,
                 healthSummary: healthSummary,
                 goals: reflectionGoals,
@@ -277,7 +394,7 @@ final class AppViewModel: ObservableObject {
                 weeklyReview = review
             }
         } catch {
-            weeklyReview = weeklyReviewService.latestReview(from: journalEntries, healthSummary: healthSummary)
+            weeklyReview = weeklyReviewService.latestReview(from: scopedEntries, healthSummary: healthSummary)
         }
         saveSnapshot()
     }
@@ -318,7 +435,8 @@ final class AppViewModel: ObservableObject {
                     action: action,
                     remainingTurns: updated.remainingTurns,
                     conversation: updated,
-                    profile: onboardingProfile
+                    profile: onboardingProfile,
+                    planTier: planTier
                 )
             } catch {
                 response = nil
@@ -328,6 +446,15 @@ final class AppViewModel: ObservableObject {
             if let response {
                 updated.remainingTurns = response.remainingTurns
                 updated.status = response.status
+                if let maxTurns = response.maxTurns {
+                    updated.maxTurns = maxTurns
+                }
+                if let deepeningUsed = response.deepeningUsed {
+                    updated.deepeningUsed = deepeningUsed
+                }
+                if let phase = response.phase {
+                    updated.phase = phase
+                }
                 reply = response.reply
                 if let goal = response.suggestedGoal {
                     reflectionGoals.insert(goal, at: 0)
@@ -343,7 +470,17 @@ final class AppViewModel: ObservableObject {
                 }
             }
 
-            updated.messages.append(ConversationMessage(id: UUID(), sender: .ai, text: reply, date: Date()))
+            let replyContext = response?.replyContext?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let contextNote = (updated.phase == .deeper && (replyContext?.isEmpty == false)) ? replyContext : nil
+            updated.messages.append(
+                ConversationMessage(
+                    id: UUID(),
+                    sender: .ai,
+                    text: reply,
+                    date: Date(),
+                    replyContext: contextNote
+                )
+            )
             updated.preview = reply
 
             if action == "Give me one action", response?.suggestedGoal == nil {
@@ -513,6 +650,7 @@ final class AppViewModel: ObservableObject {
 
     private func saveSnapshot() {
         localStore.save(snapshot)
+        refreshWidgetPayload()
         if isICloudSyncEnabled {
             Task {
                 await pushToICloud()
@@ -542,5 +680,129 @@ final class AppViewModel: ObservableObject {
             Insight(id: UUID(), title: "One useful next step", body: review.insight.action, category: "Suggestions", date: review.createdAt, type: .action)
         ]
         insights.insert(contentsOf: generated, at: 0)
+    }
+
+    private func refreshWidgetPayload() {
+        let affirmationOptions = widgetAffirmationOptions()
+        let defaults = UserDefaults.standard
+        let savedIndex = defaults.integer(forKey: widgetAffirmationIndexKey)
+        let normalizedIndex = affirmationOptions.isEmpty ? 0 : min(savedIndex, affirmationOptions.count - 1)
+        defaults.set(normalizedIndex, forKey: widgetAffirmationIndexKey)
+        let payload = WidgetAffirmationPayload(
+            preferredName: onboardingProfile.preferredName,
+            planTier: planTier == .premium ? .premium : .free,
+            primaryText: widgetPrimaryText(),
+            secondaryText: widgetSecondaryText(),
+            affirmationText: affirmationOptions.isEmpty ? nil : affirmationOptions[normalizedIndex],
+            affirmationOptions: affirmationOptions,
+            affirmationIndex: normalizedIndex,
+            stylePreset: widgetStylePreset,
+            enabledCategories: Array(widgetAffirmationCategories),
+            issueContext: widgetIssueContext(),
+            updatedAt: Date()
+        )
+        widgetPayloadStore.save(payload)
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    private func widgetPrimaryText() -> String {
+        if planTier == .premium,
+           let aiReview = latestDailyReview,
+           aiReview.source == "openai",
+           aiReview.insight.action.isEmpty == false {
+            return aiReview.insight.action
+        }
+
+        let issue = widgetIssueContext().lowercased()
+        if issue.contains("anxiety") {
+            return "Pause, breathe, and name one thing that feels manageable now."
+        }
+        if issue.contains("sleep") {
+            return "Protect a clear stop point tonight. Rest supports tomorrow."
+        }
+        if issue.contains("stress") || issue.contains("burnout") {
+            return "Choose one thing to finish, then release the rest for now."
+        }
+        if issue.contains("focus") || issue.contains("adhd") || issue.contains("attention") {
+            return "Pick one small task and stay with it for ten minutes."
+        }
+        if let goal = reflectionGoals.first(where: { $0.status == .active }) {
+            return goal.title
+        }
+        return "One short note today is enough."
+    }
+
+    private func widgetSecondaryText() -> String {
+        if planTier == .premium,
+           let aiReview = latestDailyReview,
+           aiReview.source == "openai",
+           aiReview.insight.reframe.isEmpty == false {
+            return aiReview.insight.reframe
+        }
+
+        if journalEntries.isEmpty {
+            return "Log one line in Anchor and your next review will become more personal."
+        }
+
+        if let review = latestDailyReview {
+            return review.summary
+        }
+
+        return "Your journal history builds clearer weekly patterns over time."
+    }
+
+    private func widgetAffirmationOptions() -> [String] {
+        let categories = widgetAffirmationCategories.isEmpty ? Set(WidgetAffirmationCategory.allCases) : widgetAffirmationCategories
+        var options: [String] = []
+        let preferred = onboardingProfile.preferredName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let issue = widgetIssueContext().lowercased()
+        if categories.contains(.grounding) {
+            options.append("You are safe in this moment.")
+            options.append("You can slow down and come back to the present.")
+        }
+        if categories.contains(.confidence) {
+            options.append(preferred.isEmpty ? "You can handle this one step at a time." : "\(preferred), you are doing better than you think.")
+            options.append("You have already handled hard days before.")
+        }
+        if categories.contains(.focus) {
+            options.append("Small progress still counts.")
+            options.append("One clear task is enough right now.")
+        }
+        if categories.contains(.rest) {
+            options.append("Rest is productive.")
+            options.append("You do not need to earn recovery.")
+        }
+        if categories.contains(.stress) {
+            options.append("You can let go of what is not urgent.")
+            options.append("Pressure does not define your worth.")
+        }
+
+        if issue.contains("anxiety") {
+            options.append("Anxiety is a signal, not a verdict.")
+        }
+        if issue.contains("sleep") {
+            options.append("Protecting sleep is an act of care.")
+        }
+        if issue.contains("stress") || issue.contains("burnout") {
+            options.append("Doing one thing well is enough.")
+        }
+        if issue.contains("focus") || issue.contains("adhd") || issue.contains("attention") {
+            options.append("You can begin small and still make progress.")
+        }
+        if options.isEmpty {
+            options = ["You are allowed to take this one step at a time."]
+        }
+        var deduped: [String] = []
+        for option in options where deduped.contains(option) == false {
+            deduped.append(option)
+        }
+        return deduped
+    }
+
+    private func widgetIssueContext() -> String {
+        if onboardingProfile.focusAreas.isEmpty == false {
+            return onboardingProfile.focusAreas.joined(separator: " · ")
+        }
+        return "General reflection"
     }
 }

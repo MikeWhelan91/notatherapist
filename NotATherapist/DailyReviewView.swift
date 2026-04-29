@@ -16,6 +16,10 @@ struct DailyReviewView: View {
         return appModel.reflectionGoals.first { $0.id == goalID }
     }
 
+    private var bottomContentInset: CGFloat {
+        embedded ? 12 : 180
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppSpacing.section) {
@@ -50,6 +54,11 @@ struct DailyReviewView: View {
                         }
                         ReferenceCard {
                             InsightSectionView(title: "One useful next step", bodyText: currentReview.insight.action, symbol: InsightType.action.symbol)
+                        }
+                        if appModel.isPremium, currentReview.evidenceStrength.isEmpty == false {
+                            ReferenceCard {
+                                InsightSectionView(title: "Evidence strength", bodyText: currentReview.evidenceStrength, symbol: "dial.medium")
+                            }
                         }
                     }
                 }
@@ -97,9 +106,9 @@ struct DailyReviewView: View {
                 }
             }
             .padding(AppSpacing.page)
-            .padding(.bottom, embedded ? 12 : 240)
+            .padding(.bottom, bottomContentInset)
         }
-        .safeAreaInset(edge: .bottom) { Color.clear.frame(height: embedded ? 0 : 10) }
+        .safeAreaInset(edge: .bottom) { Color.clear.frame(height: embedded ? 0 : 26) }
         .navigationTitle("Review")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)

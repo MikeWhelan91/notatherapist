@@ -154,6 +154,7 @@ struct DailyReview: Identifiable, Codable, Hashable {
     var date: Date
     var summary: String
     var insight: StructuredInsight
+    var evidenceStrength: String = ""
     var suggestedGoalTitle: String
     var suggestedGoalReason: String
     var acceptedGoalID: UUID?
@@ -177,15 +178,29 @@ enum AppPlanTier: String, CaseIterable, Identifiable, Codable {
 
     var dailyReviewLabel: String {
         switch self {
-        case .free: "Basic on-device review"
-        case .premium: "AI daily review when available"
+        case .free: "Clear daily reflection and one small next step"
+        case .premium: "Deeper AI daily review with evidence strength"
+        }
+    }
+
+    var dailyContextLabel: String {
+        switch self {
+        case .free: "Last 5 days, up to 20 context entries"
+        case .premium: "Last 21 days, up to 90 context entries"
         }
     }
 
     var weeklyReviewLabel: String {
         switch self {
-        case .free: "AI weekly insights"
-        case .premium: "Full AI weekly review"
+        case .free: "Core weekly insights and consistency metrics"
+        case .premium: "Full weekly synthesis with pattern shifts"
+        }
+    }
+
+    var weeklyContextLabel: String {
+        switch self {
+        case .free: "Last 30 days, up to 45 entries"
+        case .premium: "Last 120 days, up to 220 entries"
         }
     }
 }
@@ -200,11 +215,17 @@ enum ConversationStatus: String, Codable {
     case ended
 }
 
+enum ConversationPhase: String, Codable {
+    case core
+    case deeper
+}
+
 struct ConversationMessage: Identifiable, Codable, Hashable {
     let id: UUID
     var sender: MessageSender
     var text: String
     var date: Date
+    var replyContext: String? = nil
 }
 
 struct Conversation: Identifiable, Codable, Hashable {
@@ -215,6 +236,10 @@ struct Conversation: Identifiable, Codable, Hashable {
     var messages: [ConversationMessage]
     var status: ConversationStatus
     var remainingTurns: Int
+    var maxTurns: Int = 3
+    var deepeningUsed: Bool = false
+    var phase: ConversationPhase = .core
+    var contextHints: [String] = []
 }
 
 struct CalmSound: Identifiable, Codable, Hashable {
@@ -232,6 +257,8 @@ struct WeeklyReview: Identifiable, Codable, Hashable {
     var risk: String
     var suggestion: String
     var healthPatterns: [String] = []
+    var patternShift: String = ""
+    var goalFollowThrough: String = ""
 }
 
 enum HealthTrend: String, Codable, Hashable {
@@ -307,6 +334,8 @@ struct OnboardingProfile: Codable, Hashable {
 
 enum AICircleState: Equatable {
     case idle
+    case attentive
+    case listening
     case typing
     case thinking
     case responding

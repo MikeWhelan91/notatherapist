@@ -10,7 +10,14 @@ struct CalmView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: AppSpacing.section) {
                     HStack {
-                        AICircleView(state: .idle, size: 58, strokeWidth: 2.5)
+                        AICircleView(state: .settled, size: 62, strokeWidth: 2.5)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Anchor calm")
+                                .font(.headline)
+                            Text("Slow down with one simple practice.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                         Spacer()
                     }
 
@@ -29,7 +36,7 @@ struct CalmView: View {
                                             .lineLimit(1)
                                     }
                                     .frame(maxWidth: .infinity)
-                                    .frame(height: 84)
+                                    .frame(height: 88)
                                     .background(AppSurface.fill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                                     .overlay {
                                         RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -52,7 +59,9 @@ struct CalmView: View {
                 }
                 .padding(AppSpacing.page)
             }
+            .scrollIndicators(.hidden)
             .navigationTitle("Calm")
+            .animation(.snappy(duration: 0.2), value: playingSoundID)
         }
     }
 

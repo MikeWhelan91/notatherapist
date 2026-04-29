@@ -2,6 +2,7 @@ import SwiftUI
 
 struct JournalView: View {
     @EnvironmentObject private var appModel: AppViewModel
+    @EnvironmentObject private var router: AppRouter
     @State private var showingNewEntry = false
     @State private var showingSettings = false
     @State private var showingHistory = false
@@ -29,17 +30,15 @@ struct JournalView: View {
         return "Today, \(dateText)"
     }
 
-    private var shouldUseCompactFAB: Bool {
-        todayEntries.isEmpty == false || appModel.reflectionGoals.isEmpty == false || appModel.dailyReview(on: appModel.selectedJournalDate) != nil
-    }
-
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: AppSpacing.section) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(greetingTitle)
+                        Text(todayTitle)
                             .font(.largeTitle.weight(.semibold))
+                        Text(greetingTitle)
+                            .font(.title.weight(.semibold))
                         Text("Log today, then review when you're done.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
@@ -47,7 +46,7 @@ struct JournalView: View {
 
                     HStack {
                         Spacer()
-                        AICircleView(state: .idle, size: 112, strokeWidth: 3)
+                        AICircleView(state: .attentive, size: 116, strokeWidth: 3)
                         Spacer()
                     }
                     .padding(.vertical, 4)
@@ -125,7 +124,7 @@ struct JournalView: View {
                 .padding(AppSpacing.page)
                 .padding(.bottom, 86)
             }
-            .navigationTitle(todayTitle)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -140,23 +139,14 @@ struct JournalView: View {
                 Button {
                     showingNewEntry = true
                 } label: {
-                    if shouldUseCompactFAB {
-                        Image(systemName: "plus")
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundStyle(Color(.systemBackground))
-                            .frame(width: 58, height: 58)
-                            .background(Color.primary, in: Circle())
-                    } else {
-                        Label("New entry", systemImage: "square.and.pencil")
-                            .font(.headline.weight(.semibold))
-                            .foregroundStyle(Color(.systemBackground))
-                            .padding(.horizontal, 16)
-                            .frame(height: 52)
-                            .background(Color.primary, in: Capsule())
-                    }
+                    Image(systemName: "plus")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(Color(.systemBackground))
+                        .frame(width: 58, height: 58)
+                        .background(Color.primary, in: Circle())
                 }
-                .padding(.trailing, 22)
-                .padding(.bottom, 22)
+                .padding(.trailing, 20)
+                .padding(.bottom, 20)
                 .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
                 .accessibilityLabel("New entry")
             }
@@ -191,6 +181,17 @@ struct JournalView: View {
                     DailyReviewView(review: review)
                 }
                 .presentationCornerRadius(28)
+            }
+            .animation(.snappy(duration: 0.22), value: todayEntries.count)
+            .animation(.snappy(duration: 0.22), value: appModel.selectedJournalDate)
+            .onAppear {
+                handlePendingRouterActions()
+            }
+            .onChange(of: router.pendingNewEntry) { _, _ in
+                handlePendingRouterActions()
+            }
+            .onChange(of: router.pendingRunDailyReview) { _, _ in
+                handlePendingRouterActions()
             }
         }
     }
@@ -239,7 +240,7 @@ struct JournalView: View {
             } else {
                 ReferenceCard {
                     HStack(spacing: 12) {
-                        AICircleView(state: isReviewingDay ? .thinking : .idle, size: 44, strokeWidth: 2)
+                        AICircleView(state: isReviewingDay ? .thinking : .attentive, size: 44, strokeWidth: 2)
                         VStack(alignment: .leading, spacing: 3) {
                             Text("Save the day")
                                 .font(.subheadline.weight(.semibold))
@@ -270,6 +271,18 @@ struct JournalView: View {
                 activeDailyReview = review
             }
             isReviewingDay = false
+        }
+    }
+
+    private func handlePendingRouterActions() {
+        if router.pendingNewEntry {
+            showingNewEntry = true
+            router.consumeNewEntry()
+        }
+
+        if router.pendingRunDailyReview {
+            runReview(for: appModel.selectedJournalDate)
+            router.consumeRunDailyReview()
         }
     }
 
@@ -366,12 +379,28 @@ struct NewEntryView: View {
                     .frame(minHeight: 260)
                     .onChange(of: text) { _, newValue in
                         guard isSaving == false else { return }
-                        circleState = newValue.isEmpty ? .idle : .typing
+                        circleState = newValue.isEmpty ? (editorFocused ? .listening : .attentive) : .typing
+                    }
+                    .onChange(of: editorFocused) { _, focused in
+                        guard isSaving == false else { return }
+                        if focused, text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            circleState = .listening
+                        } else if focused {
+                            circleState = .typing
+                        } else if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            circleState = .attentive
+                        }
                     }
 
             }
             .padding(AppSpacing.page)
-            .background(Color(.secondarySystemBackground))
+            .background(
+                LinearGradient(
+                    colors: [Color(.secondarySystemBackground), Color(.systemBackground)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
             .navigationTitle("What's on your mind?")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -390,6 +419,9 @@ struct NewEntryView: View {
                         editorFocused = false
                     }
                 }
+            }
+            .onAppear {
+                circleState = .attentive
             }
         }
     }

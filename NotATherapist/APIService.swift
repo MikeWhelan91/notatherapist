@@ -58,13 +58,14 @@ struct NotATherapistAPIService {
         return response.conversation
     }
 
-    func reply(text: String, action: String?, remainingTurns: Int, conversation: Conversation, profile: OnboardingProfile) async throws -> ConversationReplyResponse {
+    func reply(text: String, action: String?, remainingTurns: Int, conversation: Conversation, profile: OnboardingProfile, planTier: AppPlanTier) async throws -> ConversationReplyResponse {
         let request = ConversationReplyRequest(
             text: text,
             action: action,
             remainingTurns: remainingTurns,
             conversation: conversation,
-            profile: profile
+            profile: profile,
+            planTier: planTier.rawValue
         )
         return try await post("/api/conversation/reply", body: request)
     }
@@ -176,6 +177,7 @@ private struct ConversationReplyRequest: Encodable {
     let remainingTurns: Int
     let conversation: Conversation
     let profile: OnboardingProfile
+    let planTier: String
 }
 
 struct ConversationReplyResponse: Decodable {
@@ -187,6 +189,10 @@ struct ConversationReplyResponse: Decodable {
     let userMessage: String?
     let suggestedGoal: ReflectionGoal?
     let actions: [String]
+    let maxTurns: Int?
+    let deepeningUsed: Bool?
+    let phase: ConversationPhase?
+    let replyContext: String?
 }
 
 struct APIHealthResponse: Decodable {

@@ -12,7 +12,7 @@ struct MessagesView: View {
                 VStack(alignment: .leading, spacing: AppSpacing.section) {
                     ReferenceCard {
                         HStack(spacing: 14) {
-                            AICircleView(state: .idle, size: 48, strokeWidth: 2.2)
+                            AICircleView(state: .attentive, size: 50, strokeWidth: 2.2)
                             VStack(alignment: .leading, spacing: 3) {
                                 Text("Anchor")
                                     .font(.headline)
@@ -37,7 +37,7 @@ struct MessagesView: View {
                                     Button {
                                         startConversation()
                                     } label: {
-                                        Text(isStartingConversation ? "Starting" : "Start conversation")
+                                        Text(isStartingConversation ? "Starting" : "Start check-in")
                                     }
                                     .buttonStyle(PrimaryCapsuleButtonStyle())
                                     .disabled(isStartingConversation)
@@ -78,6 +78,7 @@ struct MessagesView: View {
                 }
                 .padding(AppSpacing.page)
             }
+            .scrollIndicators(.hidden)
             .navigationTitle("Messages")
             .navigationDestination(for: Conversation.self) { conversation in
                 ConversationView(conversation: conversation)
@@ -122,8 +123,6 @@ struct ConversationView: View {
     @State private var circleState: AICircleState = .idle
     @State private var isGenerating = false
 
-    private let actions = ["Break this down", "Reframe it", "Give me one action", "End for today"]
-
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -155,9 +154,9 @@ struct ConversationView: View {
             if shouldShowActions {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach(actions, id: \.self) { action in
-                            Button(action) {
-                                send(action: action)
+                        ForEach(actions, id: \.value) { action in
+                            Button(action.label) {
+                                send(action: action.value)
                             }
                             .buttonStyle(CompactIconButtonStyle())
                             .disabled(isGenerating || conversation.status == .ended)
@@ -177,6 +176,7 @@ struct ConversationView: View {
         .onAppear {
             circleState = conversation.status == .ended ? .settled : .idle
         }
+        .animation(.smooth(duration: 0.2), value: conversation.messages.count)
     }
 
     private var header: some View {
@@ -185,7 +185,7 @@ struct ConversationView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Anchor")
                     .font(.subheadline.weight(.semibold))
-                Text(conversation.status == .ended ? "Settled" : "\(conversation.remainingTurns) replies left today")
+                Text(statusLine)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -208,11 +208,11 @@ struct ConversationView: View {
                     .lineLimit(1...3)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
-                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .disabled(conversation.status == .ended || isGenerating)
                     .onChange(of: text) { _, value in
                         guard conversation.status == .active, isGenerating == false else { return }
-                        circleState = value.isEmpty ? .idle : .typing
+                        circleState = value.isEmpty ? .listening : .typing
                     }
 
                 Button {
@@ -230,6 +230,25 @@ struct ConversationView: View {
         conversation.messages.count >= 2 && conversation.status == .active
     }
 
+    private var actions: [(value: String, label: String)] {
+        var chips: [(String, String)] = [
+            ("Break this down", "Break this down"),
+            ("Reframe it", "Reframe it"),
+            ("Give me one action", "Give me one action"),
+            ("End for today", "End for today")
+        ]
+        if appModel.isPremium && conversation.deepeningUsed == false {
+            chips.insert(("Go deeper", "Go deeper (+5)"), at: 3)
+        }
+        return chips
+    }
+
+    private var statusLine: String {
+        guard conversation.status == .active else { return "Settled" }
+        let phasePrefix = conversation.phase == .deeper ? "Deeper mode" : "Check-in"
+        return "\(phasePrefix) · \(conversation.remainingTurns) replies left"
+    }
+
     private func send(action: String? = nil) {
         let rawText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard action != nil || rawText.isEmpty == false else { return }
@@ -244,7 +263,7 @@ struct ConversationView: View {
             isGenerating = false
             if conversation.status == .active {
                 try? await Task.sleep(for: .milliseconds(450))
-                circleState = .idle
+                circleState = .attentive
             }
         }
     }

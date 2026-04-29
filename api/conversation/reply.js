@@ -19,14 +19,28 @@ module.exports = (req, res) => handleEndpoint(req, res, ["POST"], async () => {
     action,
     remainingTurns: body.remainingTurns,
     profile: normalizeProfile(body.profile),
-    conversation: body.conversation
+    conversation: body.conversation,
+    planTier: normalizePlanTier(body.planTier)
   });
 
   sendJSON(res, 200, {
     ok: true,
     ...result,
     actions: result.status === "active"
-      ? ["Break this down", "Reframe it", "Give me one action", "End for today"]
+      ? availableActions({
+          planTier: normalizePlanTier(body.planTier),
+          deepeningUsed: result.deepeningUsed
+        })
       : []
   });
 });
+
+const normalizePlanTier = (value) => value === "premium" ? "premium" : "free";
+
+const availableActions = ({ planTier, deepeningUsed }) => {
+  const actions = ["Break this down", "Reframe it", "Give me one action", "End for today"];
+  if (planTier === "premium" && !deepeningUsed) {
+    actions.splice(3, 0, "Go deeper");
+  }
+  return actions;
+};

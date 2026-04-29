@@ -13,6 +13,8 @@ final class AppRouter: ObservableObject {
 
     @Published var selectedTab: MainTab = .journal
     @Published var pendingWeeklyCheckIn = false
+    @Published var pendingNewEntry = false
+    @Published var pendingRunDailyReview = false
 
     private init() {}
 
@@ -23,5 +25,23 @@ final class AppRouter: ObservableObject {
 
     func consumeWeeklyCheckIn() {
         pendingWeeklyCheckIn = false
+    }
+
+    func openNewQuickThought() {
+        selectedTab = .journal
+        pendingNewEntry = true
+    }
+
+    func consumeNewEntry() {
+        pendingNewEntry = false
+    }
+
+    func runDailyReview() {
+        selectedTab = .journal
+        pendingRunDailyReview = true
+    }
+
+    func consumeRunDailyReview() {
+        pendingRunDailyReview = false
     }
 }

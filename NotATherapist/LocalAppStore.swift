@@ -1,5 +1,10 @@
 import Foundation
 
+private struct VersionedAppSnapshot: Codable {
+    var schemaVersion: Int
+    var snapshot: AppSnapshot
+}
+
 struct AppSnapshot: Codable {
     var selectedMood: MoodLevel
     var journalEntries: [JournalEntry]
@@ -13,6 +18,7 @@ struct AppSnapshot: Codable {
 
 struct LocalAppStore {
     private let fileManager = FileManager.default
+    private let currentSchemaVersion = 1
 
     private var storeURL: URL {
         let directory = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -25,6 +31,9 @@ struct LocalAppStore {
             let data = try Data(contentsOf: storeURL)
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
+            if let versioned = try? decoder.decode(VersionedAppSnapshot.self, from: data) {
+                return versioned.snapshot
+            }
             return try decoder.decode(AppSnapshot.self, from: data)
         } catch {
             return nil
@@ -40,7 +49,8 @@ struct LocalAppStore {
             encoder.dateEncodingStrategy = .iso8601
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
 
-            let data = try encoder.encode(snapshot)
+            let versioned = VersionedAppSnapshot(schemaVersion: currentSchemaVersion, snapshot: snapshot)
+            let data = try encoder.encode(versioned)
             try data.write(to: storeURL, options: [.atomic, .completeFileProtection])
         } catch {
             assertionFailure("Failed to save app state: \(error)")
@@ -56,7 +66,8 @@ struct LocalAppStore {
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
 
-        let data = try encoder.encode(snapshot)
+        let versioned = VersionedAppSnapshot(schemaVersion: currentSchemaVersion, snapshot: snapshot)
+        let data = try encoder.encode(versioned)
         let exportURL = fileManager.temporaryDirectory
             .appending(path: "anchor-export-\(Int(Date().timeIntervalSince1970)).json")
         try data.write(to: exportURL, options: [.atomic])

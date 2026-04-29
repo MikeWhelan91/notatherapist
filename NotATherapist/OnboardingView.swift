@@ -21,20 +21,23 @@ struct OnboardingView: View {
     @State private var customIssue = ""
     @State private var healthChoice: OnboardingHealthChoice?
     @State private var storageChoice: OnboardingStorageChoice?
-    @State private var firstCheckInWin = ""
-    @State private var firstCheckInChallenge = ""
+    @State private var firstCheckInBody = ""
+    @State private var firstCheckInMood: MoodLevel = .okay
+    @State private var firstCheckInType: EntryType = .reflection
     @State private var firstCheckInGenerated = false
     @State private var firstCheckInReview: DailyReview?
+    @State private var firstCheckInErrorMessage = ""
     @State private var isGeneratingFirstCheckIn = false
     @State private var isRequestingNotificationPermission = false
     @State private var isRequestingHealthPermission = false
     @FocusState private var focusedField: OnboardingField?
 
-    private let pageCount = 10
-    private let reminderPageIndex = 5
-    private let healthPageIndex = 6
-    private let storagePageIndex = 7
-    private let firstCheckInPageIndex = 8
+    private let pageCount = 12
+    private let reminderPageIndex = 6
+    private let healthPageIndex = 7
+    private let storagePageIndex = 8
+    private let firstCheckInInputPageIndex = 9
+    private let firstCheckInResultPageIndex = 10
 
     var body: some View {
         VStack(spacing: 0) {
@@ -53,22 +56,37 @@ struct OnboardingView: View {
                 agePage.tag(2)
                 contextPage.tag(3)
                 goalPage.tag(4)
-                reminderPage.tag(5)
-                healthPage.tag(6)
-                storagePage.tag(7)
-                firstCheckInPage.tag(8)
-                scopePage.tag(9)
+                storyPage.tag(5)
+                reminderPage.tag(6)
+                healthPage.tag(7)
+                storagePage.tag(8)
+                firstCheckInPage.tag(9)
+                firstCheckInResultPage.tag(10)
+                scopePage.tag(11)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .animation(.smooth(duration: 0.28), value: page)
 
-            controls
-                .padding(.horizontal, AppSpacing.page)
-                .padding(.bottom, 26)
+            if shouldShowControls {
+                controls
+                    .padding(.horizontal, AppSpacing.page)
+                    .padding(.bottom, 26)
+            }
         }
         .background(Color(.systemBackground))
+        .onTapGesture {
+            focusedField = nil
+        }
         .onChange(of: page) {
             focusedField = nil
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    focusedField = nil
+                }
+            }
         }
     }
 
@@ -98,7 +116,7 @@ struct OnboardingView: View {
 
     private var controls: some View {
         HStack(spacing: 12) {
-            if page > 0 {
+            if page > 0 && shouldShowBackButton {
                 Button {
                     focusedField = nil
                     withAnimation { page -= 1 }
@@ -116,21 +134,23 @@ struct OnboardingView: View {
                 .buttonStyle(.plain)
             }
 
-            Button {
-                focusedField = nil
-                Task {
-                    await continueTapped()
+            if page != firstCheckInInputPageIndex {
+                Button {
+                    focusedField = nil
+                    Task {
+                        await continueTapped()
+                    }
+                } label: {
+                    Text(continueButtonTitle)
+                        .font(.headline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 56)
                 }
-            } label: {
-                Text(continueButtonTitle)
-                    .font(.headline.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 56)
+                .foregroundStyle(Color(.systemBackground))
+                .background(Color.primary.opacity(canContinue ? 1 : 0.28), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .buttonStyle(.plain)
+                .disabled(canContinue == false || isRequestingNotificationPermission || isRequestingHealthPermission)
             }
-            .foregroundStyle(Color(.systemBackground))
-            .background(Color.primary.opacity(canContinue ? 1 : 0.28), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .buttonStyle(.plain)
-            .disabled(canContinue == false || isRequestingNotificationPermission || isRequestingHealthPermission)
         }
     }
 
@@ -153,13 +173,23 @@ struct OnboardingView: View {
             return healthChoice != nil
         case storagePageIndex:
             return storageChoice != nil
-        case firstCheckInPageIndex:
-            let hasInput = firstCheckInWin.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-                || firstCheckInChallenge.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-            return hasInput && firstCheckInGenerated
+        case firstCheckInResultPageIndex:
+            return firstCheckInGenerated
         default:
             return true
         }
+    }
+
+    private var shouldShowControls: Bool {
+        if page == firstCheckInInputPageIndex,
+           focusedField == .firstCheckInBody {
+            return false
+        }
+        return true
+    }
+
+    private var shouldShowBackButton: Bool {
+        page != firstCheckInInputPageIndex && page != firstCheckInResultPageIndex
     }
 
     private var welcomePage: some View {
@@ -260,25 +290,30 @@ struct OnboardingView: View {
                 singleChoice("Make decisions", subtitle: "Turn loops into next steps", symbol: "arrow.triangle.branch", selection: $reflectionGoal)
                 singleChoice("Feel more settled", subtitle: "Close the day cleanly", symbol: "circle", selection: $reflectionGoal)
                 singleChoice("Track wins", subtitle: "Notice what is working", symbol: "checkmark.seal", selection: $reflectionGoal)
+            }
+        }
+    }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Your story (optional)")
-                        .font(.subheadline.weight(.semibold))
-                    Text("One or two lines on what you have been struggling with lately.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    TextEditor(text: $personalStory)
-                        .scrollContentBackground(.hidden)
-                        .font(.subheadline)
-                        .frame(minHeight: 96)
-                        .padding(10)
-                        .background(AppSurface.fill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke(AppSurface.stroke, lineWidth: 0.5)
-                        }
-                }
+    private var storyPage: some View {
+        OnboardingQuestionPage(
+            title: "Your story",
+            subtitle: "Optional. Add context the AI should keep in mind when reflecting on entries."
+        ) {
+            VStack(alignment: .leading, spacing: 10) {
+                TextEditor(text: $personalStory)
+                    .scrollContentBackground(.hidden)
+                    .focused($focusedField, equals: .personalStory)
+                    .font(.body)
+                    .frame(minHeight: 170)
+                    .padding(10)
+                    .background(AppSurface.fill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(AppSurface.stroke, lineWidth: 0.5)
+                    }
+                Text("Example: 'Panic while driving recently. I want practical steps, not fluff.'")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -322,46 +357,64 @@ struct OnboardingView: View {
     private var firstCheckInPage: some View {
         OnboardingQuestionPage(
             title: "First check-in",
-            subtitle: "Start with one small win and one challenge. You’ll get instant feedback."
+            subtitle: "Capture one real moment. This creates your first AI reflection."
         ) {
             VStack(alignment: .leading, spacing: 14) {
+                MoodSelectorView(selectedMood: $firstCheckInMood, size: 40, labelFont: .caption2)
+
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("What went well today?")
+                    Text("Entry style")
                         .font(.subheadline.weight(.semibold))
-                    TextField("A small win is enough", text: $firstCheckInWin)
-                        .textInputAutocapitalization(.sentences)
-                        .font(.subheadline)
-                        .padding(12)
+                    HStack(spacing: 8) {
+                        firstCheckInTypeChip(.quickThought)
+                        firstCheckInTypeChip(.reflection)
+                        firstCheckInTypeChip(.rant)
+                        firstCheckInTypeChip(.win)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("How was your day?")
+                        .font(.subheadline.weight(.semibold))
+                    ZStack(alignment: .topLeading) {
+                        TextEditor(text: $firstCheckInBody)
+                            .textInputAutocapitalization(.sentences)
+                            .focused($focusedField, equals: .firstCheckInBody)
+                            .font(.subheadline)
+                            .scrollContentBackground(.hidden)
+                            .padding(8)
+                            .frame(minHeight: 140)
+                        if firstCheckInBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Text("Write one short honest entry.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 16)
+                        }
+                    }
                         .background(AppSurface.fill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                         .overlay {
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
                                 .stroke(AppSurface.stroke, lineWidth: 0.5)
                         }
                 }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("What felt hard today?")
-                        .font(.subheadline.weight(.semibold))
-                    TextField("Optional", text: $firstCheckInChallenge)
-                        .textInputAutocapitalization(.sentences)
-                        .font(.subheadline)
-                        .padding(12)
-                        .background(AppSurface.fill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke(AppSurface.stroke, lineWidth: 0.5)
-                        }
-                }
-
                 Button {
-                    Task { await generateFirstCheckIn() }
+                    focusedField = nil
+                    Task {
+                        await generateFirstCheckIn()
+                        if firstCheckInGenerated {
+                            withAnimation(.easeInOut(duration: 0.35)) {
+                                page = firstCheckInResultPageIndex
+                            }
+                        }
+                    }
                 } label: {
                     HStack {
                         if isGeneratingFirstCheckIn {
                             ProgressView()
                                 .tint(Color(.systemBackground))
                         }
-                        Text(isGeneratingFirstCheckIn ? "Reviewing your check-in" : "Get first reflection")
+                        Text(isGeneratingFirstCheckIn ? "Generating AI reflection" : "Get first reflection")
                             .font(.headline.weight(.semibold))
                     }
                     .frame(maxWidth: .infinity)
@@ -372,21 +425,52 @@ struct OnboardingView: View {
                 .disabled(firstCheckInCanGenerate == false || isGeneratingFirstCheckIn)
                 .buttonStyle(.plain)
 
+                if firstCheckInErrorMessage.isEmpty == false {
+                    Text(firstCheckInErrorMessage)
+                        .font(.caption)
+                        .foregroundStyle(.red.opacity(0.9))
+                }
+            }
+        }
+    }
+
+    private var firstCheckInResultPage: some View {
+        OnboardingQuestionPage(
+            title: "Your first reflection",
+            subtitle: "This came from your first journal entry and onboarding context."
+        ) {
+            VStack(alignment: .leading, spacing: 14) {
                 if let review = firstCheckInReview {
                     ReferenceCard {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Here’s what I noticed")
-                                .font(.subheadline.weight(.semibold))
-                            Text(review.insight.emotionalRead)
-                                .font(.subheadline)
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack(spacing: 10) {
+                                AICircleView(
+                                    state: .responding,
+                                    size: 34,
+                                    strokeWidth: 2.4,
+                                    motionStyle: .continuous
+                                )
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("AI Reflection")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text(review.source == "openai" ? "Generated by OpenAI" : "AI unavailable")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
                             Divider()
+                            Text(review.insight.emotionalRead)
+                                .font(.body.weight(.medium))
                             Text(review.insight.action)
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
-                            Text("Tap Continue to finish setup.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
                         }
+                    }
+                } else {
+                    ReferenceCard {
+                        Text("No reflection generated yet. Go back and submit your first check-in.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -574,11 +658,8 @@ struct OnboardingView: View {
             await appModel.refreshICloudStatus()
         }
 
-        if page == firstCheckInPageIndex {
-            guard firstCheckInGenerated else {
-                await generateFirstCheckIn()
-                return
-            }
+        if page == firstCheckInInputPageIndex {
+            return
         }
 
         if page == pageCount - 1 {
@@ -605,6 +686,24 @@ struct OnboardingView: View {
         .padding(.vertical, 10)
     }
 
+    private func firstCheckInTypeChip(_ type: EntryType) -> some View {
+        Button {
+            firstCheckInType = type
+        } label: {
+            Text(shortEntryTypeLabel(type))
+                .font(.subheadline.weight(.semibold))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .foregroundStyle(firstCheckInType == type ? Color(.systemBackground) : .primary)
+            .background(firstCheckInType == type ? Color.primary : AppSurface.fill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(firstCheckInType == type ? Color.primary : AppSurface.stroke, lineWidth: 0.5)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
     private var selectedIssues: [String] {
         var values = Array(lifeContext).sorted()
         let trimmed = customIssue.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -615,42 +714,42 @@ struct OnboardingView: View {
     }
 
     private var firstCheckInCanGenerate: Bool {
-        let win = firstCheckInWin.trimmingCharacters(in: .whitespacesAndNewlines)
-        let challenge = firstCheckInChallenge.trimmingCharacters(in: .whitespacesAndNewlines)
-        return win.isEmpty == false || challenge.isEmpty == false
+        firstCheckInBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
     }
 
     private func generateFirstCheckIn() async {
         guard firstCheckInCanGenerate else { return }
         guard isGeneratingFirstCheckIn == false else { return }
         isGeneratingFirstCheckIn = true
+        firstCheckInErrorMessage = ""
         defer { isGeneratingFirstCheckIn = false }
 
-        let win = firstCheckInWin.trimmingCharacters(in: .whitespacesAndNewlines)
-        let challenge = firstCheckInChallenge.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = firstCheckInBody.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        let text: String
-        switch (win.isEmpty, challenge.isEmpty) {
-        case (false, false):
-            text = "Win: \(win)\nChallenge: \(challenge)"
-        case (false, true):
-            text = "Win: \(win)"
-        case (true, false):
-            text = "Challenge: \(challenge)"
-        case (true, true):
-            return
-        }
-
-        _ = appModel.addEntry(text: text, mood: .okay, type: .reflection)
-        let review = await appModel.reviewDay(Date())
+        _ = appModel.addEntry(text: text, mood: firstCheckInMood, type: firstCheckInType)
+        let review = await appModel.generateOnboardingFirstReflection(for: Date())
         firstCheckInReview = review
-        firstCheckInGenerated = review != nil
+        firstCheckInGenerated = review?.source == "openai"
+        if firstCheckInGenerated == false {
+            firstCheckInErrorMessage = "Could not generate AI reflection right now. Check connection and try again."
+        }
+    }
+
+    private func shortEntryTypeLabel(_ type: EntryType) -> String {
+        switch type {
+        case .quickThought: return "Quick"
+        case .rant: return "Rant"
+        case .reflection: return "Reflection"
+        case .win: return "Win"
+        }
     }
 }
 
 private enum OnboardingField {
     case name
     case customIssue
+    case personalStory
+    case firstCheckInBody
 }
 
 private enum OnboardingHealthChoice {
@@ -669,6 +768,7 @@ private enum OnboardingStorageChoice {
         }
     }
 }
+
 
 private struct OnboardingQuestionPage<Content: View>: View {
     let title: String

@@ -354,16 +354,66 @@ struct SettingsView: View {
                     }
 
                     HStack(alignment: .firstTextBaseline) {
+                        Text("Daily memory")
+                        Spacer()
+                        Text(appModel.planTier.dailyContextLabel)
+                            .multilineTextAlignment(.trailing)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    HStack(alignment: .firstTextBaseline) {
                         Text("Weekly reviews")
                         Spacer()
                         Text(appModel.planTier.weeklyReviewLabel)
                             .multilineTextAlignment(.trailing)
                             .foregroundStyle(.secondary)
                     }
+
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Weekly memory")
+                        Spacer()
+                        Text(appModel.planTier.weeklyContextLabel)
+                            .multilineTextAlignment(.trailing)
+                            .foregroundStyle(.secondary)
+                    }
                 } header: {
                     Text("Plan")
                 } footer: {
-                    Text("Free uses basic on-device daily reviews and AI weekly insights. Premium enables AI daily reviews and fuller weekly reviews.")
+                    Text("Free gives clear daily reflection, one practical next step, and core weekly insights. Premium adds deeper AI daily reasoning, evidence strength, pattern-shift tracking, and goal follow-through synthesis.")
+                }
+
+                Section {
+                    Picker(
+                        "Widget style",
+                        selection: Binding(
+                            get: { appModel.widgetStylePreset },
+                            set: { appModel.updateWidgetStylePreset($0) }
+                        )
+                    ) {
+                        ForEach(WidgetStylePreset.allCases, id: \.rawValue) { style in
+                            Text(style.label).tag(style)
+                        }
+                    }
+
+                    ForEach(WidgetAffirmationCategory.allCases) { category in
+                        Toggle(
+                            category.label,
+                            isOn: Binding(
+                                get: { appModel.widgetAffirmationCategories.contains(category) },
+                                set: { appModel.setWidgetAffirmationCategory(category, enabled: $0) }
+                            )
+                        )
+                    }
+
+                    Button {
+                        appModel.cycleWidgetAffirmation()
+                    } label: {
+                        Label("Next affirmation now", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                } header: {
+                    Text("Widget personalization")
+                } footer: {
+                    Text("These settings affect both Home Screen and Lock Screen widget text and style.")
                 }
 
                 Section("Scope") {

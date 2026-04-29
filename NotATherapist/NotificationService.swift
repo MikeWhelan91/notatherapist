@@ -38,6 +38,9 @@ final class NotificationService: ObservableObject {
 
     private let center = UNUserNotificationCenter.current()
     private let weeklyReviewIdentifier = "weekly-review-check-in"
+    private let weeklyReviewCategoryIdentifier = "weekly-review-actions"
+    private let actionStartCheckIn = "weekly-action-start-check-in"
+    private let actionReviewToday = "weekly-action-review-today"
     private let enabledKey = "weeklyReviewReminderEnabled"
     private let weekdayKey = "weeklyReviewReminderWeekday"
     private let hourKey = "weeklyReviewReminderHour"
@@ -51,6 +54,7 @@ final class NotificationService: ObservableObject {
         let hour = defaults.object(forKey: hourKey) == nil ? 18 : defaults.integer(forKey: hourKey)
         let minute = defaults.integer(forKey: minuteKey)
         weeklyReminderTime = Calendar.current.date(from: DateComponents(hour: hour, minute: minute)) ?? Date()
+        registerNotificationCategories()
     }
 
     var authorizationLabel: String {
@@ -140,6 +144,7 @@ final class NotificationService: ObservableObject {
         content.title = "Weekly review is ready"
         content.body = "I noticed a few patterns. Start a short check-in."
         content.sound = .default
+        content.categoryIdentifier = weeklyReviewCategoryIdentifier
         content.userInfo = ["route": "weeklyCheckIn"]
 
         var components = DateComponents()
@@ -160,6 +165,26 @@ final class NotificationService: ObservableObject {
     func openAppSettings() {
         guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
         UIApplication.shared.open(url)
+    }
+
+    private func registerNotificationCategories() {
+        let startCheckIn = UNNotificationAction(
+            identifier: actionStartCheckIn,
+            title: "Start check-in",
+            options: [.foreground]
+        )
+        let reviewToday = UNNotificationAction(
+            identifier: actionReviewToday,
+            title: "Review today",
+            options: [.foreground]
+        )
+        let weeklyCategory = UNNotificationCategory(
+            identifier: weeklyReviewCategoryIdentifier,
+            actions: [startCheckIn, reviewToday],
+            intentIdentifiers: [],
+            options: []
+        )
+        center.setNotificationCategories([weeklyCategory])
     }
 }
 
@@ -188,7 +213,14 @@ final class AppNotificationDelegate: NSObject, UIApplicationDelegate, UNUserNoti
         }
 
         await MainActor.run {
-            AppRouter.shared.openWeeklyCheckIn()
+            switch response.actionIdentifier {
+            case "weekly-action-review-today":
+                AppRouter.shared.runDailyReview()
+            case "weekly-action-start-check-in", UNNotificationDefaultActionIdentifier:
+                AppRouter.shared.openWeeklyCheckIn()
+            default:
+                break
+            }
         }
     }
 }

@@ -207,6 +207,16 @@ struct WeeklyReviewView: View {
                     InsightSectionView(title: "Potential risk", bodyText: review.risk, symbol: InsightType.risk.symbol)
                 }
             }
+            if appModel.isPremium, review.patternShift.isEmpty == false {
+                ReferenceCard {
+                    InsightSectionView(title: "Pattern shift", bodyText: review.patternShift, symbol: "arrow.left.arrow.right")
+                }
+            }
+            if appModel.isPremium, review.goalFollowThrough.isEmpty == false {
+                ReferenceCard {
+                    InsightSectionView(title: "Goal follow-through", bodyText: review.goalFollowThrough, symbol: "flag.checkered")
+                }
+            }
             if appModel.isPremium, review.healthPatterns.isEmpty == false {
                 ReferenceCard {
                     VStack(alignment: .leading, spacing: 8) {
@@ -226,6 +236,24 @@ struct WeeklyReviewView: View {
             }
             ReferenceCard {
                 InsightSectionView(title: "Suggestion", bodyText: review.suggestion, symbol: InsightType.suggestion.symbol)
+            }
+            if appModel.isPremium == false {
+                ReferenceCard {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Premium preview", systemImage: "lock.fill")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Text("Pattern shifts week-to-week")
+                            .font(.subheadline.weight(.semibold))
+                            .redacted(reason: .placeholder)
+                        Text("Goal follow-through summary")
+                            .font(.subheadline.weight(.semibold))
+                            .redacted(reason: .placeholder)
+                        Text("Unlock deeper weekly synthesis with Premium mode.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
         }
         .navigationTitle(appModel.isPremium ? "Weekly review" : "Weekly insight")

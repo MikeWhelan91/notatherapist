@@ -21,31 +21,66 @@
 		4A88039FEB9C25179005E169 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECEEDCC536C1CF382A1A0BC1 /* OnboardingView.swift */; };
 		5CB4E1E98B52800A1060DCCC /* AppAttestService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B0B142BADCE1059B06422DD /* AppAttestService.swift */; };
 		652C2C72A60CF787391116AE /* LocalAppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82855229C977B660683AA568 /* LocalAppStore.swift */; };
+		6792821DFF79B8A5958D3CC5 /* AnchorWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 024B90C64E262D1E69ADD7E6 /* AnchorWidgets.swift */; };
+		713D41FD6191B16594AAC2D5 /* AnchorWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 47AFDDF38EB4DD7FDB8A2441 /* AnchorWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		727BD42F3D031075B07B83A3 /* APIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A041E831CBDEEC99815BE259 /* APIService.swift */; };
 		77BE28E7E63CF8229DAE7C95 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DE6E81A3EC973E2AC9DF78C /* NotificationService.swift */; };
+		7F1ED5B7543E7316118E8B87 /* WidgetShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EC1FCDA511960C4285A6A2C /* WidgetShared.swift */; };
 		930A745C1E157C1E0D3CD7E3 /* CalmView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8623EAE818E0A35718FAD110 /* CalmView.swift */; };
-		936A3D0C4C1E4F74A2D52D88 /* JournalHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C882D5CC2AB04555AB6712F3 /* JournalHistoryView.swift */; };
 		9D19D981C15874DAFD3CE618 /* DailyReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B29BFF9D7AE483A323F3EFE /* DailyReviewView.swift */; };
+		9D660BFCC825AD50CAA06DA8 /* JournalHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A846E85A6F6C9E4BF0EF638 /* JournalHistoryView.swift */; };
 		A4732372156A976A36CFB3CD /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A4B528419784EBC6ADC1296 /* Components.swift */; };
 		ACE515FE6CBF1109C9C30ED4 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97B9AA6C3315067AAD058A50 /* Models.swift */; };
 		C15B7D62FC2F6B3EC607C6DB /* InsightsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B2A86DD82E5AEA38D2581EF /* InsightsView.swift */; };
 		C815FC984034D94CA3802209 /* Design.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3494D6D6C7904FF91E44735E /* Design.swift */; };
+		E42919934258310CDD158F2F /* AnchorIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4C6510E00CEEBB62202EF75 /* AnchorIntents.swift */; };
+		EDD1A77B06A5BB2AF70237B9 /* WidgetShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EC1FCDA511960C4285A6A2C /* WidgetShared.swift */; };
 		FFE50A52DE54EB089845DF53 /* HealthConnectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB7F4C6E8831537A418BD44E /* HealthConnectView.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		95D22448064B9F4AB11EB103 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F9011E559A88B5F2A601CF0A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F56FFDA4BD80FCE34C0EF511;
+			remoteInfo = AnchorWidgets;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		CA1A73BAD6BD2D3C3D7E153A /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				713D41FD6191B16594AAC2D5 /* AnchorWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		024B90C64E262D1E69ADD7E6 /* AnchorWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnchorWidgets.swift; sourceTree = "<group>"; };
 		0AFBDB1D9DB56E9115C14BD8 /* NotATherapist.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NotATherapist.entitlements; sourceTree = "<group>"; };
 		1B29BFF9D7AE483A323F3EFE /* DailyReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyReviewView.swift; sourceTree = "<group>"; };
 		1DE6E81A3EC973E2AC9DF78C /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
+		2A846E85A6F6C9E4BF0EF638 /* JournalHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JournalHistoryView.swift; sourceTree = "<group>"; };
 		2CAF6C1F4D234A997D6EC891 /* AppRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRouter.swift; sourceTree = "<group>"; };
+		2DC5BEF513C5C4BC58C36195 /* AnchorWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AnchorWidgets.entitlements; sourceTree = "<group>"; };
 		3494D6D6C7904FF91E44735E /* Design.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Design.swift; sourceTree = "<group>"; };
 		4526177357FDDD334C4B7A82 /* ICloudSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ICloudSyncService.swift; sourceTree = "<group>"; };
 		468F4E2B1C96DE08C27E8932 /* AppViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppViewModel.swift; sourceTree = "<group>"; };
+		47AFDDF38EB4DD7FDB8A2441 /* AnchorWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AnchorWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		4B2A86DD82E5AEA38D2581EF /* InsightsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsightsView.swift; sourceTree = "<group>"; };
+		4EC1FCDA511960C4285A6A2C /* WidgetShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetShared.swift; sourceTree = "<group>"; };
 		59389A36ADA0EEE4C28117C9 /* Anchor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Anchor.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5A4B528419784EBC6ADC1296 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		688255F7CDA2BEFF17229452 /* MockData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockData.swift; sourceTree = "<group>"; };
 		79D6D423A903CEE62D528BA1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		7AA44B6C9A3D9AE9B2ECEE80 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		806DEB02C67230523F0AA151 /* MessagesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagesView.swift; sourceTree = "<group>"; };
 		82855229C977B660683AA568 /* LocalAppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAppStore.swift; sourceTree = "<group>"; };
 		8623EAE818E0A35718FAD110 /* CalmView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalmView.swift; sourceTree = "<group>"; };
@@ -54,11 +89,11 @@
 		A041E831CBDEEC99815BE259 /* APIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIService.swift; sourceTree = "<group>"; };
 		BE282B22439564477927FDB4 /* HealthKitManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitManager.swift; sourceTree = "<group>"; };
 		C75BC9CA126A05BF22517BEC /* MockServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockServices.swift; sourceTree = "<group>"; };
-		C882D5CC2AB04555AB6712F3 /* JournalHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JournalHistoryView.swift; sourceTree = "<group>"; };
 		CF4164741B6CEEAF043F3B68 /* NotATherapistApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotATherapistApp.swift; sourceTree = "<group>"; };
 		DB7F4C6E8831537A418BD44E /* HealthConnectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthConnectView.swift; sourceTree = "<group>"; };
 		ECEEDCC536C1CF382A1A0BC1 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		F48090E8FBC274AA5AC7FEF0 /* JournalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JournalView.swift; sourceTree = "<group>"; };
+		F4C6510E00CEEBB62202EF75 /* AnchorIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnchorIntents.swift; sourceTree = "<group>"; };
 		F8A850C4E98B449C9F2599F1 /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -66,7 +101,9 @@
 		40260BFEFE657DBA75570F1C = {
 			isa = PBXGroup;
 			children = (
+				B00956FD37C52376A7D018CC /* AnchorWidgets */,
 				E71753DD28C86F1F2D786E8E /* NotATherapist */,
+				775E40D6FA333D4B84F483C4 /* Shared */,
 				6CFCACD1016DBDB229C836BD /* Products */,
 			);
 			sourceTree = "<group>";
@@ -74,14 +111,34 @@
 		6CFCACD1016DBDB229C836BD /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				47AFDDF38EB4DD7FDB8A2441 /* AnchorWidgets.appex */,
 				59389A36ADA0EEE4C28117C9 /* Anchor.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
+		775E40D6FA333D4B84F483C4 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				4EC1FCDA511960C4285A6A2C /* WidgetShared.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		B00956FD37C52376A7D018CC /* AnchorWidgets */ = {
+			isa = PBXGroup;
+			children = (
+				2DC5BEF513C5C4BC58C36195 /* AnchorWidgets.entitlements */,
+				024B90C64E262D1E69ADD7E6 /* AnchorWidgets.swift */,
+				7AA44B6C9A3D9AE9B2ECEE80 /* Info.plist */,
+			);
+			path = AnchorWidgets;
+			sourceTree = "<group>";
+		};
 		E71753DD28C86F1F2D786E8E /* NotATherapist */ = {
 			isa = PBXGroup;
 			children = (
+				F4C6510E00CEEBB62202EF75 /* AnchorIntents.swift */,
 				A041E831CBDEEC99815BE259 /* APIService.swift */,
 				8B0B142BADCE1059B06422DD /* AppAttestService.swift */,
 				2CAF6C1F4D234A997D6EC891 /* AppRouter.swift */,
@@ -95,7 +152,7 @@
 				BE282B22439564477927FDB4 /* HealthKitManager.swift */,
 				4526177357FDDD334C4B7A82 /* ICloudSyncService.swift */,
 				4B2A86DD82E5AEA38D2581EF /* InsightsView.swift */,
-				C882D5CC2AB04555AB6712F3 /* JournalHistoryView.swift */,
+				2A846E85A6F6C9E4BF0EF638 /* JournalHistoryView.swift */,
 				F48090E8FBC274AA5AC7FEF0 /* JournalView.swift */,
 				82855229C977B660683AA568 /* LocalAppStore.swift */,
 				806DEB02C67230523F0AA151 /* MessagesView.swift */,
@@ -120,10 +177,12 @@
 			buildPhases = (
 				699A384DDCC8BBF8EB844569 /* Sources */,
 				01FC1CB5A95B4EF59E391C71 /* Resources */,
+				CA1A73BAD6BD2D3C3D7E153A /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				F94FF9942AC6572E1E1F67CA /* PBXTargetDependency */,
 			);
 			name = NotATherapist;
 			packageProductDependencies = (
@@ -131,6 +190,23 @@
 			productName = NotATherapist;
 			productReference = 59389A36ADA0EEE4C28117C9 /* Anchor.app */;
 			productType = "com.apple.product-type.application";
+		};
+		F56FFDA4BD80FCE34C0EF511 /* AnchorWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D1DE8BC9C238825E1696F0DA /* Build configuration list for PBXNativeTarget "AnchorWidgets" */;
+			buildPhases = (
+				7C2688281C91781A7435D4E4 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AnchorWidgets;
+			packageProductDependencies = (
+			);
+			productName = AnchorWidgets;
+			productReference = 47AFDDF38EB4DD7FDB8A2441 /* AnchorWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -154,6 +230,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				F56FFDA4BD80FCE34C0EF511 /* AnchorWidgets */,
 				68DB6128A93D1EE3A8284DC2 /* NotATherapist */,
 			);
 		};
@@ -176,6 +253,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				727BD42F3D031075B07B83A3 /* APIService.swift in Sources */,
+				E42919934258310CDD158F2F /* AnchorIntents.swift in Sources */,
 				5CB4E1E98B52800A1060DCCC /* AppAttestService.swift in Sources */,
 				2A04BF44AB8308AE1391EE17 /* AppRouter.swift in Sources */,
 				490A0CA5BBB8AA1E75CD71FB /* AppViewModel.swift in Sources */,
@@ -187,7 +265,7 @@
 				2B9DC282FB0999E0BBE93305 /* HealthKitManager.swift in Sources */,
 				259C274EAC3EE4BCDF735712 /* ICloudSyncService.swift in Sources */,
 				C15B7D62FC2F6B3EC607C6DB /* InsightsView.swift in Sources */,
-				936A3D0C4C1E4F74A2D52D88 /* JournalHistoryView.swift in Sources */,
+				9D660BFCC825AD50CAA06DA8 /* JournalHistoryView.swift in Sources */,
 				05318CCA12581DD266B17D5B /* JournalView.swift in Sources */,
 				652C2C72A60CF787391116AE /* LocalAppStore.swift in Sources */,
 				44DFAD53D5424FC9BF7AFE18 /* MessagesView.swift in Sources */,
@@ -198,10 +276,28 @@
 				77BE28E7E63CF8229DAE7C95 /* NotificationService.swift in Sources */,
 				4A88039FEB9C25179005E169 /* OnboardingView.swift in Sources */,
 				1EE768C413114529764E4D84 /* TodayView.swift in Sources */,
+				EDD1A77B06A5BB2AF70237B9 /* WidgetShared.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7C2688281C91781A7435D4E4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6792821DFF79B8A5958D3CC5 /* AnchorWidgets.swift in Sources */,
+				7F1ED5B7543E7316118E8B87 /* WidgetShared.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		F94FF9942AC6572E1E1F67CA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F56FFDA4BD80FCE34C0EF511 /* AnchorWidgets */;
+			targetProxy = 95D22448064B9F4AB11EB103 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		4B4E02A6ECE16BA0DC15557B /* Debug */ = {
@@ -255,7 +351,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -273,23 +369,72 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_ENTITLEMENTS = NotATherapist/NotATherapist.entitlements;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 5976U4WSJN;
-				ENABLE_DEBUG_DYLIB = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Anchor;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Optional Apple Health access helps spot simple patterns between sleep, steps, mood, and journal entries.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.mikewhelan.anchor;
 				PRODUCT_NAME = Anchor;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		880B92D9609184B6B6F1B104 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = AnchorWidgets/AnchorWidgets.entitlements;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5976U4WSJN;
+				INFOPLIST_FILE = AnchorWidgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mikewhelan.anchor.widgets;
+				PRODUCT_NAME = AnchorWidgets;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		B356EF0D890BB01C42C5D9AB /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = AnchorWidgets/AnchorWidgets.entitlements;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5976U4WSJN;
+				INFOPLIST_FILE = AnchorWidgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mikewhelan.anchor.widgets;
+				PRODUCT_NAME = AnchorWidgets;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
@@ -300,7 +445,9 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_ENTITLEMENTS = NotATherapist/NotATherapist.entitlements;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 5976U4WSJN;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Anchor;
@@ -308,13 +455,15 @@
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.mikewhelan.anchor;
 				PRODUCT_NAME = Anchor;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -365,7 +514,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -393,6 +542,15 @@
 			buildConfigurations = (
 				D9FEAB8C348247DE1D4EAF52 /* Debug */,
 				760CF26B60833590363BDDD1 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		D1DE8BC9C238825E1696F0DA /* Build configuration list for PBXNativeTarget "AnchorWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				880B92D9609184B6B6F1B104 /* Debug */,
+				B356EF0D890BB01C42C5D9AB /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

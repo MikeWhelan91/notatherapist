@@ -1,10 +1,10 @@
 import SwiftUI
 
 enum AppSpacing {
-    static let page: CGFloat = 16
+    static let page: CGFloat = 18
     static let compact: CGFloat = 8
     static let row: CGFloat = 12
-    static let section: CGFloat = 22
+    static let section: CGFloat = 24
 }
 
 struct PrimaryCapsuleButtonStyle: ButtonStyle {
@@ -14,10 +14,11 @@ struct PrimaryCapsuleButtonStyle: ButtonStyle {
         configuration.label
             .font(.subheadline.weight(.semibold))
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
+            .padding(.vertical, 13)
             .foregroundStyle(Color(.systemBackground))
-            .background(Color.primary.opacity(isEnabled ? 1 : 0.35), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .background(Color.primary.opacity(isEnabled ? 1 : 0.35), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .animation(.snappy(duration: 0.14), value: configuration.isPressed)
     }
 }
 
@@ -28,12 +29,13 @@ struct CompactIconButtonStyle: ButtonStyle {
             .foregroundStyle(.primary)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(AppSurface.fill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .background(AppSurface.fill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(AppSurface.stroke, lineWidth: 0.5)
             }
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.snappy(duration: 0.14), value: configuration.isPressed)
     }
 }
 
@@ -43,16 +45,16 @@ enum AppSurface {
 }
 
 struct ReferenceCard<Content: View>: View {
-    var padding: CGFloat = 14
+    var padding: CGFloat = 15
     @ViewBuilder var content: Content
 
     var body: some View {
         content
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppSurface.fill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .background(AppSurface.fill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .stroke(AppSurface.stroke, lineWidth: 0.5)
             }
     }
