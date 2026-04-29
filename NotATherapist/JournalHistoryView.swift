@@ -4,8 +4,6 @@ struct JournalHistoryView: View {
     @EnvironmentObject private var appModel: AppViewModel
     @Environment(\.dismiss) private var dismiss
 
-    @State private var showingNewEntry = false
-
     private var selectedEntries: [JournalEntry] {
         appModel.entries(on: appModel.selectedJournalDate)
     }
@@ -13,14 +11,14 @@ struct JournalHistoryView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppSpacing.section) {
-                WeekCalendarStripView(
-                    selectedDate: $appModel.selectedJournalDate,
-                    dates: appModel.currentWeekDates,
-                    hasEntry: { date in
-                        appModel.entries(on: date).isEmpty == false
-                    }
+                DatePicker(
+                    "",
+                    selection: $appModel.selectedJournalDate,
+                    displayedComponents: .date
                 )
-                .padding(.horizontal, -AppSpacing.page)
+                .datePickerStyle(.graphical)
+                .labelsHidden()
+                .tint(.primary)
 
                 VStack(alignment: .leading, spacing: 8) {
                     SectionLabel(title: appModel.selectedJournalDate.formatted(date: .complete, time: .omitted))
@@ -28,15 +26,9 @@ struct JournalHistoryView: View {
                         VStack(alignment: .leading, spacing: 10) {
                             Text("No entries on this date.")
                                 .font(.headline)
-                            Text("Pick another day or add one note.")
+                            Text("Pick another day to view entries.")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
-                            Button {
-                                showingNewEntry = true
-                            } label: {
-                                Label("Add entry", systemImage: "plus")
-                            }
-                            .buttonStyle(PrimaryCapsuleButtonStyle())
                         }
                     } else {
                         VStack(spacing: 10) {
@@ -64,10 +56,6 @@ struct JournalHistoryView: View {
                     dismiss()
                 }
             }
-        }
-        .sheet(isPresented: $showingNewEntry) {
-            NewEntryView(initialMood: appModel.selectedMood, date: appModel.selectedJournalDate)
-                .presentationCornerRadius(28)
         }
     }
 }

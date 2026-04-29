@@ -24,7 +24,7 @@ struct JournalView: View {
 
     private var todayTitle: String {
         let dateText = todayDate.formatted(.dateTime.day().month(.wide))
-        return "Today \(dateText)"
+        return "Today, \(dateText)"
     }
 
     var body: some View {
@@ -60,7 +60,7 @@ struct JournalView: View {
 
                     WeekCalendarStripView(
                         selectedDate: $appModel.selectedJournalDate,
-                        dates: appModel.currentWeekDates,
+                        dates: appModel.centeredTodayDates,
                         hasEntry: { date in
                             appModel.entries(on: date).isEmpty == false
                         }

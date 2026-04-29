@@ -104,6 +104,12 @@ final class AppViewModel: ObservableObject {
         return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
     }
 
+    var centeredTodayDates: [Date] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        return (-3...3).compactMap { calendar.date(byAdding: .day, value: $0, to: today) }
+    }
+
     func entries(on date: Date) -> [JournalEntry] {
         journalEntries
             .filter { Calendar.current.isDate($0.date, inSameDayAs: date) }
