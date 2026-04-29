@@ -331,23 +331,39 @@ struct SettingsView: View {
 
                 Section {
                     Toggle(
-                        "AI daily reviews",
+                        "Premium mode",
                         isOn: Binding(
-                            get: { appModel.isPremiumDailyReviewsEnabled },
-                            set: { appModel.isPremiumDailyReviewsEnabled = $0 }
+                            get: { appModel.isPremium },
+                            set: { appModel.isPremium = $0 }
                         )
                     )
 
                     HStack(alignment: .firstTextBaseline) {
-                        Text("Weekly review")
+                        Text("Current tier")
                         Spacer()
-                        Text("Included")
+                        Text(appModel.planTier.label)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Daily reviews")
+                        Spacer()
+                        Text(appModel.planTier.dailyReviewLabel)
+                            .multilineTextAlignment(.trailing)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Weekly reviews")
+                        Spacer()
+                        Text(appModel.planTier.weeklyReviewLabel)
+                            .multilineTextAlignment(.trailing)
                             .foregroundStyle(.secondary)
                     }
                 } header: {
                     Text("Plan")
                 } footer: {
-                    Text("When AI daily reviews are off, day reviews stay on-device. Weekly review can use AI when available.")
+                    Text("Free uses basic on-device daily reviews and AI weekly insights. Premium enables AI daily reviews and fuller weekly reviews.")
                 }
 
                 Section("Scope") {

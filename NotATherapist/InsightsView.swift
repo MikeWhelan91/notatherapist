@@ -165,6 +165,7 @@ private struct WeeklyReviewContainerView: View {
 }
 
 struct WeeklyReviewView: View {
+    @EnvironmentObject private var appModel: AppViewModel
     let review: WeeklyReview
     var embedded = false
 
@@ -173,11 +174,14 @@ struct WeeklyReviewView: View {
             HStack(spacing: 14) {
                 AICircleView(state: .checkIn, size: 48, strokeWidth: 2.2)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Weekly review")
+                    Text(appModel.isPremium ? "Weekly review" : "Weekly insight")
                         .font(.headline)
                     Text(review.dateRange)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    Text(appModel.planTier.weeklyReviewLabel)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
                 }
             }
 
@@ -198,10 +202,12 @@ struct WeeklyReviewView: View {
                 }
             }
 
-            ReferenceCard {
-                InsightSectionView(title: "Potential risk", bodyText: review.risk, symbol: InsightType.risk.symbol)
+            if appModel.isPremium {
+                ReferenceCard {
+                    InsightSectionView(title: "Potential risk", bodyText: review.risk, symbol: InsightType.risk.symbol)
+                }
             }
-            if review.healthPatterns.isEmpty == false {
+            if appModel.isPremium, review.healthPatterns.isEmpty == false {
                 ReferenceCard {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Health patterns")
@@ -222,7 +228,7 @@ struct WeeklyReviewView: View {
                 InsightSectionView(title: "Suggestion", bodyText: review.suggestion, symbol: InsightType.suggestion.symbol)
             }
         }
-        .navigationTitle("Weekly review")
+        .navigationTitle(appModel.isPremium ? "Weekly review" : "Weekly insight")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

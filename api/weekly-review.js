@@ -16,7 +16,8 @@ module.exports = (req, res) => handleEndpoint(req, res, ["POST"], async () => {
     entries,
     profile: normalizeProfile(body.profile),
     healthSummary: normalizeHealthSummary(body.healthSummary),
-    goals: normalizeGoals(body.goals)
+    goals: normalizeGoals(body.goals),
+    planTier: normalizePlanTier(body.planTier)
   });
 
   sendJSON(res, 200, {
@@ -24,3 +25,5 @@ module.exports = (req, res) => handleEndpoint(req, res, ["POST"], async () => {
     ...result
   });
 });
+
+const normalizePlanTier = (value) => value === "premium" ? "premium" : "free";

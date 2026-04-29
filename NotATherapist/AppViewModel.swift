@@ -16,7 +16,7 @@ final class AppViewModel: ObservableObject {
     @Published var dailyReviews: [DailyReview] = []
     @Published var aiConnection: AIConnectionState = .unknown
     @Published var iCloudSyncState: ICloudSyncState = .off
-    @Published var premiumDailyReviewsEnabled: Bool = UserDefaults.standard.bool(forKey: "premiumDailyReviewsEnabled")
+    @Published var planTier: AppPlanTier
 
     private let insightService = MockAIInsightService()
     private let weeklyReviewService = MockWeeklyReviewService()
@@ -25,9 +25,14 @@ final class AppViewModel: ObservableObject {
     private let localStore = LocalAppStore()
     private let iCloudSyncService = ICloudSyncService.shared
     private let iCloudSyncEnabledKey = "iCloudSyncEnabled"
-    private let premiumDailyReviewsKey = "premiumDailyReviewsEnabled"
+    private let planTierKey = "appPlanTier"
 
     init(seedWithMockData: Bool = false) {
+        let defaults = UserDefaults.standard
+        let savedTier = defaults.string(forKey: planTierKey)
+        let migratedPremium = defaults.bool(forKey: "premiumDailyReviewsEnabled")
+        _planTier = Published(initialValue: AppPlanTier(rawValue: savedTier ?? "") ?? (migratedPremium ? .premium : .free))
+
         if seedWithMockData {
             let initialEntries = MockData.entries
             journalEntries = initialEntries
@@ -66,11 +71,11 @@ final class AppViewModel: ObservableObject {
         insights.isEmpty == false || localSignals.isEmpty == false
     }
 
-    var isPremiumDailyReviewsEnabled: Bool {
-        get { premiumDailyReviewsEnabled }
+    var isPremium: Bool {
+        get { planTier == .premium }
         set {
-            premiumDailyReviewsEnabled = newValue
-            UserDefaults.standard.set(newValue, forKey: premiumDailyReviewsKey)
+            planTier = newValue ? .premium : .free
+            UserDefaults.standard.set(planTier.rawValue, forKey: planTierKey)
         }
     }
 
@@ -142,7 +147,7 @@ final class AppViewModel: ObservableObject {
         guard dayEntries.isEmpty == false else { return nil }
 
         let review: DailyReview
-        if isPremiumDailyReviewsEnabled {
+        if planTier == .premium {
             do {
                 review = try await apiService.dailyReview(
                     date: date,
@@ -239,7 +244,8 @@ final class AppViewModel: ObservableObject {
                 entries: journalEntries,
                 profile: onboardingProfile,
                 healthSummary: healthSummary,
-                goals: reflectionGoals
+                goals: reflectionGoals,
+                planTier: planTier
             ) {
                 weeklyReview = review
             }

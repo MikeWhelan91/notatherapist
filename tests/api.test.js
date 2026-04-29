@@ -58,6 +58,12 @@ const weeklyResult = createWeeklyReview({ entries, healthSummary });
 assert.equal(weeklyResult.canReview, true);
 assert.equal(weeklyResult.weeklyReview.patterns.length > 0, true);
 assert.equal(weeklyResult.weeklyReview.healthPatterns.length > 0, true);
+assert.equal(weeklyResult.weeklyReview.patterns.length <= 2, true);
+
+const premiumWeeklyResult = createWeeklyReview({ entries, healthSummary, planTier: "premium" });
+assert.equal(premiumWeeklyResult.canReview, true);
+assert.equal(premiumWeeklyResult.weeklyReview.patterns.length <= 3, true);
+assert.equal(premiumWeeklyResult.weeklyReview.risk.includes("Premium"), false);
 
 const conversation = createConversation({
   weeklyReview: weeklyResult.weeklyReview,

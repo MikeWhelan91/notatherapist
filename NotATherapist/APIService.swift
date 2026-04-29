@@ -27,8 +27,8 @@ struct NotATherapistAPIService {
         return response.review
     }
 
-    func weeklyReview(entries: [JournalEntry], profile: OnboardingProfile, healthSummary: HealthSummary?, goals: [ReflectionGoal]) async throws -> WeeklyReview? {
-        let request = WeeklyReviewRequest(entries: entries, profile: profile, healthSummary: healthSummary, goals: goals)
+    func weeklyReview(entries: [JournalEntry], profile: OnboardingProfile, healthSummary: HealthSummary?, goals: [ReflectionGoal], planTier: AppPlanTier) async throws -> WeeklyReview? {
+        let request = WeeklyReviewRequest(entries: entries, profile: profile, healthSummary: healthSummary, goals: goals, planTier: planTier.rawValue)
         let response: WeeklyReviewResponse = try await post("/api/weekly-review", body: request)
         return response.weeklyReview
     }
@@ -142,6 +142,7 @@ private struct WeeklyReviewRequest: Encodable {
     let profile: OnboardingProfile
     let healthSummary: HealthSummary?
     let goals: [ReflectionGoal]
+    let planTier: String
 }
 
 private struct WeeklyReviewResponse: Decodable {

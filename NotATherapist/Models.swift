@@ -151,6 +151,34 @@ struct DailyReview: Identifiable, Codable, Hashable {
     var createdAt: Date
 }
 
+enum AppPlanTier: String, CaseIterable, Identifiable, Codable {
+    case free
+    case premium
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .free: "Free"
+        case .premium: "Premium"
+        }
+    }
+
+    var dailyReviewLabel: String {
+        switch self {
+        case .free: "Basic on-device review"
+        case .premium: "AI daily review when available"
+        }
+    }
+
+    var weeklyReviewLabel: String {
+        switch self {
+        case .free: "AI weekly insights"
+        case .premium: "Full AI weekly review"
+        }
+    }
+}
+
 enum MessageSender: String, Codable {
     case user
     case ai

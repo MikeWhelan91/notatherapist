@@ -27,7 +27,7 @@ struct DailyReviewView: View {
                         Text(currentReview.date.formatted(date: .complete, time: .omitted))
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text(appModel.isPremiumDailyReviewsEnabled ? "AI review when available" : "On-device review")
+                        Text(appModel.planTier.dailyReviewLabel)
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     }
