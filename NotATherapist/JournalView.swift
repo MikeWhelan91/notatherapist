@@ -11,7 +11,7 @@ struct JournalView: View {
     private var todayDate: Date { Date() }
 
     var todayEntries: [JournalEntry] {
-        appModel.entries(on: todayDate)
+        appModel.entries(on: appModel.selectedJournalDate)
     }
 
     private var preferredName: String {
@@ -29,22 +29,20 @@ struct JournalView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(greetingTitle)
                             .font(.largeTitle.weight(.semibold))
-                        Text("How are you feeling today?")
+                        Text("Log today, then review when you're done.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
 
                     HStack {
                         Spacer()
-                        AICircleView(state: .idle, size: 120, strokeWidth: 3)
+                        AICircleView(state: .idle, size: 112, strokeWidth: 3)
                         Spacer()
                     }
                     .padding(.vertical, 4)
 
-                    MoodSelectorView(selectedMood: $appModel.selectedMood, size: 52, labelFont: .caption)
-                    Text(todayDate.formatted(date: .complete, time: .omitted))
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    WeekCalendarStripView(selectedDate: $appModel.selectedJournalDate, dates: appModel.currentWeekDates)
+                        .padding(.horizontal, -AppSpacing.page)
 
                     if appModel.reflectionGoals.isEmpty == false {
                         VStack(alignment: .leading, spacing: 8) {
@@ -70,7 +68,7 @@ struct JournalView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         SectionLabel(title: "Entries")
                         HStack {
-                            Text("\(todayEntries.count) \(todayEntries.count == 1 ? "entry" : "entries") today")
+                            Text("\(todayEntries.count) \(todayEntries.count == 1 ? "entry" : "entries") on this date")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             Spacer()
@@ -89,12 +87,6 @@ struct JournalView: View {
                                 Text("A short check-in is enough. The review appears after you write.")
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
-                                Button {
-                                    showingNewEntry = true
-                                } label: {
-                                    Label("Log now", systemImage: "square.and.pencil")
-                                }
-                                .buttonStyle(PrimaryCapsuleButtonStyle())
                             }
                         } else {
                             VStack(spacing: 10) {
@@ -178,7 +170,7 @@ struct JournalView: View {
     @ViewBuilder
     private var dayReviewSection: some View {
         if todayEntries.isEmpty == false {
-            if let review = appModel.dailyReview(on: todayDate) {
+            if let review = appModel.dailyReview(on: appModel.selectedJournalDate) {
                 ReferenceCard {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(spacing: 12) {
@@ -217,7 +209,7 @@ struct JournalView: View {
                         Button {
                             isReviewingDay = true
                             Task {
-                                if let review = await appModel.reviewDay(todayDate) {
+                                if let review = await appModel.reviewDay(appModel.selectedJournalDate) {
                                     activeDailyReview = review
                                 }
                                 isReviewingDay = false
