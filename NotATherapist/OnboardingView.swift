@@ -20,13 +20,21 @@ struct OnboardingView: View {
     @State private var wantsWeeklyReviewReminder = true
     @State private var customIssue = ""
     @State private var healthChoice: OnboardingHealthChoice?
+    @State private var storageChoice: OnboardingStorageChoice?
+    @State private var firstCheckInWin = ""
+    @State private var firstCheckInChallenge = ""
+    @State private var firstCheckInGenerated = false
+    @State private var firstCheckInReview: DailyReview?
+    @State private var isGeneratingFirstCheckIn = false
     @State private var isRequestingNotificationPermission = false
     @State private var isRequestingHealthPermission = false
     @FocusState private var focusedField: OnboardingField?
 
-    private let pageCount = 8
+    private let pageCount = 10
     private let reminderPageIndex = 5
     private let healthPageIndex = 6
+    private let storagePageIndex = 7
+    private let firstCheckInPageIndex = 8
 
     var body: some View {
         VStack(spacing: 0) {
@@ -47,7 +55,9 @@ struct OnboardingView: View {
                 goalPage.tag(4)
                 reminderPage.tag(5)
                 healthPage.tag(6)
-                scopePage.tag(7)
+                storagePage.tag(7)
+                firstCheckInPage.tag(8)
+                scopePage.tag(9)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .animation(.smooth(duration: 0.28), value: page)
@@ -133,11 +143,22 @@ struct OnboardingView: View {
 
     private var canContinue: Bool {
         switch page {
-        case 2: ageRange.isEmpty == false
-        case 3: lifeContext.isEmpty == false || customIssue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-        case 4: reflectionGoal.isEmpty == false
-        case healthPageIndex: healthChoice != nil
-        default: true
+        case 2:
+            return ageRange.isEmpty == false
+        case 3:
+            return lifeContext.isEmpty == false || customIssue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        case 4:
+            return reflectionGoal.isEmpty == false
+        case healthPageIndex:
+            return healthChoice != nil
+        case storagePageIndex:
+            return storageChoice != nil
+        case firstCheckInPageIndex:
+            let hasInput = firstCheckInWin.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                || firstCheckInChallenge.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            return hasInput && firstCheckInGenerated
+        default:
+            return true
         }
     }
 
@@ -283,6 +304,7 @@ struct OnboardingView: View {
                         setupSummary("Goal", values: [reflectionGoal])
                         setupSummary("Story", values: [personalStory])
                         setupSummary("Reminder", values: [wantsWeeklyReviewReminder ? "Sunday 18:00" : "Off"])
+                        setupSummary("Storage", values: [storageChoice?.label ?? "On this device"])
                         setupSummary("Voice", values: ["Factual, calm, contemplative, kind"])
                     }
                 }
@@ -294,6 +316,80 @@ struct OnboardingView: View {
             }
             .padding(AppSpacing.page)
             .padding(.top, 28)
+        }
+    }
+
+    private var firstCheckInPage: some View {
+        OnboardingQuestionPage(
+            title: "First check-in",
+            subtitle: "Start with one small win and one challenge. You’ll get instant feedback."
+        ) {
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("What went well today?")
+                        .font(.subheadline.weight(.semibold))
+                    TextField("A small win is enough", text: $firstCheckInWin)
+                        .textInputAutocapitalization(.sentences)
+                        .font(.subheadline)
+                        .padding(12)
+                        .background(AppSurface.fill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(AppSurface.stroke, lineWidth: 0.5)
+                        }
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("What felt hard today?")
+                        .font(.subheadline.weight(.semibold))
+                    TextField("Optional", text: $firstCheckInChallenge)
+                        .textInputAutocapitalization(.sentences)
+                        .font(.subheadline)
+                        .padding(12)
+                        .background(AppSurface.fill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(AppSurface.stroke, lineWidth: 0.5)
+                        }
+                }
+
+                Button {
+                    Task { await generateFirstCheckIn() }
+                } label: {
+                    HStack {
+                        if isGeneratingFirstCheckIn {
+                            ProgressView()
+                                .tint(Color(.systemBackground))
+                        }
+                        Text(isGeneratingFirstCheckIn ? "Reviewing your check-in" : "Get first reflection")
+                            .font(.headline.weight(.semibold))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+                }
+                .foregroundStyle(Color(.systemBackground))
+                .background(Color.primary.opacity(firstCheckInCanGenerate ? 1 : 0.28), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .disabled(firstCheckInCanGenerate == false || isGeneratingFirstCheckIn)
+                .buttonStyle(.plain)
+
+                if let review = firstCheckInReview {
+                    ReferenceCard {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Here’s what I noticed")
+                                .font(.subheadline.weight(.semibold))
+                            Text(review.insight.emotionalRead)
+                                .font(.subheadline)
+                            Divider()
+                            Text(review.insight.action)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            Text("Tap Continue to finish setup.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -359,6 +455,33 @@ struct OnboardingView: View {
         }
     }
 
+    private var storagePage: some View {
+        OnboardingQuestionPage(
+            title: "Where should your data live?",
+            subtitle: "Choose local-only or private iCloud sync. You can change this later in Settings."
+        ) {
+            VStack(spacing: 10) {
+                OnboardingChoiceRow(
+                    title: "On this device",
+                    subtitle: "Data is removed if the app is deleted",
+                    symbol: "iphone",
+                    isSelected: storageChoice == .deviceOnly
+                ) {
+                    storageChoice = .deviceOnly
+                }
+
+                OnboardingChoiceRow(
+                    title: "Sync with iCloud",
+                    subtitle: "Keeps entries available across reinstalls and devices",
+                    symbol: "icloud",
+                    isSelected: storageChoice == .iCloudSync
+                ) {
+                    storageChoice = .iCloudSync
+                }
+            }
+        }
+    }
+
     private func setupSummary(_ title: String, values: [String]) -> some View {
         HStack(alignment: .top) {
             Text(title)
@@ -405,6 +528,7 @@ struct OnboardingView: View {
         storedLifeContext = issues.joined(separator: "|")
         storedReflectionGoal = reflectionGoal
         storedPersonalStory = personalStory
+        appModel.isICloudSyncEnabled = storageChoice == .iCloudSync
         appModel.updateOnboardingProfile(
             preferredName: trimmedName,
             ageRange: ageRange,
@@ -445,6 +569,18 @@ struct OnboardingView: View {
             }
         }
 
+        if page == storagePageIndex {
+            appModel.isICloudSyncEnabled = storageChoice == .iCloudSync
+            await appModel.refreshICloudStatus()
+        }
+
+        if page == firstCheckInPageIndex {
+            guard firstCheckInGenerated else {
+                await generateFirstCheckIn()
+                return
+            }
+        }
+
         if page == pageCount - 1 {
             finish()
         } else {
@@ -477,6 +613,39 @@ struct OnboardingView: View {
         }
         return values
     }
+
+    private var firstCheckInCanGenerate: Bool {
+        let win = firstCheckInWin.trimmingCharacters(in: .whitespacesAndNewlines)
+        let challenge = firstCheckInChallenge.trimmingCharacters(in: .whitespacesAndNewlines)
+        return win.isEmpty == false || challenge.isEmpty == false
+    }
+
+    private func generateFirstCheckIn() async {
+        guard firstCheckInCanGenerate else { return }
+        guard isGeneratingFirstCheckIn == false else { return }
+        isGeneratingFirstCheckIn = true
+        defer { isGeneratingFirstCheckIn = false }
+
+        let win = firstCheckInWin.trimmingCharacters(in: .whitespacesAndNewlines)
+        let challenge = firstCheckInChallenge.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let text: String
+        switch (win.isEmpty, challenge.isEmpty) {
+        case (false, false):
+            text = "Win: \(win)\nChallenge: \(challenge)"
+        case (false, true):
+            text = "Win: \(win)"
+        case (true, false):
+            text = "Challenge: \(challenge)"
+        case (true, true):
+            return
+        }
+
+        _ = appModel.addEntry(text: text, mood: .okay, type: .reflection)
+        let review = await appModel.reviewDay(Date())
+        firstCheckInReview = review
+        firstCheckInGenerated = review != nil
+    }
 }
 
 private enum OnboardingField {
@@ -487,6 +656,18 @@ private enum OnboardingField {
 private enum OnboardingHealthChoice {
     case connect
     case skip
+}
+
+private enum OnboardingStorageChoice {
+    case deviceOnly
+    case iCloudSync
+
+    var label: String {
+        switch self {
+        case .deviceOnly: "On this device"
+        case .iCloudSync: "iCloud sync"
+        }
+    }
 }
 
 private struct OnboardingQuestionPage<Content: View>: View {

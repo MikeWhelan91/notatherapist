@@ -42,8 +42,8 @@ enum MoodLevel: String, CaseIterable, Identifiable, Codable {
 
     var emoji: String {
         switch self {
-        case .terrible: "😣"
-        case .low: "😐"
+        case .terrible: "😞"
+        case .low: "😕"
         case .okay: "🙂"
         case .good: "😊"
         case .great: "😄"

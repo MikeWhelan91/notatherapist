@@ -97,11 +97,9 @@ struct DailyReviewView: View {
                 }
             }
             .padding(AppSpacing.page)
-            .padding(.bottom, embedded ? 0 : 180)
+            .padding(.bottom, embedded ? 12 : 240)
         }
-        .safeAreaInset(edge: .bottom) {
-            Color.clear.frame(height: embedded ? 0 : 18)
-        }
+        .safeAreaInset(edge: .bottom) { Color.clear.frame(height: embedded ? 0 : 10) }
         .navigationTitle("Review")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)

@@ -7,6 +7,8 @@ struct JournalView: View {
     @State private var showingHistory = false
     @State private var activeDailyReview: DailyReview?
     @State private var isReviewingDay = false
+    @State private var pendingReReviewDate: Date?
+    @State private var showingReReviewConfirm = false
 
     private var todayDate: Date { Date() }
 
@@ -25,6 +27,10 @@ struct JournalView: View {
     private var todayTitle: String {
         let dateText = todayDate.formatted(.dateTime.day().month(.wide))
         return "Today, \(dateText)"
+    }
+
+    private var shouldUseCompactFAB: Bool {
+        todayEntries.isEmpty == false || appModel.reflectionGoals.isEmpty == false || appModel.dailyReview(on: appModel.selectedJournalDate) != nil
     }
 
     var body: some View {
@@ -134,17 +140,37 @@ struct JournalView: View {
                 Button {
                     showingNewEntry = true
                 } label: {
-                    Label("New entry", systemImage: "square.and.pencil")
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(Color(.systemBackground))
-                        .padding(.horizontal, 16)
-                        .frame(height: 52)
-                        .background(Color.primary, in: Capsule())
+                    if shouldUseCompactFAB {
+                        Image(systemName: "plus")
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundStyle(Color(.systemBackground))
+                            .frame(width: 58, height: 58)
+                            .background(Color.primary, in: Circle())
+                    } else {
+                        Label("New entry", systemImage: "square.and.pencil")
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(Color(.systemBackground))
+                            .padding(.horizontal, 16)
+                            .frame(height: 52)
+                            .background(Color.primary, in: Capsule())
+                    }
                 }
                 .padding(.trailing, 22)
                 .padding(.bottom, 22)
                 .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
                 .accessibilityLabel("New entry")
+            }
+            .alert("Update this day’s review?", isPresented: $showingReReviewConfirm) {
+                Button("Cancel", role: .cancel) {
+                    pendingReReviewDate = nil
+                }
+                Button("Update review") {
+                    guard let date = pendingReReviewDate else { return }
+                    pendingReReviewDate = nil
+                    runReview(for: date)
+                }
+            } message: {
+                Text("You added or changed entries after saving this review. Updating will replace today’s previous review.")
             }
             .sheet(isPresented: $showingNewEntry) {
                 NewEntryView(initialMood: appModel.selectedMood, date: todayDate)
@@ -173,6 +199,7 @@ struct JournalView: View {
     private var dayReviewSection: some View {
         if todayEntries.isEmpty == false {
             if let review = appModel.dailyReview(on: appModel.selectedJournalDate) {
+                let hasChangesSinceReview = hasEntryChangesSinceReview(review, for: appModel.selectedJournalDate)
                 ReferenceCard {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(spacing: 12) {
@@ -188,12 +215,25 @@ struct JournalView: View {
                             Spacer()
                         }
 
-                        Button {
-                            activeDailyReview = review
-                        } label: {
-                            Label("Open review", systemImage: "doc.text.magnifyingglass")
+                        HStack(spacing: 10) {
+                            Button {
+                                activeDailyReview = review
+                            } label: {
+                                Label("Open review", systemImage: "doc.text.magnifyingglass")
+                            }
+                            .buttonStyle(PrimaryCapsuleButtonStyle())
+
+                            if hasChangesSinceReview {
+                                Button {
+                                    pendingReReviewDate = appModel.selectedJournalDate
+                                    showingReReviewConfirm = true
+                                } label: {
+                                    Text("Update")
+                                        .font(.subheadline.weight(.semibold))
+                                }
+                                .buttonStyle(.bordered)
+                            }
                         }
-                        .buttonStyle(PrimaryCapsuleButtonStyle())
                     }
                 }
             } else {
@@ -209,13 +249,7 @@ struct JournalView: View {
                         }
                         Spacer()
                         Button {
-                            isReviewingDay = true
-                            Task {
-                                if let review = await appModel.reviewDay(appModel.selectedJournalDate) {
-                                    activeDailyReview = review
-                                }
-                                isReviewingDay = false
-                            }
+                            runReview(for: appModel.selectedJournalDate)
                         } label: {
                             Text(isReviewingDay ? "Saving" : "Review")
                         }
@@ -227,6 +261,22 @@ struct JournalView: View {
                 }
             }
         }
+    }
+
+    private func runReview(for date: Date) {
+        isReviewingDay = true
+        Task {
+            if let review = await appModel.reviewDay(date) {
+                activeDailyReview = review
+            }
+            isReviewingDay = false
+        }
+    }
+
+    private func hasEntryChangesSinceReview(_ review: DailyReview, for date: Date) -> Bool {
+        let currentIDs = Set(appModel.entries(on: date).map(\.id))
+        let reviewedIDs = Set(review.entryIDs)
+        return currentIDs != reviewedIDs
     }
 }
 

@@ -406,7 +406,6 @@ struct MoodSelectorView: View {
 }
 
 struct WeekCalendarStripView: View {
-    @Environment(\.colorScheme) private var colorScheme
     @Binding var selectedDate: Date
     let dates: [Date]
     var hasEntry: (Date) -> Bool = { _ in false }
@@ -426,11 +425,11 @@ struct WeekCalendarStripView: View {
                                 .foregroundStyle(isSelected ? .primary : .secondary)
                             Text(date.dayNumber)
                                 .font(.subheadline.weight(.semibold))
-                                .frame(width: 32, height: 32)
-                                .foregroundStyle(hasSavedEntry ? Color.black : .primary)
-                                .background(hasSavedEntry ? Color.primary : Color.clear, in: Circle())
+                                .frame(width: 34, height: 34)
+                                .foregroundStyle((hasSavedEntry || isSelected) ? Color.black : .primary)
+                                .background((hasSavedEntry || isSelected) ? Color.primary : Color.clear, in: Circle())
                                 .overlay {
-                                    if hasSavedEntry == false {
+                                    if (hasSavedEntry || isSelected) == false {
                                         Circle()
                                             .stroke(Color.primary.opacity(0.95), lineWidth: 1.2)
                                     }
@@ -438,11 +437,8 @@ struct WeekCalendarStripView: View {
                                 .overlay {
                                     if isSelected {
                                         Circle()
-                                            .stroke(hasSavedEntry ? Color.black.opacity(0.85) : Color.primary, lineWidth: hasSavedEntry ? 1.8 : 2.0)
-                                            .scaleEffect(hasSavedEntry ? 1.01 : 1.08)
-                                        Circle()
-                                            .stroke(Color.white.opacity(0.92), lineWidth: 1.8)
-                                            .scaleEffect(1.2)
+                                            .stroke(Color.white.opacity(0.92), lineWidth: hasSavedEntry ? 2.1 : 2.0)
+                                            .scaleEffect(1.16)
                                     }
                                 }
                                 .overlay(alignment: .bottom) {
@@ -450,21 +446,20 @@ struct WeekCalendarStripView: View {
                                         Circle()
                                             .fill(Color.black)
                                             .frame(width: 4, height: 4)
-                                            .offset(y: -3)
+                                            .offset(y: -2)
                                     }
                                 }
                         }
-                        .overlay(alignment: .bottom) {
-                            EmptyView()
-                        }
-                        .scaleEffect(isSelected ? 1.04 : 1.0)
-                        .frame(width: 46)
+                        .frame(height: 62)
+                        .frame(width: 50)
                     }
                     .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, AppSpacing.page)
+            .padding(.vertical, 6)
         }
+        .padding(.vertical, 2)
     }
 }
 
@@ -523,8 +518,8 @@ struct EntryRowView: View {
             Spacer(minLength: 8)
 
             Text(entry.mood.emoji)
-                .font(.system(size: 19))
-                .frame(width: 36, height: 36)
+                .font(.system(size: 21))
+                .frame(width: 38, height: 38)
                 .foregroundStyle(Color.black)
                 .background(Color.primary, in: Circle())
 
