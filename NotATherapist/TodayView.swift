@@ -148,42 +148,14 @@ struct TodayView: View {
 
                     VStack(alignment: .leading, spacing: 8) {
                         SectionLabel(title: "This week")
-                        ReferenceCard {
-                            VStack(alignment: .leading, spacing: 12) {
-                                HStack(spacing: 8) {
-                                    ForEach(appModel.currentWeekDates, id: \.self) { date in
-                                        let checked = appModel.entries(on: date).isEmpty == false
-                                        VStack(spacing: 5) {
-                                            Circle()
-                                                .fill(checked ? Color.primary : Color.clear)
-                                                .frame(width: 8, height: 8)
-                                                .overlay {
-                                                    Circle().stroke(AppSurface.stroke, lineWidth: 0.5)
-                                                }
-                                            Text(date.shortDay.prefix(1))
-                                                .font(.caption2)
-                                                .foregroundStyle(.secondary)
-                                        }
-                                        .frame(maxWidth: .infinity)
-                                    }
-                                }
-                                Text("\(appModel.checkInCountThisWeek()) of 7 days checked in")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                Divider()
-                                HStack {
-                                    Label("Current streak: \(appModel.currentStreakDays)d", systemImage: "flame.fill")
-                                        .font(.caption.weight(.semibold))
-                                    Spacer()
-                                    Text("Longest: \(appModel.longestStreakDays)d")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Text("Goal progress: \(appModel.streakProgressText)")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
+                        StreakCardView(
+                            currentWeekDates: appModel.currentWeekDates,
+                            entriesForDate: { appModel.entries(on: $0) },
+                            checkedInCount: appModel.checkInCountThisWeek(),
+                            currentStreakDays: appModel.currentStreakDays,
+                            longestStreakDays: appModel.longestStreakDays,
+                            streakGoalDays: appModel.streakGoalDays
+                        )
                     }
 
                     if let followUp = appModel.adaptiveFollowUpQuestion {
@@ -263,6 +235,101 @@ struct TodayView: View {
                     try? await Task.sleep(for: .milliseconds(450))
                     circleState = .idle
                 }
+            }
+        }
+    }
+}
+
+private struct StreakCardView: View {
+    let currentWeekDates: [Date]
+    let entriesForDate: (Date) -> [JournalEntry]
+    let checkedInCount: Int
+    let currentStreakDays: Int
+    let longestStreakDays: Int
+    let streakGoalDays: Int
+
+    private var progress: Double {
+        guard streakGoalDays > 0 else { return 0 }
+        return min(1, Double(currentStreakDays) / Double(streakGoalDays))
+    }
+
+    private var milestoneText: String {
+        if currentStreakDays >= streakGoalDays {
+            return "Goal reached. Keep the streak alive."
+        }
+        if currentStreakDays == 0 {
+            return "Start a new streak with one entry today."
+        }
+        if currentStreakDays >= max(2, streakGoalDays / 2) {
+            return "You are building momentum."
+        }
+        return "Consistency is taking shape."
+    }
+
+    var body: some View {
+        ReferenceCard {
+            VStack(spacing: 14) {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .stroke(AppSurface.stroke, lineWidth: 5)
+                        Circle()
+                            .trim(from: 0, to: progress)
+                            .stroke(Color.primary, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                            .rotationEffect(.degrees(-90))
+                            .animation(.easeInOut(duration: 0.35), value: progress)
+                        VStack(spacing: 1) {
+                            Text("\(currentStreakDays)")
+                                .font(.headline.weight(.bold))
+                            Text("days")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(width: 54, height: 54)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Streak progress \(min(currentStreakDays, streakGoalDays))/\(streakGoalDays)")
+                            .font(.subheadline.weight(.semibold))
+                        Text(milestoneText)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Text("Best \(longestStreakDays)d")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(AppSurface.fill, in: Capsule())
+                        .overlay {
+                            Capsule().stroke(AppSurface.stroke, lineWidth: 0.5)
+                        }
+                }
+
+                HStack(spacing: 8) {
+                    ForEach(currentWeekDates, id: \.self) { date in
+                        let checked = entriesForDate(date).isEmpty == false
+                        VStack(spacing: 6) {
+                            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                .fill(checked ? Color.primary : Color.clear)
+                                .frame(width: 20, height: 14)
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                        .stroke(AppSurface.stroke, lineWidth: 0.5)
+                                }
+                            Text(String(date.shortDay.prefix(1)))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+                .padding(.top, 1)
+
+                Text("\(checkedInCount) of 7 days checked in this week")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
