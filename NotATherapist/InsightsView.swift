@@ -91,7 +91,8 @@ private struct InsightFeedView: View {
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text(insight.body)
                                             .font(.subheadline)
-                                            .lineLimit(2)
+                                            .lineLimit(3)
+                                            .fixedSize(horizontal: false, vertical: true)
                                         Text(insight.date.compactDate)
                                             .font(.caption2)
                                             .foregroundStyle(.secondary)
@@ -129,6 +130,8 @@ private struct InsightFeedView: View {
                                     Text(insight.body)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
+                                        .lineLimit(3)
+                                        .fixedSize(horizontal: false, vertical: true)
                                 }
                                 Spacer()
                             }
@@ -187,15 +190,16 @@ struct WeeklyReviewView: View {
 
             ReferenceCard {
                 VStack(alignment: .leading, spacing: 0) {
-                Text("Top patterns")
-                    .font(.subheadline.weight(.semibold))
-                    .padding(.bottom, 6)
+                        Text("Top patterns")
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.bottom, 6)
                 ForEach(review.patterns, id: \.self) { pattern in
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         Image(systemName: "sparkle")
                             .font(.caption)
                         Text(pattern)
                             .font(.body)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(.vertical, 5)
                 }

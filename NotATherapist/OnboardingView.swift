@@ -18,7 +18,7 @@ struct OnboardingView: View {
     @State private var checkInTime = "Evening"
 
     @State private var assessmentIndex = 0
-    @State private var assessmentAnswers = Array<Int?>(repeating: nil, count: OnboardingAssessment.questions.count)
+    @State private var assessmentAnswers = Array<Int?>(repeating: nil, count: OnboardingAssessment.items.count)
     @State private var selectedMood: MoodLevel = .okay
     @State private var firstCheckInType: EntryType = .reflection
     @State private var firstCheckInBody = ""
@@ -91,6 +91,9 @@ struct OnboardingView: View {
         }
         .background(Color(.systemBackground))
         .onTapGesture { focusedField = nil }
+        .onChange(of: page) { _, _ in
+            focusedField = nil
+        }
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
@@ -268,17 +271,17 @@ struct OnboardingView: View {
     }
 
     private var assessmentPage: some View {
-        let q = OnboardingAssessment.questions[assessmentIndex]
+        let q = OnboardingAssessment.items[assessmentIndex]
         return OnboardingQuestionPage(
-            title: "Question \(assessmentIndex + 1)/\(OnboardingAssessment.questions.count)",
-            subtitle: q
+            title: "Question \(assessmentIndex + 1)/\(OnboardingAssessment.items.count)",
+            subtitle: q.prompt
         ) {
             VStack(spacing: 12) {
                 ForEach(Array(OnboardingAssessment.optionTitles.enumerated()), id: \.offset) { index, title in
                     Button {
                         assessmentAnswers[assessmentIndex] = index
                         withAnimation(.easeInOut(duration: 0.25)) {
-                            if assessmentIndex < OnboardingAssessment.questions.count - 1 {
+                            if assessmentIndex < OnboardingAssessment.items.count - 1 {
                                 assessmentIndex += 1
                             } else {
                                 page = scoreLoadingPageIndex
@@ -323,7 +326,7 @@ struct OnboardingView: View {
         let breakdown = scoreBreakdown
         return OnboardingQuestionPage(
             title: "Your results",
-            subtitle: "This is your starting snapshot."
+            subtitle: "This is your baseline snapshot."
         ) {
             VStack(spacing: 14) {
                 Text("\(totalScore)")
@@ -336,9 +339,9 @@ struct OnboardingView: View {
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(.primary)
 
-                scoreBar("Anxiety", value: breakdown.anxiety)
-                scoreBar("Mood", value: breakdown.mood)
-                scoreBar("Stress", value: breakdown.stress)
+                scoreBar("Anxiety load", value: breakdown.anxiety)
+                scoreBar("Mood load", value: breakdown.mood)
+                scoreBar("Stress load", value: breakdown.stress)
             }
         }
     }
@@ -360,9 +363,10 @@ struct OnboardingView: View {
     private var planPage: some View {
         OnboardingQuestionPage(
             title: "Your plan is ready",
-            subtitle: "Here’s how we’ll start this week."
+            subtitle: planFocusTitle
         ) {
             VStack(spacing: 10) {
+                planRow("Why this plan", body: planWhyLine)
                 planRow("Daily Check-In", body: dailyPlanLine)
                 planRow("Guided Journal Track", body: guidedTrackLine)
                 planRow("Weekly AI Review", body: "Looks at this week next to your recent entries and context.")
@@ -544,34 +548,67 @@ struct OnboardingView: View {
     private var scoreHeadline: String {
         switch totalScore {
         case 40...63:
-            return "You’re carrying a lot right now. We’ll keep this steady and manageable."
+            return "You reported frequent symptoms recently. We’ll keep your plan short and stabilizing."
         case 24...39:
-            return "You’re in a mixed stretch. We’ll focus on consistency and clarity."
+            return "Your baseline shows mixed days. We’ll focus on consistency and clearer patterns."
         default:
-            return "You’ve got room to build momentum. We’ll keep this practical and simple."
+            return "Your baseline is lighter overall. We’ll build momentum with practical routines."
         }
     }
 
+    private var planFocusTitle: String {
+        "Here is a starting plan based on your highest-load domains."
+    }
+
+    private var planWhyLine: String {
+        let ranked = rankedDomains
+        guard let first = ranked.first else {
+            return "We start with consistency first, then adjust once more entries are available."
+        }
+        if ranked.count > 1 {
+            return "\(first.name) came through strongest, with \(ranked[1].name) as a secondary focus."
+        }
+        return "\(first.name) came through strongest, so this week is tuned for that."
+    }
+
     private var dailyPlanLine: String {
-        switch totalScore {
-        case 40...63:
-            return "One short check-in daily with calming prompts and low pressure."
-        case 24...39:
-            return "One balanced check-in daily with practical reflection prompts."
+        switch dominantDomain {
+        case "Anxiety":
+            return "One short check-in daily focused on worry loops, body cues, and de-escalation."
+        case "Mood":
+            return "One daily check-in focused on energy, self-talk, and one doable action."
         default:
-            return "One quick check-in daily to build consistency and awareness."
+            return "One short check-in daily with calming prompts and low pressure."
         }
     }
 
     private var guidedTrackLine: String {
-        switch totalScore {
-        case 40...63:
-            return "Grounding track with shorter exercises for heavy days."
-        case 24...39:
-            return "Balanced track for emotional clarity and thought sorting."
+        switch dominantDomain {
+        case "Anxiety":
+            return "Grounding track with shorter exercises and worry-unhook prompts."
+        case "Mood":
+            return "Mood reset track with activation prompts and self-criticism interrupts."
         default:
-            return "Growth track for confidence and better daily routines."
+            return "Stress load track with boundary, pacing, and recovery prompts."
         }
+    }
+
+    private var rankedDomains: [(name: String, value: Double)] {
+        [
+            (name: "Anxiety", value: scoreBreakdown.anxiety),
+            (name: "Mood", value: scoreBreakdown.mood),
+            (name: "Stress", value: scoreBreakdown.stress)
+        ]
+        .sorted { lhs, rhs in
+            if lhs.value == rhs.value {
+                return lhs.name < rhs.name
+            }
+            return lhs.value > rhs.value
+        }
+    }
+
+    private var dominantDomain: String {
+        rankedDomains.first?.name ?? "Stress"
     }
 
     private var scoreBreakdown: (anxiety: Double, mood: Double, stress: Double) {
@@ -668,6 +705,43 @@ struct OnboardingView: View {
         let trimmedName = preferredName.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedStory = personalStory.trimmingCharacters(in: .whitespacesAndNewlines)
         let focus = Array(focusAreas).sorted()
+        let labels = OnboardingAssessment.items.map(\.prompt)
+        let answers = assessmentAnswers.map { min(max($0 ?? 0, 0), 3) }
+
+        func domainSummary(name: String, indices: [Int]) -> OnboardingProfile.AssessmentDomainSummary {
+            let domainAnswers = indices.compactMap { idx -> Int? in
+                guard idx < answers.count else { return nil }
+                return answers[idx]
+            }
+            let score = domainAnswers.reduce(0, +)
+            let maxScore = domainAnswers.count * 3
+            let ratio = maxScore == 0 ? 0 : Double(score) / Double(maxScore)
+            let level: String
+            if ratio >= 0.67 {
+                level = "high"
+            } else if ratio >= 0.34 {
+                level = "moderate"
+            } else {
+                level = "low"
+            }
+            return .init(domain: name, score: score, maxScore: maxScore, level: level)
+        }
+
+        let assessment = OnboardingProfile.AssessmentProfile(
+            instrument: "Anchor Intake 21",
+            version: "1",
+            totalScore: answers.reduce(0, +),
+            maxScore: answers.count * 3,
+            answers: answers,
+            questionLabels: labels,
+            domains: [
+                domainSummary(name: "Anxiety", indices: [0, 1, 2, 3, 4, 6]),
+                domainSummary(name: "Mood", indices: [7, 8, 9, 10, 11, 12, 13]),
+                domainSummary(name: "Stress", indices: [5, 14, 15, 16, 17, 18, 19, 20])
+            ],
+            completedAt: Date()
+        )
+
         let lifeContext = focus + [
             "Main goal: \(selectedGoal)",
             "Tried therapy before: \(triedTherapy == true ? "yes" : "no")",
@@ -682,7 +756,8 @@ struct OnboardingView: View {
             lifeContext: lifeContext,
             focusAreas: focus,
             reflectionGoal: selectedGoal.isEmpty ? "Build a consistent daily check-in habit" : selectedGoal,
-            personalStory: trimmedStory
+            personalStory: trimmedStory,
+            assessment: assessment
         )
 
         hasCompletedOnboarding = true
@@ -926,30 +1001,34 @@ private enum OnboardingField {
 }
 
 private enum OnboardingAssessment {
-    static let optionTitles = ["Not at all", "Sometimes", "Pretty often", "All the time"]
+    struct Item {
+        let prompt: String
+    }
 
-    static let questions = [
-        "How often did you feel nervous, anxious, or on edge?",
-        "How often did you struggle to stop or control your worries?",
-        "How often did you worry too much about different things?",
-        "How often did you have trouble relaxing?",
-        "How often did you feel so restless that it was hard to sit still?",
-        "How often did you become easily annoyed or irritable?",
-        "How often did you feel afraid as if something awful might happen?",
-        "How often did you feel little interest or pleasure in doing things?",
-        "How often did you feel down, depressed, or hopeless?",
-        "How often did you have trouble sleeping or sleeping too much?",
-        "How often did you feel tired or had little energy?",
-        "How often did you have a poor appetite or overeat?",
-        "How often did you feel bad about yourself or that you let yourself down?",
-        "How often did you have trouble concentrating on things?",
-        "How often did you get upset by trivial things?",
-        "How often did you over-react to situations?",
-        "How often did you get impatient when delayed?",
-        "How often did you feel irritable?",
-        "How often did you find it hard to wind down?",
-        "How often did you find interruptions difficult to tolerate?",
-        "How often did you feel in a state of nervous tension?"
+    static let optionTitles = ["Not at all", "Several days", "More than half the days", "Nearly every day"]
+
+    static let items: [Item] = [
+        .init(prompt: "Over the last two weeks, how often have you felt nervous, anxious, or on edge?"),
+        .init(prompt: "Over the last two weeks, how often have you been unable to stop or control worrying?"),
+        .init(prompt: "Over the last two weeks, how often have you worried excessively about different things?"),
+        .init(prompt: "Over the last two weeks, how often have you had trouble relaxing once stress starts?"),
+        .init(prompt: "Over the last two weeks, how often have you been so restless that sitting still felt difficult?"),
+        .init(prompt: "Over the last two weeks, how often have you become easily annoyed or irritable?"),
+        .init(prompt: "Over the last two weeks, how often have you felt afraid as if something bad might happen?"),
+        .init(prompt: "Over the last two weeks, how often have you had little interest or pleasure in doing things?"),
+        .init(prompt: "Over the last two weeks, how often have you felt down, depressed, or hopeless?"),
+        .init(prompt: "Over the last two weeks, how often have you had trouble falling asleep, staying asleep, or slept too much?"),
+        .init(prompt: "Over the last two weeks, how often have you felt tired or low in energy?"),
+        .init(prompt: "Over the last two weeks, how often have appetite changes (too little or too much) affected you?"),
+        .init(prompt: "Over the last two weeks, how often have you felt bad about yourself, or like you have let yourself or others down?"),
+        .init(prompt: "Over the last two weeks, how often have you had trouble concentrating (for example while reading, working, or watching something)?"),
+        .init(prompt: "Over the last two weeks, how often have routine demands felt overwhelming?"),
+        .init(prompt: "Over the last two weeks, how often have you reacted more intensely than you wanted to?"),
+        .init(prompt: "Over the last two weeks, how often have interruptions or delays triggered a strong stress response?"),
+        .init(prompt: "Over the last two weeks, how often have you noticed stress tension in your body (jaw, neck, chest, stomach)?"),
+        .init(prompt: "Over the last two weeks, how often have racing thoughts made it hard to switch off?"),
+        .init(prompt: "Over the last two weeks, how often has stress spilled over into your relationships?"),
+        .init(prompt: "Over the last two weeks, how often have anxiety or low mood made daily tasks harder to complete?")
     ]
 }
 

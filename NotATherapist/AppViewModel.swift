@@ -142,7 +142,8 @@ final class AppViewModel: ObservableObject {
         lifeContext: [String],
         focusAreas: [String],
         reflectionGoal: String,
-        personalStory: String
+        personalStory: String,
+        assessment: OnboardingProfile.AssessmentProfile? = nil
     ) {
         let defaults = UserDefaults.standard
         defaults.set(preferredName, forKey: "onboardingPreferredName")
@@ -151,6 +152,20 @@ final class AppViewModel: ObservableObject {
         defaults.set(focusAreas.joined(separator: "|"), forKey: "onboardingFocusAreas")
         defaults.set(reflectionGoal, forKey: "onboardingReflectionGoal")
         defaults.set(personalStory, forKey: "onboardingPersonalStory")
+
+        let profile = OnboardingProfile(
+            preferredName: preferredName,
+            ageRange: ageRange,
+            lifeContext: lifeContext,
+            focusAreas: focusAreas,
+            reflectionGoal: reflectionGoal,
+            personalStory: personalStory,
+            assessment: assessment
+        )
+        if let data = try? JSONEncoder().encode(profile) {
+            defaults.set(data, forKey: "onboardingProfileV2")
+        }
+
         onboardingProfile = .current
         saveSnapshot()
     }

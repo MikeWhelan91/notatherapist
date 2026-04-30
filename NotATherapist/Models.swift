@@ -123,7 +123,7 @@ enum InsightType: String, CaseIterable, Identifiable, Codable {
         case .pattern: "Pattern"
         case .reframe: "Reframe"
         case .action: "Action"
-        case .risk: "Watchpoint"
+        case .risk: "Focus for next week"
         case .suggestion: "Suggestion"
         }
     }
@@ -291,22 +291,46 @@ struct ReflectionGoal: Identifiable, Codable, Hashable {
 }
 
 struct OnboardingProfile: Codable, Hashable {
+    struct AssessmentDomainSummary: Codable, Hashable {
+        var domain: String
+        var score: Int
+        var maxScore: Int
+        var level: String
+    }
+
+    struct AssessmentProfile: Codable, Hashable {
+        var instrument: String
+        var version: String
+        var totalScore: Int
+        var maxScore: Int
+        var answers: [Int]
+        var questionLabels: [String]
+        var domains: [AssessmentDomainSummary]
+        var completedAt: Date
+    }
+
     var preferredName: String
     var ageRange: String
     var lifeContext: [String]
     var focusAreas: [String]
     var reflectionGoal: String
     var personalStory: String
+    var assessment: AssessmentProfile?
 
     static var current: OnboardingProfile {
         let defaults = UserDefaults.standard
+        if let data = defaults.data(forKey: "onboardingProfileV2"),
+           let decoded = try? JSONDecoder().decode(OnboardingProfile.self, from: data) {
+            return decoded
+        }
         return OnboardingProfile(
             preferredName: defaults.string(forKey: "onboardingPreferredName") ?? "",
             ageRange: defaults.string(forKey: "onboardingAgeRange") ?? "",
             lifeContext: split(defaults.string(forKey: "onboardingLifeContext")),
             focusAreas: split(defaults.string(forKey: "onboardingFocusAreas")),
             reflectionGoal: defaults.string(forKey: "onboardingReflectionGoal") ?? "",
-            personalStory: defaults.string(forKey: "onboardingPersonalStory") ?? ""
+            personalStory: defaults.string(forKey: "onboardingPersonalStory") ?? "",
+            assessment: nil
         )
     }
 
@@ -317,10 +341,19 @@ struct OnboardingProfile: Codable, Hashable {
             lifeContext.isEmpty ? nil : "Life context: \(lifeContext.joined(separator: ", "))",
             focusAreas.isEmpty ? nil : "Focus: \(focusAreas.joined(separator: ", "))",
             reflectionGoal.isEmpty ? nil : "Goal: \(reflectionGoal)",
-            personalStory.isEmpty ? nil : "Story: \(personalStory)"
+            personalStory.isEmpty ? nil : "Story: \(personalStory)",
+            assessmentSummaryLine
         ]
         .compactMap { $0 }
         .joined(separator: "\n")
+    }
+
+    var assessmentSummaryLine: String? {
+        guard let assessment else { return nil }
+        let domainText = assessment.domains
+            .map { "\($0.domain): \($0.score)/\($0.maxScore) (\($0.level))" }
+            .joined(separator: ", ")
+        return "Assessment (\(assessment.instrument)): total \(assessment.totalScore)/\(assessment.maxScore). \(domainText)"
     }
 
     private static func split(_ string: String?) -> [String] {
