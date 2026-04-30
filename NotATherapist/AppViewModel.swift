@@ -186,6 +186,40 @@ final class AppViewModel: ObservableObject {
         return (-3...3).compactMap { calendar.date(byAdding: .day, value: $0, to: today) }
     }
 
+    var currentStreakDays: Int {
+        streakSummary.current
+    }
+
+    var longestStreakDays: Int {
+        streakSummary.longest
+    }
+
+    var streakGoalDays: Int {
+        let marker = "Streak goal:"
+        guard let line = onboardingProfile.lifeContext.first(where: { $0.hasPrefix(marker) }) else { return 3 }
+        let digits = line.components(separatedBy: CharacterSet.decimalDigits.inverted).joined()
+        return max(1, Int(digits) ?? 3)
+    }
+
+    var streakProgressText: String {
+        "\(min(currentStreakDays, streakGoalDays))/\(streakGoalDays) days"
+    }
+
+    var adaptiveFollowUpQuestion: String? {
+        guard let assessment = onboardingProfile.assessment else { return nil }
+        let sortedDomains = assessment.domains.sorted { $0.score > $1.score }
+        guard let top = sortedDomains.first else { return nil }
+
+        switch top.domain.lowercased() {
+        case "anxiety":
+            return "Follow-up: What was one moment today where your worry dropped even slightly, and what helped?"
+        case "mood":
+            return "Follow-up: What gave you even a small lift in energy or mood today?"
+        default:
+            return "Follow-up: What boundary or pause helped your stress stay more manageable today?"
+        }
+    }
+
     func entries(on date: Date) -> [JournalEntry] {
         journalEntries
             .filter { Calendar.current.isDate($0.date, inSameDayAs: date) }
@@ -221,6 +255,7 @@ final class AppViewModel: ObservableObject {
 
         checkForGoalProgress(in: entry)
         weeklyReview = weeklyReviewService.latestReview(from: journalEntries, healthSummary: healthSummary)
+        applyAdaptiveAssessmentAdjustment(reason: "entry_update")
         selectedMood = mood
         saveSnapshot()
         return entry
@@ -279,6 +314,7 @@ final class AppViewModel: ObservableObject {
         }
 
         replaceInsights(for: storedReview)
+        applyAdaptiveAssessmentAdjustment(reason: "daily_review")
         await refreshWeeklyReview()
         saveSnapshot()
         return storedReview
@@ -323,6 +359,7 @@ final class AppViewModel: ObservableObject {
         }
 
         replaceInsights(for: storedReview)
+        applyAdaptiveAssessmentAdjustment(reason: "onboarding_first_reflection")
         await refreshWeeklyReview()
         saveSnapshot()
         return storedReview
@@ -419,6 +456,7 @@ final class AppViewModel: ObservableObject {
         } catch {
             weeklyReview = weeklyReviewService.latestReview(from: scopedEntries, healthSummary: healthSummary)
         }
+        applyAdaptiveAssessmentAdjustment(reason: "weekly_review")
         saveSnapshot()
     }
 
@@ -656,6 +694,106 @@ final class AppViewModel: ObservableObject {
             ),
             at: 0
         )
+    }
+
+    private var streakSummary: (current: Int, longest: Int) {
+        let calendar = Calendar.current
+        let days = Set(journalEntries.map { calendar.startOfDay(for: $0.date) })
+        guard !days.isEmpty else { return (0, 0) }
+        let sortedDays = days.sorted()
+
+        var longest = 1
+        var running = 1
+        for idx in 1..<sortedDays.count {
+            let previous = sortedDays[idx - 1]
+            let current = sortedDays[idx]
+            if let nextExpected = calendar.date(byAdding: .day, value: 1, to: previous),
+               calendar.isDate(nextExpected, inSameDayAs: current) {
+                running += 1
+            } else {
+                running = 1
+            }
+            longest = max(longest, running)
+        }
+
+        let today = calendar.startOfDay(for: Date())
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: today) ?? today
+        guard days.contains(today) || days.contains(yesterday) else {
+            return (0, longest)
+        }
+
+        var current = days.contains(today) ? 1 : 0
+        var cursor = days.contains(today) ? today : yesterday
+        while let previous = calendar.date(byAdding: .day, value: -1, to: cursor),
+              days.contains(previous) {
+            current += 1
+            cursor = previous
+        }
+        return (current, longest)
+    }
+
+    private func applyAdaptiveAssessmentAdjustment(reason: String) {
+        onboardingProfile = .current
+        guard var profile = optionalOnboardingProfile(),
+              var assessment = profile.assessment else { return }
+
+        let recent = journalEntries
+            .sorted { $0.date > $1.date }
+            .prefix(14)
+        guard recent.count >= 3 else { return }
+
+        let recent7 = Array(recent.prefix(7))
+        let lowMoodCount = recent7.filter { $0.mood.score <= 2 }.count
+        let highMoodCount = recent7.filter { $0.mood.score >= 4 }.count
+        let stressSignals = recent7.filter { $0.themes.contains("Stress") || $0.themes.contains("Anxiety") }.count
+
+        var delta = 0
+        if lowMoodCount >= 3 || stressSignals >= 3 { delta += 1 }
+        if highMoodCount >= 3 { delta -= 1 }
+
+        let completionSignals = recent7.filter {
+            let text = $0.text.lowercased()
+            return ["done", "finished", "completed", "calmer", "better", "easier"].contains(where: text.contains)
+        }.count
+        if completionSignals >= 2 { delta -= 1 }
+
+        delta = max(-2, min(2, delta))
+        guard delta != 0 else { return }
+
+        let originalScore = assessment.totalScore
+        assessment.totalScore = max(0, min(assessment.maxScore, assessment.totalScore + delta))
+
+        if let top = assessment.domains.enumerated().max(by: { $0.element.score < $1.element.score }) {
+            let updated = max(0, min(top.element.maxScore, top.element.score + delta))
+            assessment.domains[top.offset].score = updated
+            let ratio = top.element.maxScore == 0 ? 0 : Double(updated) / Double(top.element.maxScore)
+            assessment.domains[top.offset].level = ratio >= 0.67 ? "high" : (ratio >= 0.34 ? "moderate" : "low")
+        }
+
+        assessment.completedAt = Date()
+        profile.assessment = assessment
+        profile.lifeContext = profile.lifeContext.filter { $0.hasPrefix("Adaptive baseline:") == false }
+        profile.lifeContext.append("Adaptive baseline: \(originalScore) -> \(assessment.totalScore) (\(reason))")
+        persistOnboardingProfile(profile)
+    }
+
+    private func optionalOnboardingProfile() -> OnboardingProfile? {
+        let profile = onboardingProfile
+        if profile.preferredName.isEmpty &&
+            profile.personalStory.isEmpty &&
+            profile.focusAreas.isEmpty &&
+            profile.lifeContext.isEmpty &&
+            profile.assessment == nil {
+            return nil
+        }
+        return profile
+    }
+
+    private func persistOnboardingProfile(_ profile: OnboardingProfile) {
+        if let data = try? JSONEncoder().encode(profile) {
+            UserDefaults.standard.set(data, forKey: "onboardingProfileV2")
+            onboardingProfile = .current
+        }
     }
 
     private var snapshot: AppSnapshot {

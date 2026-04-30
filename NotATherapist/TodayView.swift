@@ -170,6 +170,33 @@ struct TodayView: View {
                                 Text("\(appModel.checkInCountThisWeek()) of 7 days checked in")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
+                                Divider()
+                                HStack {
+                                    Label("Current streak: \(appModel.currentStreakDays)d", systemImage: "flame.fill")
+                                        .font(.caption.weight(.semibold))
+                                    Spacer()
+                                    Text("Longest: \(appModel.longestStreakDays)d")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Text("Goal progress: \(appModel.streakProgressText)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+
+                    if let followUp = appModel.adaptiveFollowUpQuestion {
+                        ReferenceCard {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Label("Adaptive follow-up", systemImage: "waveform.path.ecg")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                Text(followUp)
+                                    .font(.subheadline.weight(.semibold))
+                                Text("Answer this in your next entry. It helps tune your baseline over time.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                             }
                         }
                     }
