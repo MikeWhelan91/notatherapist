@@ -16,6 +16,8 @@ struct OnboardingView: View {
     @State private var personalStory = ""
     @State private var streakGoal = 3
     @State private var checkInTime = "Evening"
+    @State private var therapyExperience = ""
+    @State private var emotionAwarenessLevel = ""
 
     @State private var assessmentIndex = 0
     @State private var assessmentAnswers = Array<Int?>(repeating: nil, count: OnboardingAssessment.items.count)
@@ -156,6 +158,7 @@ struct OnboardingView: View {
 
     private var shouldShowBottomControls: Bool {
         if page == assessmentPageIndex || page == firstCheckInPageIndex || page == firstReflectionPageIndex { return false }
+        if page == reasonPageIndex || page == therapyPageIndex || page == emotionPageIndex { return false }
         return focusedField == nil
     }
 
@@ -213,9 +216,9 @@ struct OnboardingView: View {
         case reasonPageIndex:
             return !selectedGoal.isEmpty
         case therapyPageIndex:
-            return triedTherapy != nil
+            return !therapyExperience.isEmpty
         case emotionPageIndex:
-            return emotionAwarenessHard != nil
+            return !emotionAwarenessLevel.isEmpty
         case reminderPageIndex:
             return !checkInTime.isEmpty
         default:
@@ -226,12 +229,9 @@ struct OnboardingView: View {
     private var introPage: some View {
         OnboardingQuestionPage(
             title: "Begin your journey",
-            subtitle: "A short setup to personalize your check-ins and weekly guidance."
+            subtitle: "Tell your companion who you are, then we will tailor your plan."
         ) {
             VStack(alignment: .leading, spacing: 12) {
-                singleRow("Guided daily check-ins", symbol: "sparkles")
-                singleRow("Weekly AI review in your tone", symbol: "brain")
-                singleRow("Plans based on your answers", symbol: "list.bullet.rectangle")
                 TextField("Name (optional)", text: $preferredName)
                     .textInputAutocapitalization(.words)
                     .focused($focusedField, equals: .name)
@@ -261,7 +261,7 @@ struct OnboardingView: View {
                     .overlay {
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
                             .stroke(AppSurface.stroke, lineWidth: 0.5)
-                    }
+                        }
                 }
                 Text("Your age range helps tailor examples and pacing.")
                     .font(.caption)
@@ -273,7 +273,7 @@ struct OnboardingView: View {
     private var goalsPage: some View {
         OnboardingQuestionPage(
             title: "What brings you here?",
-            subtitle: "Pick your top focus areas."
+            subtitle: "Pick all areas you want support with."
         ) {
             VStack(spacing: 10) {
                 focusRow("Relieve anxiety", "wind")
@@ -288,34 +288,91 @@ struct OnboardingView: View {
 
     private var reasonPage: some View {
         OnboardingQuestionPage(
-            title: "I want to...",
-            subtitle: "Choose one main goal to start."
+            title: "What would feel like progress in 2 weeks?",
+            subtitle: "Choose one clear outcome to aim for first."
         ) {
             VStack(spacing: 10) {
-                singleChoiceRow("Improve relationships", "person.2", selected: selectedGoal == "Improve relationships") { selectedGoal = "Improve relationships" }
-                singleChoiceRow("Support personal growth", "figure.walk", selected: selectedGoal == "Support personal growth") { selectedGoal = "Support personal growth" }
-                singleChoiceRow("Relieve anxiety", "wind", selected: selectedGoal == "Relieve anxiety") { selectedGoal = "Relieve anxiety" }
-                singleChoiceRow("Boost mood", "sun.max", selected: selectedGoal == "Boost mood") { selectedGoal = "Boost mood" }
-                singleChoiceRow("Something else", "ellipsis.circle", selected: selectedGoal == "Something else") { selectedGoal = "Something else" }
+                singleChoiceRow("Feel calmer in stressful moments", "wind", selected: selectedGoal == "Feel calmer in stressful moments") {
+                    selectedGoal = "Feel calmer in stressful moments"
+                    advanceAfterSingleChoice()
+                }
+                singleChoiceRow("Have more steady energy", "sun.max", selected: selectedGoal == "Have more steady energy") {
+                    selectedGoal = "Have more steady energy"
+                    advanceAfterSingleChoice()
+                }
+                singleChoiceRow("Stop overthinking spirals sooner", "brain.head.profile", selected: selectedGoal == "Stop overthinking spirals sooner") {
+                    selectedGoal = "Stop overthinking spirals sooner"
+                    advanceAfterSingleChoice()
+                }
+                singleChoiceRow("Handle relationships with less reactivity", "person.2", selected: selectedGoal == "Handle relationships with less reactivity") {
+                    selectedGoal = "Handle relationships with less reactivity"
+                    advanceAfterSingleChoice()
+                }
+                singleChoiceRow("Build a consistent reflection routine", "calendar", selected: selectedGoal == "Build a consistent reflection routine") {
+                    selectedGoal = "Build a consistent reflection routine"
+                    advanceAfterSingleChoice()
+                }
             }
         }
     }
 
     private var therapyPage: some View {
         OnboardingQuestionPage(
-            title: "Have you tried therapy before?",
-            subtitle: "This helps us match the right pace."
+            title: "How familiar are you with therapy or counseling?",
+            subtitle: "This helps us choose the right level of guidance."
         ) {
-            binaryChoice(leftTitle: "No", rightTitle: "Yes", selection: $triedTherapy)
+            VStack(spacing: 10) {
+                singleChoiceRow("Never tried", "circle", selected: therapyExperience == "Never tried") {
+                    therapyExperience = "Never tried"
+                    triedTherapy = false
+                    advanceAfterSingleChoice()
+                }
+                singleChoiceRow("Tried briefly", "clock", selected: therapyExperience == "Tried briefly") {
+                    therapyExperience = "Tried briefly"
+                    triedTherapy = true
+                    advanceAfterSingleChoice()
+                }
+                singleChoiceRow("Had regular sessions before", "calendar.badge.clock", selected: therapyExperience == "Had regular sessions before") {
+                    therapyExperience = "Had regular sessions before"
+                    triedTherapy = true
+                    advanceAfterSingleChoice()
+                }
+                singleChoiceRow("Currently in therapy", "person.badge.shield.checkmark", selected: therapyExperience == "Currently in therapy") {
+                    therapyExperience = "Currently in therapy"
+                    triedTherapy = true
+                    advanceAfterSingleChoice()
+                }
+            }
         }
     }
 
     private var emotionPage: some View {
         OnboardingQuestionPage(
-            title: "Do you find it hard to identify emotions?",
-            subtitle: "We can adapt prompts to make check-ins easier."
+            title: "How often is it hard to identify what you are feeling?",
+            subtitle: "We can tune prompt clarity and pacing to match this."
         ) {
-            binaryChoice(leftTitle: "No", rightTitle: "Yes", selection: $emotionAwarenessHard)
+            VStack(spacing: 10) {
+                singleChoiceRow("Rarely", "checkmark.circle", selected: emotionAwarenessLevel == "Rarely") {
+                    emotionAwarenessLevel = "Rarely"
+                    emotionAwarenessHard = false
+                    advanceAfterSingleChoice()
+                }
+                singleChoiceRow("Sometimes", "circle.lefthalf.filled", selected: emotionAwarenessLevel == "Sometimes") {
+                    emotionAwarenessLevel = "Sometimes"
+                    emotionAwarenessHard = false
+                    advanceAfterSingleChoice()
+                }
+                singleChoiceRow("Often", "exclamationmark.circle", selected: emotionAwarenessLevel == "Often") {
+                    emotionAwarenessLevel = "Often"
+                    emotionAwarenessHard = true
+                    advanceAfterSingleChoice()
+                }
+                singleChoiceRow("Almost always", "exclamationmark.octagon", selected: emotionAwarenessLevel == "Almost always") {
+                    emotionAwarenessLevel = "Almost always"
+                    emotionAwarenessHard = true
+                    advanceAfterSingleChoice()
+                }
+            }
         }
     }
 
@@ -753,6 +810,14 @@ struct OnboardingView: View {
         withAnimation(.easeInOut(duration: 0.25)) { page += 1 }
     }
 
+    private func advanceAfterSingleChoice() {
+        focusedField = nil
+        guard page < completionPageIndex else { return }
+        withAnimation(.easeInOut(duration: 0.22)) {
+            page += 1
+        }
+    }
+
     private func enforcePageRules(from oldPage: Int, to newPage: Int) {
         guard newPage != oldPage else { return }
         if firstCheckInGenerated == false && newPage > firstCheckInPageIndex {
@@ -810,10 +875,15 @@ struct OnboardingView: View {
             completedAt: Date()
         )
 
+        let therapyBinary = triedTherapy.map { $0 ? "yes" : "no" } ?? "unknown"
+        let emotionBinary = emotionAwarenessHard.map { $0 ? "yes" : "no" } ?? "unknown"
+
         let lifeContext = focus + [
             "Main goal: \(selectedGoal)",
-            "Tried therapy before: \(triedTherapy == true ? "yes" : "no")",
-            "Emotion awareness difficult: \(emotionAwarenessHard == true ? "yes" : "no")",
+            "Therapy familiarity: \(therapyExperience)",
+            "Emotion awareness frequency: \(emotionAwarenessLevel)",
+            "Tried therapy before: \(therapyBinary)",
+            "Emotion awareness difficult: \(emotionBinary)",
             "Streak goal: \(streakGoal) days",
             "Preferred check-in: \(checkInTime)"
         ]
@@ -926,34 +996,6 @@ struct OnboardingView: View {
             }
         }
         .buttonStyle(.plain)
-    }
-
-    private func binaryChoice(leftTitle: String, rightTitle: String, selection: Binding<Bool?>) -> some View {
-        HStack(spacing: 12) {
-            Button {
-                selection.wrappedValue = false
-            } label: {
-                Text(leftTitle)
-                    .font(.title3.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 58)
-                    .foregroundStyle((selection.wrappedValue == false) ? Color(.systemBackground) : .primary)
-                    .background((selection.wrappedValue == false) ? Color.primary : AppSurface.fill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            }
-            .buttonStyle(.plain)
-
-            Button {
-                selection.wrappedValue = true
-            } label: {
-                Text(rightTitle)
-                    .font(.title3.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 58)
-                    .foregroundStyle((selection.wrappedValue == true) ? Color(.systemBackground) : .primary)
-                    .background((selection.wrappedValue == true) ? Color.primary : AppSurface.fill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            }
-            .buttonStyle(.plain)
-        }
     }
 
     private func streakChoice(_ days: Int) -> some View {
