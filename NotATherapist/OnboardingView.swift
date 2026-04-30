@@ -28,6 +28,7 @@ struct OnboardingView: View {
     @State private var firstCheckInErrorMessage = ""
     @State private var firstCheckInUsedFallback = false
     @State private var firstCheckInGenerated = false
+    @State private var firstCheckInEntryCreated = false
 
     @State private var scoreReveal = false
     @State private var isRequestingNotificationPermission = false
@@ -81,7 +82,8 @@ struct OnboardingView: View {
                 completionPage.tag(completionPageIndex)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .animation(.easeInOut(duration: 0.25), value: page)
+            .animation(.interactiveSpring(response: 0.42, dampingFraction: 0.86, blendDuration: 0.18), value: page)
+            .sensoryFeedback(.selection, trigger: page)
 
             if shouldShowBottomControls {
                 controls
@@ -89,10 +91,12 @@ struct OnboardingView: View {
                     .padding(.bottom, 24)
             }
         }
-        .background(Color(.systemBackground))
+        .background(onboardingBackground)
+        .fontDesign(.rounded)
         .onTapGesture { focusedField = nil }
-        .onChange(of: page) { _, _ in
+        .onChange(of: page) { oldPage, newPage in
             focusedField = nil
+            enforcePageRules(from: oldPage, to: newPage)
         }
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
@@ -100,6 +104,27 @@ struct OnboardingView: View {
                 Button("Done") { focusedField = nil }
             }
         }
+    }
+
+    private var onboardingBackground: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(.systemBackground),
+                    Color(.systemGray6).opacity(0.75),
+                    Color(.systemBackground)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            RadialGradient(
+                colors: [Color.primary.opacity(0.05), Color.clear],
+                center: .topTrailing,
+                startRadius: 24,
+                endRadius: 420
+            )
+        }
+        .ignoresSafeArea()
     }
 
     private var progress: some View {
@@ -217,6 +242,30 @@ struct OnboardingView: View {
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
                             .stroke(AppSurface.stroke, lineWidth: 0.5)
                     }
+                Menu {
+                    ForEach(OnboardingDemographics.ageRanges, id: \.self) { range in
+                        Button(range) { ageRange = range }
+                    }
+                } label: {
+                    HStack {
+                        Text(ageRange.isEmpty ? "Age range (optional)" : ageRange)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(ageRange.isEmpty ? .secondary : .primary)
+                        Spacer()
+                        Image(systemName: "chevron.down")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(14)
+                    .background(AppSurface.fill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(AppSurface.stroke, lineWidth: 0.5)
+                    }
+                }
+                Text("Your age range helps tailor examples and pacing.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -423,6 +472,9 @@ struct OnboardingView: View {
                 Text("Example: ‘10 years of panic disorder, especially when driving. I want practical support and less fear.’")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                Text("\(personalStory.count)/600")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(personalStory.count > 600 ? Color.red : Color.secondary)
             }
         }
     }
@@ -701,9 +753,25 @@ struct OnboardingView: View {
         withAnimation(.easeInOut(duration: 0.25)) { page += 1 }
     }
 
+    private func enforcePageRules(from oldPage: Int, to newPage: Int) {
+        guard newPage != oldPage else { return }
+        if firstCheckInGenerated == false && newPage > firstCheckInPageIndex {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                page = firstCheckInPageIndex
+            }
+            return
+        }
+        if newPage == completionPageIndex && firstCheckInGenerated == false {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                page = firstCheckInPageIndex
+            }
+        }
+    }
+
     private func finishOnboarding() {
         let trimmedName = preferredName.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedStory = personalStory.trimmingCharacters(in: .whitespacesAndNewlines)
+        let clippedStory = String(trimmedStory.prefix(600))
         let focus = Array(focusAreas).sorted()
         let labels = OnboardingAssessment.items.map(\.prompt)
         let answers = assessmentAnswers.map { min(max($0 ?? 0, 0), 3) }
@@ -756,7 +824,7 @@ struct OnboardingView: View {
             lifeContext: lifeContext,
             focusAreas: focus,
             reflectionGoal: selectedGoal.isEmpty ? "Build a consistent daily check-in habit" : selectedGoal,
-            personalStory: trimmedStory,
+            personalStory: clippedStory,
             assessment: assessment
         )
 
@@ -772,7 +840,10 @@ struct OnboardingView: View {
         defer { isGeneratingFirstCheckIn = false }
 
         let text = firstCheckInBody.trimmingCharacters(in: .whitespacesAndNewlines)
-        _ = appModel.addEntry(text: text, mood: selectedMood, type: firstCheckInType)
+        if firstCheckInEntryCreated == false {
+            _ = appModel.addEntry(text: text, mood: selectedMood, type: firstCheckInType)
+            firstCheckInEntryCreated = true
+        }
 
         let review = await appModel.generateOnboardingFirstReflection(for: Date())
         firstCheckInReview = review
@@ -1032,6 +1103,19 @@ private enum OnboardingAssessment {
     ]
 }
 
+private enum OnboardingDemographics {
+    static let ageRanges = [
+        "Under 18",
+        "18-24",
+        "25-34",
+        "35-44",
+        "45-54",
+        "55-64",
+        "65+",
+        "Prefer not to say"
+    ]
+}
+
 private struct OnboardingQuestionPage<Content: View>: View {
     let title: String
     let subtitle: String
@@ -1053,6 +1137,13 @@ private struct OnboardingQuestionPage<Content: View>: View {
             }
             .padding(AppSpacing.page)
             .padding(.top, 8)
+            .opacity(isVisible ? 1 : 0.0)
+            .offset(y: isVisible ? 0 : 14)
+            .animation(.easeOut(duration: 0.24), value: isVisible)
         }
+        .onAppear { isVisible = true }
+        .onDisappear { isVisible = false }
     }
+
+    @State private var isVisible = false
 }
