@@ -76,7 +76,7 @@ const conversation = createConversation({
   weeklyReview: weeklyResult.weeklyReview,
   profile: { preferredName: "Mike" }
 });
-assert.equal(conversation.remainingTurns, 3);
+assert.equal(conversation.remainingTurns, 6);
 assert.equal(conversation.messages[0].sender, "ai");
 
 const reply = replyToConversation({
@@ -88,7 +88,7 @@ const reply = replyToConversation({
   planTier: "free"
 });
 assert.equal(reply.status, "active");
-assert.equal(reply.remainingTurns, 2);
+assert.equal(reply.remainingTurns, 5);
 assert.equal(Boolean(reply.suggestedGoal), true);
 assert.equal(typeof reply.replyContext, "string");
 
@@ -101,7 +101,7 @@ const deeper = replyToConversation({
   planTier: "premium"
 });
 assert.equal(deeper.status, "active");
-assert.equal(deeper.remainingTurns, 7);
+assert.equal(deeper.remainingTurns, 11);
 assert.equal(deeper.deepeningUsed, true);
 assert.equal(deeper.phase, "deeper");
 assert.equal(typeof deeper.replyContext, "string");

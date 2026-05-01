@@ -40,9 +40,9 @@ private enum InsightTab: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .feed: "Feed"
-        case .weekly: "Weekly Review"
-        case .analytics: "Analytics"
+        case .feed: "Highlights"
+        case .weekly: "Weekly"
+        case .analytics: "Trends"
         }
     }
 }
@@ -61,9 +61,9 @@ private struct InsightFeedView: View {
                 .padding(.top, 80)
             } else {
                 VStack(alignment: .leading, spacing: AppSpacing.section) {
-                    insightSection("Recent insights", filter: { $0.category == "Recent" })
-                    insightSection("Keep in mind", filter: { $0.category == "Patterns" })
-                    insightSection("Suggestions", filter: { $0.category == "Suggestions" })
+                    insightSection("Today & recent", filter: { $0.category == "Recent" })
+                    insightSection("Patterns to watch", filter: { $0.category == "Patterns" })
+                    insightSection("Try next", filter: { $0.category == "Suggestions" })
                     localSignalsSection
                 }
                 .padding(AppSpacing.page)
@@ -89,9 +89,13 @@ private struct InsightFeedView: View {
                                         .frame(width: 28)
                                         .foregroundStyle(.primary)
                                     VStack(alignment: .leading, spacing: 3) {
+                                        Text(insight.title)
+                                            .font(.subheadline.weight(.semibold))
+                                            .lineLimit(1)
                                         Text(insight.body)
-                                            .font(.subheadline)
-                                            .lineLimit(3)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(2)
                                             .fixedSize(horizontal: false, vertical: true)
                                         Text(insight.date.compactDate)
                                             .font(.caption2)
@@ -155,7 +159,7 @@ private struct WeeklyReviewContainerView: View {
                 ContentUnavailableView(
                     "No weekly review yet",
                     systemImage: "calendar.badge.clock",
-                    description: Text("A review appears after a few days or several entries.")
+                    description: Text(appModel.weeklyUnlockProgressText)
                 )
                 .padding(.top, 80)
             }
@@ -175,7 +179,7 @@ struct WeeklyReviewView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 14) {
-                AICircleView(state: .checkIn, size: 48, strokeWidth: 2.2)
+                AICircleView(state: .checkIn, size: 48, strokeWidth: 2.2, tint: .white)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(appModel.isPremium ? "Weekly review" : "Weekly insight")
                         .font(.headline)
@@ -188,11 +192,9 @@ struct WeeklyReviewView: View {
                 }
             }
 
-            ReferenceCard {
-                VStack(alignment: .leading, spacing: 0) {
-                        Text("Top patterns")
-                            .font(.subheadline.weight(.semibold))
-                            .padding(.bottom, 6)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Top patterns")
+                    .font(.subheadline.weight(.semibold))
                 ForEach(review.patterns, id: \.self) { pattern in
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         Image(systemName: "sparkle")
@@ -203,44 +205,38 @@ struct WeeklyReviewView: View {
                     }
                     .padding(.vertical, 5)
                 }
-                }
             }
+            Divider().background(AppSurface.stroke.opacity(0.55))
 
             if appModel.isPremium {
-                ReferenceCard {
-                    InsightSectionView(title: "Watchpoint", bodyText: review.risk, symbol: InsightType.risk.symbol)
-                }
+                InsightSectionView(title: "Watchpoint", bodyText: review.risk, symbol: InsightType.risk.symbol)
+                Divider().background(AppSurface.stroke.opacity(0.55))
             }
             if appModel.isPremium, review.patternShift.isEmpty == false {
-                ReferenceCard {
-                    InsightSectionView(title: "Pattern shift", bodyText: review.patternShift, symbol: "arrow.left.arrow.right")
-                }
+                InsightSectionView(title: "Pattern shift", bodyText: review.patternShift, symbol: "arrow.left.arrow.right")
+                Divider().background(AppSurface.stroke.opacity(0.55))
             }
             if appModel.isPremium, review.goalFollowThrough.isEmpty == false {
-                ReferenceCard {
-                    InsightSectionView(title: "Goal follow-through", bodyText: review.goalFollowThrough, symbol: "flag.checkered")
-                }
+                InsightSectionView(title: "Goal follow-through", bodyText: review.goalFollowThrough, symbol: "flag.checkered")
+                Divider().background(AppSurface.stroke.opacity(0.55))
             }
             if appModel.isPremium, review.healthPatterns.isEmpty == false {
-                ReferenceCard {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Health patterns")
-                            .font(.subheadline.weight(.semibold))
-                        ForEach(review.healthPatterns, id: \.self) { pattern in
-                            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                                Image(systemName: pattern.lowercased().contains("sleep") ? "moon" : "figure.walk")
-                                    .font(.caption)
-                                Text(pattern)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Health patterns")
+                        .font(.subheadline.weight(.semibold))
+                    ForEach(review.healthPatterns, id: \.self) { pattern in
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            Image(systemName: pattern.lowercased().contains("sleep") ? "moon" : "figure.walk")
+                                .font(.caption)
+                            Text(pattern)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
+                Divider().background(AppSurface.stroke.opacity(0.55))
             }
-            ReferenceCard {
-                InsightSectionView(title: "Suggestion", bodyText: review.suggestion, symbol: InsightType.suggestion.symbol)
-            }
+            InsightSectionView(title: "Suggestion", bodyText: review.suggestion, symbol: InsightType.suggestion.symbol)
             if appModel.isPremium == false {
                 ReferenceCard {
                     VStack(alignment: .leading, spacing: 8) {
@@ -267,6 +263,7 @@ struct WeeklyReviewView: View {
 
 private struct AnalyticsView: View {
     @EnvironmentObject private var appModel: AppViewModel
+    @State private var showMoreAnalytics = false
 
     private var sortedEntries: [JournalEntry] {
         appModel.journalEntries.sorted { $0.date < $1.date }
@@ -288,10 +285,16 @@ private struct AnalyticsView: View {
                     moodTrendChart
                     checkInConsistencyChart
                     moodDistributionChart
-                    topThemesChart
-                    entryTypeBreakdownChart
-                    reviewCadenceChart
-                    healthContextChart
+                    DisclosureGroup(showMoreAnalytics ? "Hide detailed analytics" : "Show detailed analytics", isExpanded: $showMoreAnalytics) {
+                        VStack(alignment: .leading, spacing: AppSpacing.section) {
+                            topThemesChart
+                            entryTypeBreakdownChart
+                            reviewCadenceChart
+                            healthContextChart
+                        }
+                        .padding(.top, 8)
+                    }
+                    .font(.subheadline.weight(.semibold))
                 }
                 .padding(AppSpacing.page)
             }
@@ -343,10 +346,13 @@ private struct AnalyticsView: View {
                         y: .value("Mood", entry.mood.score)
                     )
                     .interpolationMethod(.catmullRom)
+                    .foregroundStyle(Color.white.opacity(0.75))
                     PointMark(
                         x: .value("Date", entry.date),
                         y: .value("Mood", entry.mood.score)
                     )
+                    .foregroundStyle(entry.mood.companionColor)
+                    .symbolSize(52)
                 }
                 .chartYScale(domain: 1...5)
                 .chartXAxis(.hidden)
@@ -381,7 +387,7 @@ private struct AnalyticsView: View {
                         x: .value("Mood", item.name),
                         y: .value("Entries", item.count)
                     )
-                    .foregroundStyle(Color.primary)
+                    .foregroundStyle(moodColor(for: item.name))
                 }
                 .chartYAxis(.hidden)
                 .frame(height: 120)
@@ -519,6 +525,10 @@ private struct AnalyticsView: View {
         }
         return counts.map { (name: $0.key, count: $0.value) }
             .sorted { $0.name < $1.name }
+    }
+
+    private func moodColor(for label: String) -> Color {
+        MoodLevel.allCases.first(where: { $0.label == label })?.companionColor ?? .white
     }
 }
 

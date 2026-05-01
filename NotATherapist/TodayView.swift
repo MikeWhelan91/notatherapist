@@ -3,11 +3,19 @@ import SwiftUI
 struct TodayView: View {
     @EnvironmentObject private var appModel: AppViewModel
     @State private var circleState: AICircleState = .idle
+    @State private var companionLensFocusActive = false
+    @State private var companionBusy = false
     @State private var showingNewEntry = false
     @State private var showingWeekly = false
     @State private var showingSettings = false
     @State private var activeDailyReview: DailyReview?
     @State private var isReviewingToday = false
+    @State private var showingHistory = false
+    @State private var showingReviewModeChoice = false
+    @State private var missionRevealCount = 0
+    @State private var confettiTrigger = 0
+    @State private var lastMissionDoneCount = 0
+    @State private var lastStreakValue = 0
 
     private var todayEntries: [JournalEntry] {
         appModel.entries(on: Date())
@@ -17,13 +25,77 @@ struct TodayView: View {
         appModel.dailyReview(on: Date())
     }
 
+    private var hasNewEntriesSinceTodayReview: Bool {
+        guard let review = todayReview else { return todayEntries.isEmpty == false }
+        let currentIDs = Set(todayEntries.map(\.id))
+        return currentIDs != Set(review.entryIDs)
+    }
+
+    private var canRunTodayReview: Bool {
+        guard todayEntries.isEmpty == false else { return false }
+        if appModel.planTier == .premium {
+            return true
+        }
+        return todayReview == nil || hasNewEntriesSinceTodayReview
+    }
+
+    private var todayReviewHint: String {
+        if appModel.planTier == .premium {
+            if todayReview?.source == "openai" {
+                return "AI review already used today. You can still run unlimited local refresh reviews."
+            }
+            return "Run today’s review. First run uses AI; extra runs today are local refreshes."
+        }
+        if todayReview == nil {
+            return "Run a short local review when you are finished writing."
+        }
+        return hasNewEntriesSinceTodayReview
+            ? "You added a new entry. Run review again to refresh today’s guidance."
+            : "Add another entry to refresh today’s local review."
+    }
+
+    private enum NextActionKind {
+        case writeEntry
+        case reviewToday
+        case openWeekly
+        case keepStreak
+    }
+
+    private var nextAction: (kind: NextActionKind, title: String, subtitle: String, cta: String) {
+        if todayEntries.isEmpty {
+            return (.writeEntry, "Your fastest win", "Start with a 30-second check-in to keep momentum.", "Write check-in")
+        }
+        if todayReview == nil {
+            return (.reviewToday, "Lock in today", "You already wrote. Review now to turn it into guidance.", "Review today")
+        }
+        if appModel.hasWeeklyReview {
+            return (.openWeekly, "Weekly insight is ready", "See this week as one story, not disconnected entries.", "Open weekly review")
+        }
+        return (.keepStreak, "Keep momentum", "Your weekly unlock is close. Stay consistent tomorrow.", "View history")
+    }
+
+    private var nextActionTimeHint: String {
+        switch nextAction.kind {
+        case .writeEntry: "~30 sec"
+        case .reviewToday: "~20 sec"
+        case .openWeekly: "~2 min"
+        case .keepStreak: "~10 sec"
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: AppSpacing.section) {
                     HStack {
                         Spacer()
-                        AICircleView(state: circleState, size: 104, strokeWidth: 3.2)
+                        AICircleView(
+                            state: circleState,
+                            size: 104,
+                            strokeWidth: 3.2,
+                            tint: appModel.companionTint,
+                            lensFocusActive: companionLensFocusActive
+                        )
                         Spacer()
                     }
                     .padding(.top, 2)
@@ -34,12 +106,67 @@ struct TodayView: View {
                         MoodSelectorView(selectedMood: $appModel.selectedMood)
                     }
 
-                    Button {
-                        showingNewEntry = true
-                    } label: {
-                        Label("New entry", systemImage: "pencil")
+                    ReferenceCard {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                Text(nextAction.title)
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Text(nextActionTimeHint)
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(.tertiary)
+                            }
+                            Text(nextAction.subtitle)
+                                .font(.subheadline.weight(.semibold))
+
+                            Button {
+                                runNextAction()
+                            } label: {
+                                Label(nextAction.cta, systemImage: nextActionSymbol)
+                            }
+                            .buttonStyle(PrimaryCapsuleButtonStyle())
+                            .disabled(isReviewingToday)
+                        }
                     }
-                    .buttonStyle(PrimaryCapsuleButtonStyle())
+
+                    if appModel.onboardingMission.filter(\.done).count < appModel.onboardingMission.count {
+                        ReferenceCard {
+                            VStack(alignment: .leading, spacing: 10) {
+                                HStack {
+                                    Text("Your first 3-day mission")
+                                        .font(.subheadline.weight(.semibold))
+                                    Spacer()
+                                    Text(appModel.onboardingMissionProgressText)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                ProgressView(value: missionProgressRatio)
+                                    .tint(.primary)
+                                    .animation(.easeOut(duration: 0.28), value: missionProgressRatio)
+
+                                ForEach(Array(appModel.onboardingMission.enumerated()), id: \.offset) { _, step in
+                                    HStack(spacing: 8) {
+                                        Image(systemName: step.done ? "checkmark.circle.fill" : "circle")
+                                            .foregroundStyle(step.done ? .primary : .secondary)
+                                        Text(step.title)
+                                            .font(.caption)
+                                            .foregroundStyle(step.done ? .primary : .secondary)
+                                    }
+                                    .opacity(missionRevealCount > 0 ? 1 : 0)
+                                    .offset(y: missionRevealCount > 0 ? 0 : 8)
+                                    .animation(.easeOut(duration: 0.28), value: missionRevealCount)
+                                }
+                            }
+                        }
+                        .onAppear {
+                            missionRevealCount = 0
+                            withAnimation(.easeOut(duration: 0.22)) {
+                                missionRevealCount = 1
+                            }
+                        }
+                    }
 
                     ReferenceCard {
                         HStack(spacing: 12) {
@@ -115,33 +242,35 @@ struct TodayView: View {
                                     .foregroundStyle(.secondary)
                             }
                         }
-                    } else if todayReview == nil, todayEntries.isEmpty == false {
+                    } else if todayEntries.isEmpty == false {
                         ReferenceCard {
                             VStack(alignment: .leading, spacing: 12) {
                                 VStack(alignment: .leading, spacing: 5) {
-                                    Text("Ready to review today.")
+                                    Text(todayReview == nil ? "Ready to review today." : "Review status")
                                         .font(.subheadline.weight(.semibold))
-                                    Text("Run a short review when you are finished writing for the day.")
+                                    Text(todayReviewHint)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
                                 Button {
-                                    isReviewingToday = true
-                                    circleState = .thinking
-                                    Task {
-                                        if let review = await appModel.reviewDay(Date()) {
-                                            activeDailyReview = review
-                                        }
-                                        isReviewingToday = false
-                                        circleState = .responding
-                                        try? await Task.sleep(for: .milliseconds(450))
-                                        circleState = .idle
+                                    guard canRunTodayReview else { return }
+                                    if shouldPromptForReviewMode {
+                                        showingReviewModeChoice = true
+                                    } else {
+                                        runTodayReview(preferLocal: appModel.planTier == .premium && todayReview?.source == "openai")
                                     }
                                 } label: {
-                                    Label(isReviewingToday ? "Reviewing" : "Review today", systemImage: "sparkle.magnifyingglass")
+                                    Label(
+                                        isReviewingToday
+                                            ? "Reviewing"
+                                            : (canRunTodayReview
+                                                ? ((appModel.planTier == .premium && todayReview?.source == "openai") ? "Refresh review" : "Review today")
+                                                : "Review unavailable"),
+                                        systemImage: "sparkle.magnifyingglass"
+                                    )
                                 }
                                 .buttonStyle(PrimaryCapsuleButtonStyle())
-                                .disabled(isReviewingToday)
+                                .disabled(isReviewingToday || canRunTodayReview == false)
                             }
                         }
                     }
@@ -176,11 +305,11 @@ struct TodayView: View {
                     if appModel.hasWeeklyReview {
                         ReferenceCard {
                             HStack(spacing: 12) {
-                                AICircleView(state: .checkIn, size: 42, strokeWidth: 2.1)
+                                AICircleView(state: .checkIn, size: 42, strokeWidth: 2.1, tint: .white)
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text("I noticed a few patterns this week.")
+                                    Text("I noticed a few patterns.")
                                         .font(.subheadline.weight(.semibold))
-                                    Text("Weekly review is ready")
+                                    Text(appModel.weeklyCheckInAvailabilityText)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
@@ -189,6 +318,26 @@ struct TodayView: View {
                                     showingWeekly = true
                                 }
                                 .buttonStyle(CompactIconButtonStyle())
+                                .disabled(appModel.isWeeklyCheckInAvailableNow == false)
+                            }
+                        }
+                    } else {
+                        ReferenceCard {
+                            VStack(alignment: .leading, spacing: 10) {
+                                HStack(spacing: 12) {
+                                    AICircleView(state: .attentive, size: 42, strokeWidth: 2.1, tint: appModel.companionTint)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Weekly check-in is building")
+                                            .font(.subheadline.weight(.semibold))
+                                        Text(appModel.weeklyUnlockProgressText)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                }
+
+                                ProgressView(value: appModel.weeklyUnlockProgressRatio)
+                                    .tint(.primary)
                             }
                         }
                     }
@@ -211,6 +360,12 @@ struct TodayView: View {
                 NewEntryView(initialMood: appModel.selectedMood)
                     .presentationCornerRadius(28)
             }
+            .sheet(isPresented: $showingHistory) {
+                NavigationStack {
+                    JournalHistoryView()
+                }
+                .presentationCornerRadius(28)
+            }
             .sheet(isPresented: $showingWeekly) {
                 NavigationStack {
                     WeeklyReviewView(review: appModel.weeklyReview)
@@ -228,14 +383,135 @@ struct TodayView: View {
                     .presentationDetents([.medium])
                     .presentationCornerRadius(28)
             }
+            .confirmationDialog(
+                "Choose review type",
+                isPresented: $showingReviewModeChoice,
+                titleVisibility: .visible
+            ) {
+                Button("AI review (uses today’s AI pass)") {
+                    runTodayReview(preferLocal: false)
+                }
+                Button("Local review") {
+                    runTodayReview(preferLocal: true)
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("AI gives a deeper pass but is limited to once per day. Local review is instant and unlimited.")
+            }
             .onAppear { circleState = .idle }
+            .onAppear {
+                lastMissionDoneCount = appModel.onboardingMission.filter(\.done).count
+                lastStreakValue = appModel.currentStreakDays
+            }
+            .task {
+                circleState = .attentive
+                companionLensFocusActive = false
+                while !Task.isCancelled {
+                    let wait = UInt64(Int.random(in: 3_600_000_000...6_200_000_000))
+                    try? await Task.sleep(nanoseconds: wait)
+                    guard !Task.isCancelled else { return }
+                    guard companionBusy == false else { continue }
+
+                    if Bool.random() {
+                        companionLensFocusActive = true
+                        try? await Task.sleep(nanoseconds: 1_500_000_000)
+                        companionLensFocusActive = false
+                    }
+
+                    let ambient: [AICircleState] = [.attentive, .listening, .checkIn]
+                    circleState = ambient.randomElement() ?? .attentive
+                    try? await Task.sleep(nanoseconds: 1_500_000_000)
+                    if companionBusy == false {
+                        circleState = .attentive
+                    }
+                }
+            }
             .onChange(of: appModel.selectedMood) {
+                companionBusy = true
                 circleState = .responding
                 Task {
                     try? await Task.sleep(for: .milliseconds(450))
-                    circleState = .idle
+                    circleState = .attentive
+                    companionBusy = false
                 }
             }
+            .onChange(of: appModel.onboardingMission.filter(\.done).count) { oldValue, newValue in
+                guard newValue > oldValue else { return }
+                fireConfetti()
+                lastMissionDoneCount = newValue
+            }
+            .onChange(of: appModel.currentStreakDays) { oldValue, newValue in
+                guard newValue > oldValue else { return }
+                let reachedGoalNow = newValue >= appModel.streakGoalDays && oldValue < appModel.streakGoalDays
+                let milestoneStep = newValue % 3 == 0
+                if reachedGoalNow || milestoneStep {
+                    fireConfetti()
+                }
+                lastStreakValue = newValue
+            }
+            .overlay {
+                ConfettiOverlayView(trigger: confettiTrigger)
+            }
+        }
+    }
+
+    private var missionProgressRatio: Double {
+        let mission = appModel.onboardingMission
+        guard mission.isEmpty == false else { return 0 }
+        let doneCount = mission.filter(\.done).count
+        return Double(doneCount) / Double(mission.count)
+    }
+
+    private var nextActionSymbol: String {
+        switch nextAction.kind {
+        case .writeEntry: "pencil"
+        case .reviewToday: "sparkle.magnifyingglass"
+        case .openWeekly: "chart.line.uptrend.xyaxis"
+        case .keepStreak: "clock.arrow.trianglehead.counterclockwise.rotate.90"
+        }
+    }
+
+    private var shouldPromptForReviewMode: Bool {
+        appModel.planTier == .premium && todayReview?.source != "openai"
+    }
+
+    private func runNextAction() {
+        switch nextAction.kind {
+        case .writeEntry:
+            showingNewEntry = true
+        case .reviewToday:
+            guard isReviewingToday == false else { return }
+            guard canRunTodayReview else { return }
+            if shouldPromptForReviewMode {
+                showingReviewModeChoice = true
+            } else {
+                runTodayReview(preferLocal: appModel.planTier == .premium && todayReview?.source == "openai")
+            }
+        case .openWeekly:
+            showingWeekly = true
+        case .keepStreak:
+            showingHistory = true
+        }
+    }
+
+    private func fireConfetti() {
+        confettiTrigger += 1
+    }
+
+    private func runTodayReview(preferLocal: Bool) {
+        guard isReviewingToday == false else { return }
+        isReviewingToday = true
+        companionBusy = true
+        circleState = .thinking
+        Task {
+            if let review = await appModel.reviewDay(Date(), preferLocal: preferLocal) {
+                activeDailyReview = review
+            }
+            isReviewingToday = false
+            circleState = .responding
+            try? await Task.sleep(for: .milliseconds(450))
+            circleState = .attentive
+            companionBusy = false
         }
     }
 }
@@ -578,6 +854,32 @@ struct SettingsView: View {
                 }
 
                 Section("Weekly review reminder") {
+                    Toggle(
+                        "Daily mood reminder",
+                        isOn: Binding(
+                            get: { notificationService.isDailyReminderEnabled },
+                            set: { enabled in
+                                Task {
+                                    await notificationService.setDailyReminderEnabled(enabled)
+                                }
+                            }
+                        )
+                    )
+
+                    DatePicker(
+                        "Daily time",
+                        selection: Binding(
+                            get: { notificationService.dailyReminderTime },
+                            set: { time in
+                                Task {
+                                    await notificationService.updateDailyReminderTime(time)
+                                }
+                            }
+                        ),
+                        displayedComponents: .hourAndMinute
+                    )
+                    .disabled(notificationService.isDailyReminderEnabled == false)
+
                     Toggle(
                         "Notify when review is ready",
                         isOn: Binding(

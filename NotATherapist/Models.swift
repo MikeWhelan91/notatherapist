@@ -59,6 +59,16 @@ enum MoodLevel: String, CaseIterable, Identifiable, Codable {
         case .great: 5
         }
     }
+
+    var companionColor: Color {
+        switch self {
+        case .terrible: Color(red: 0.82, green: 0.40, blue: 0.39)
+        case .low: Color(red: 0.86, green: 0.60, blue: 0.34)
+        case .okay: Color(red: 0.80, green: 0.84, blue: 0.90)
+        case .good: Color(red: 0.30, green: 0.61, blue: 0.95)
+        case .great: Color(red: 0.36, green: 0.76, blue: 0.56)
+        }
+    }
 }
 
 enum EntryType: String, CaseIterable, Identifiable, Codable {
@@ -315,6 +325,7 @@ struct OnboardingProfile: Codable, Hashable {
     var focusAreas: [String]
     var reflectionGoal: String
     var personalStory: String
+    var streakGoal: Int = 3
     var assessment: AssessmentProfile?
 
     static var current: OnboardingProfile {
@@ -323,6 +334,7 @@ struct OnboardingProfile: Codable, Hashable {
            let decoded = try? JSONDecoder().decode(OnboardingProfile.self, from: data) {
             return decoded
         }
+        let storedStreakGoal = defaults.integer(forKey: "onboardingStreakGoal")
         return OnboardingProfile(
             preferredName: defaults.string(forKey: "onboardingPreferredName") ?? "",
             ageRange: defaults.string(forKey: "onboardingAgeRange") ?? "",
@@ -330,6 +342,7 @@ struct OnboardingProfile: Codable, Hashable {
             focusAreas: split(defaults.string(forKey: "onboardingFocusAreas")),
             reflectionGoal: defaults.string(forKey: "onboardingReflectionGoal") ?? "",
             personalStory: defaults.string(forKey: "onboardingPersonalStory") ?? "",
+            streakGoal: storedStreakGoal > 0 ? storedStreakGoal : 3,
             assessment: nil
         )
     }
@@ -341,6 +354,7 @@ struct OnboardingProfile: Codable, Hashable {
             lifeContext.isEmpty ? nil : "Life context: \(lifeContext.joined(separator: ", "))",
             focusAreas.isEmpty ? nil : "Focus: \(focusAreas.joined(separator: ", "))",
             reflectionGoal.isEmpty ? nil : "Goal: \(reflectionGoal)",
+            "Streak goal: \(streakGoal) days",
             personalStory.isEmpty ? nil : "Story: \(personalStory)",
             assessmentSummaryLine
         ]

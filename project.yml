@@ -14,6 +14,7 @@ targets:
       - NotATherapist
       - Shared
     dependencies:
+      - package: Lottie
       - target: AnchorWidgets
         embed: true
     settings:
@@ -54,3 +55,7 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         SKIP_INSTALL: YES
         APPLICATION_EXTENSION_API_ONLY: YES
+packages:
+  Lottie:
+    url: https://github.com/airbnb/lottie-ios
+    from: 4.5.0

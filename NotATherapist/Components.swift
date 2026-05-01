@@ -10,9 +10,13 @@ struct AICircleView: View {
     var size: CGFloat = 64
     var strokeWidth: CGFloat = 2.5
     var motionStyle: AICircleMotionStyle = .continuous
+    var tint: Color = .white
+    var lensFocusActive: Bool = false
 
     @State private var animationStart = Date()
     @State private var responseKick = false
+    @State private var lensRotation: Double = 0
+    @State private var lensScale: CGFloat = 1
 
     var body: some View {
         let profile = AICircleProfile(state: state)
@@ -33,8 +37,8 @@ struct AICircleView: View {
                     .fill(
                         RadialGradient(
                             colors: [
-                                .white.opacity(profile.mistCoreOpacity),
-                                .white.opacity(profile.mistMidOpacity),
+                                tint.opacity(profile.mistCoreOpacity),
+                                tint.opacity(profile.mistMidOpacity),
                                 .clear
                             ],
                             center: .center,
@@ -46,98 +50,117 @@ struct AICircleView: View {
                     .scaleEffect(profile.mistScale + (CGFloat(pulse) * 0.03))
 
                 Circle()
-                    .stroke(.white.opacity(profile.glowOpacity), style: StrokeStyle(lineWidth: brushWidth * 1.15, lineCap: .round, lineJoin: .round))
+                    .stroke(tint.opacity(profile.glowOpacity), style: StrokeStyle(lineWidth: brushWidth * 1.15, lineCap: .round, lineJoin: .round))
                     .blur(radius: profile.glowRadius)
                     .scaleEffect(1.015)
 
                 Circle()
-                    .stroke(.white.opacity(profile.innerGlowOpacity), style: StrokeStyle(lineWidth: brushWidth * 1.55, lineCap: .round, lineJoin: .round))
+                    .stroke(tint.opacity(profile.innerGlowOpacity), style: StrokeStyle(lineWidth: brushWidth * 1.55, lineCap: .round, lineJoin: .round))
                     .blur(radius: profile.innerGlowRadius)
                     .scaleEffect(0.84)
 
                 Circle()
-                    .fill(.white.opacity(profile.coreGlowOpacity))
+                    .fill(tint.opacity(profile.coreGlowOpacity))
                     .blur(radius: profile.innerGlowRadius * 1.4)
                     .scaleEffect(0.58)
 
                 Circle()
                     .trim(from: 0.025, to: 0.965)
-                    .stroke(.primary.opacity(profile.baseOpacity), style: StrokeStyle(lineWidth: brushWidth, lineCap: .round, lineJoin: .round))
+                    .stroke(tint.opacity(profile.baseOpacity), style: StrokeStyle(lineWidth: brushWidth, lineCap: .round, lineJoin: .round))
                     .rotationEffect(.degrees(12 + (drift * 0.09)))
                     .scaleEffect(0.99)
 
                 Circle()
                     .trim(from: profile.primaryTrim.lowerBound, to: profile.primaryTrim.upperBound)
-                    .stroke(.primary.opacity(profile.primaryOpacity), style: StrokeStyle(lineWidth: brushWidth * 0.82, lineCap: .round, lineJoin: .round))
+                    .stroke(tint.opacity(profile.primaryOpacity), style: StrokeStyle(lineWidth: brushWidth * 0.82, lineCap: .round, lineJoin: .round))
                     .rotationEffect(.degrees(-14 - (drift * 0.12)))
                     .scaleEffect(profile.primaryScale)
 
                 Circle()
                     .trim(from: profile.secondaryTrim.lowerBound, to: profile.secondaryTrim.upperBound)
-                    .stroke(.primary.opacity(profile.secondaryOpacity), style: StrokeStyle(lineWidth: brushWidth * 0.62, lineCap: .round, lineJoin: .round))
+                    .stroke(tint.opacity(profile.secondaryOpacity), style: StrokeStyle(lineWidth: brushWidth * 0.62, lineCap: .round, lineJoin: .round))
                     .rotationEffect(.degrees(140 + (drift * 0.1)))
                     .scaleEffect(1.015)
 
                 Circle()
                     .trim(from: profile.highlightTrim.lowerBound, to: profile.highlightTrim.upperBound)
-                    .stroke(.primary.opacity(profile.highlightOpacity), style: StrokeStyle(lineWidth: brushWidth * 0.44, lineCap: .round, lineJoin: .round))
+                    .stroke(tint.opacity(profile.highlightOpacity), style: StrokeStyle(lineWidth: brushWidth * 0.44, lineCap: .round, lineJoin: .round))
                     .rotationEffect(.degrees(44 - (drift * 0.11)))
                     .scaleEffect(0.975)
 
                 Circle()
                     .trim(from: 0.01, to: 0.97)
-                    .stroke(.primary.opacity(profile.scratchOpacity), style: StrokeStyle(lineWidth: hairlineWidth, lineCap: .round))
+                    .stroke(tint.opacity(profile.scratchOpacity), style: StrokeStyle(lineWidth: hairlineWidth, lineCap: .round))
                     .rotationEffect(.degrees(-12 + (lineMotion * 0.08)))
                     .scaleEffect(1.105)
 
                 Circle()
                     .trim(from: 0.045, to: 0.94)
-                    .stroke(.primary.opacity(profile.scratchOpacity * 0.8), style: StrokeStyle(lineWidth: hairlineWidth * 0.82, lineCap: .round))
+                    .stroke(tint.opacity(profile.scratchOpacity * 0.8), style: StrokeStyle(lineWidth: hairlineWidth * 0.82, lineCap: .round))
                     .rotationEffect(.degrees(8 + (lineMotion * 0.07)))
                     .scaleEffect(0.86)
 
                 Circle()
                     .trim(from: 0.14, to: 0.31)
-                    .stroke(.primary.opacity(profile.dryBrushOpacity), style: StrokeStyle(lineWidth: hairlineWidth * 0.9, lineCap: .round))
+                    .stroke(tint.opacity(profile.dryBrushOpacity), style: StrokeStyle(lineWidth: hairlineWidth * 0.9, lineCap: .round))
                     .rotationEffect(.degrees(-42 + (lineMotion * 0.14)))
                     .scaleEffect(1.18)
 
                 Circle()
                     .trim(from: 0.56, to: 0.72)
-                    .stroke(.primary.opacity(profile.dryBrushOpacity * 0.86), style: StrokeStyle(lineWidth: hairlineWidth * 0.78, lineCap: .round))
+                    .stroke(tint.opacity(profile.dryBrushOpacity * 0.86), style: StrokeStyle(lineWidth: hairlineWidth * 0.78, lineCap: .round))
                     .rotationEffect(.degrees(104 + (lineMotion * 0.11)))
                     .scaleEffect(1.06)
 
                 Circle()
                     .trim(from: 0.79, to: 0.93)
-                    .stroke(.primary.opacity(profile.dryBrushOpacity * 1.15), style: StrokeStyle(lineWidth: hairlineWidth * 1.05, lineCap: .round))
+                    .stroke(tint.opacity(profile.dryBrushOpacity * 1.15), style: StrokeStyle(lineWidth: hairlineWidth * 1.05, lineCap: .round))
                     .rotationEffect(.degrees(23 + (lineMotion * 0.09)))
                     .scaleEffect(1.16)
 
                 Circle()
                     .trim(from: 0.04, to: 0.18)
-                    .stroke(.primary.opacity(profile.innerLineOpacity), style: StrokeStyle(lineWidth: hairlineWidth * 1.1, lineCap: .round))
+                    .stroke(tint.opacity(profile.innerLineOpacity), style: StrokeStyle(lineWidth: hairlineWidth * 1.1, lineCap: .round))
                     .rotationEffect(.degrees(-28 + (lineMotion * 0.15)))
                     .scaleEffect(0.66)
 
                 Circle()
                     .trim(from: 0.34, to: 0.52)
-                    .stroke(.primary.opacity(profile.innerLineOpacity * 0.82), style: StrokeStyle(lineWidth: hairlineWidth * 0.9, lineCap: .round))
+                    .stroke(tint.opacity(profile.innerLineOpacity * 0.82), style: StrokeStyle(lineWidth: hairlineWidth * 0.9, lineCap: .round))
                     .rotationEffect(.degrees(78 + (lineMotion * 0.12)))
                     .scaleEffect(0.74)
 
                 Circle()
                     .trim(from: 0.64, to: 0.82)
-                    .stroke(.primary.opacity(profile.innerLineOpacity * 0.72), style: StrokeStyle(lineWidth: hairlineWidth * 0.72, lineCap: .round))
+                    .stroke(tint.opacity(profile.innerLineOpacity * 0.72), style: StrokeStyle(lineWidth: hairlineWidth * 0.72, lineCap: .round))
                     .rotationEffect(.degrees(154 + (lineMotion * 0.1)))
                     .scaleEffect(0.56)
 
                 if state == .typing || state == .checkIn || state == .listening {
                     Circle()
                         .trim(from: 0.82, to: 0.96)
-                        .stroke(.primary.opacity(0.24), style: StrokeStyle(lineWidth: brushWidth * 0.28, lineCap: .round))
+                        .stroke(tint.opacity(0.24), style: StrokeStyle(lineWidth: brushWidth * 0.28, lineCap: .round))
                         .rotationEffect(.degrees(28 + (drift * 0.16)))
                         .scaleEffect(1.08)
+                }
+
+                if lensFocusActive {
+                    Circle()
+                        .stroke(tint.opacity(0.4), style: StrokeStyle(lineWidth: hairlineWidth * 1.3))
+                        .scaleEffect(0.84 * lensScale)
+                        .blur(radius: 1.1)
+
+                    Circle()
+                        .trim(from: 0.11, to: 0.39)
+                        .stroke(tint.opacity(0.6), style: StrokeStyle(lineWidth: brushWidth * 0.18, lineCap: .round))
+                        .rotationEffect(.degrees(-32 + lensRotation))
+                        .scaleEffect(0.82 * lensScale)
+
+                    Circle()
+                        .trim(from: 0.58, to: 0.86)
+                        .stroke(tint.opacity(0.52), style: StrokeStyle(lineWidth: brushWidth * 0.15, lineCap: .round))
+                        .rotationEffect(.degrees(138 - lensRotation))
+                        .scaleEffect(0.86 * lensScale)
                 }
             }
             .frame(width: size, height: size)
@@ -145,15 +168,31 @@ struct AICircleView: View {
             .opacity(profile.totalOpacity)
         }
         .animation(.easeOut(duration: 0.26), value: responseKick)
-        .task(id: state) {
+        .task {
             animationStart = Date()
             configureAnimation()
         }
+        .onChange(of: state) { _, _ in
+            configureAnimation()
+        }
+        .onChange(of: lensFocusActive) { _, active in
+            if active {
+                runLensFocusSequence()
+            } else {
+                withAnimation(.easeOut(duration: 0.25)) {
+                    lensRotation = 0
+                    lensScale = 1
+                }
+            }
+        }
+        .animation(.easeInOut(duration: 0.52), value: state)
         .accessibilityHidden(true)
     }
 
     private func configureAnimation() {
-        responseKick = false
+        withAnimation(.easeOut(duration: 0.18)) {
+            responseKick = false
+        }
 
         if state == .responding {
             withAnimation(.easeOut(duration: 0.24)) {
@@ -161,6 +200,33 @@ struct AICircleView: View {
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
                 responseKick = false
+            }
+        }
+    }
+
+    private func runLensFocusSequence() {
+        withAnimation(.easeInOut(duration: 0.62)) {
+            lensRotation = 26
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.62) {
+            withAnimation(.easeOut(duration: 0.48)) {
+                lensRotation = -10
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) {
+            withAnimation(.easeInOut(duration: 0.34)) {
+                lensScale = 1.06
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.44) {
+            withAnimation(.easeInOut(duration: 0.34)) {
+                lensScale = 0.97
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.78) {
+            withAnimation(.interactiveSpring(response: 0.46, dampingFraction: 0.86, blendDuration: 0.14)) {
+                lensRotation = 0
+                lensScale = 1
             }
         }
     }
@@ -460,25 +526,29 @@ struct MoodSelectorView: View {
     @Binding var selectedMood: MoodLevel
     var size: CGFloat = 54
     var labelFont: Font = .caption
+    var useMoodAccent: Bool = false
 
     var body: some View {
         HStack(spacing: 10) {
             ForEach(MoodLevel.allCases) { mood in
+                let isSelected = selectedMood == mood
+                let activeFill = useMoodAccent ? mood.companionColor : Color.primary
                 Button {
                     selectedMood = mood
                 } label: {
                     VStack(spacing: 7) {
-                        Text(mood.emoji)
-                            .font(.system(size: size * 0.42))
+                        Image(systemName: mood.symbol)
+                            .font(.system(size: size * 0.34, weight: .semibold))
                             .frame(width: size, height: size)
-                            .background(selectedMood == mood ? Color.primary : AppSurface.fill, in: Circle())
+                            .background(isSelected ? activeFill : AppSurface.fill, in: Circle())
                             .overlay {
                                 Circle()
                                     .stroke(AppSurface.stroke, lineWidth: 0.5)
                             }
+                            .foregroundStyle(isSelected ? Color(.systemBackground) : .primary)
                         Text(mood.label)
                             .font(labelFont)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(isSelected ? activeFill : .secondary)
                             .lineLimit(1)
                     }
                     .frame(maxWidth: .infinity)
@@ -494,6 +564,7 @@ struct WeekCalendarStripView: View {
     @Binding var selectedDate: Date
     let dates: [Date]
     var hasEntry: (Date) -> Bool = { _ in false }
+    var dayMoodColor: (Date) -> Color? = { _ in nil }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -501,6 +572,7 @@ struct WeekCalendarStripView: View {
                 ForEach(dates, id: \.self) { date in
                     let isSelected = Calendar.current.isDate(date, inSameDayAs: selectedDate)
                     let hasSavedEntry = hasEntry(date)
+                    let moodColor = dayMoodColor(date)
                     Button {
                         selectedDate = date
                     } label: {
@@ -510,7 +582,7 @@ struct WeekCalendarStripView: View {
                                 .foregroundStyle(isSelected ? .primary : .secondary)
                             ZStack {
                                 Circle()
-                                    .fill(hasSavedEntry ? Color.primary : Color.clear)
+                                    .fill(hasSavedEntry ? (moodColor ?? Color.primary) : Color.clear)
                                     .frame(width: 40, height: 40)
                                 Circle()
                                     .stroke(Color.primary.opacity(0.95), lineWidth: 1.2)
@@ -524,11 +596,11 @@ struct WeekCalendarStripView: View {
 
                                 Text(date.dayNumber)
                                     .font(.headline.weight(.semibold))
-                                    .foregroundStyle(hasSavedEntry ? Color.black : .primary)
+                                    .foregroundStyle(hasSavedEntry ? Color.white : .primary)
 
                                 if hasSavedEntry {
                                     Circle()
-                                        .fill(Color.black)
+                                        .fill(Color.white)
                                         .frame(width: 4, height: 4)
                                         .offset(y: 13)
                                 }
@@ -578,40 +650,55 @@ struct EntryRowView: View {
     let entry: JournalEntry
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Text(entry.date.compactTime)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(width: 48, alignment: .leading)
-
-            Image(systemName: entry.entryType.icon)
-                .font(.subheadline)
-                .frame(width: 24)
-                .foregroundStyle(.primary)
-
-            VStack(alignment: .leading, spacing: 5) {
-                Text(entry.text)
-                    .font(.subheadline)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(entry.entryType.label)
-                    .font(.caption.weight(.medium))
+        let accent = entry.mood.companionColor
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center, spacing: 8) {
+                Text(entry.date.compactTime)
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(accent.opacity(0.12), in: Capsule())
+
+                Image(systemName: entry.entryType.icon)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(accent)
+                    .frame(width: 24, height: 24)
+                    .background(accent.opacity(0.14), in: Circle())
+
+                Text(entry.entryType.label)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(accent)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(accent.opacity(0.12), in: Capsule())
+                    .overlay {
+                        Capsule().stroke(accent.opacity(0.35), lineWidth: 0.6)
+                    }
+
+                Spacer()
+
+                Image(systemName: entry.mood.symbol)
+                    .font(.system(size: 14, weight: .semibold))
+                    .frame(width: 34, height: 34)
+                    .foregroundStyle(Color.white)
+                    .background(accent, in: Circle())
             }
 
-            Spacer(minLength: 8)
+            Text(entry.text)
+                .font(.body.weight(.medium))
+                .lineLimit(4)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-            Text(entry.mood.emoji)
-                .font(.system(size: 21))
-                .frame(width: 38, height: 38)
-                .foregroundStyle(Color.black)
-                .background(Color.primary, in: Circle())
-
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.tertiary)
+            HStack {
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
         }
-        .padding(.vertical, 5)
+        .padding(.vertical, 4)
     }
 }
 

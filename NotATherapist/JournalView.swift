@@ -10,6 +10,9 @@ struct JournalView: View {
     @State private var isReviewingDay = false
     @State private var pendingReReviewDate: Date?
     @State private var showingReReviewConfirm = false
+    @State private var companionState: AICircleState = .attentive
+    @State private var companionLensFocusActive = false
+    @State private var companionBusy = false
 
     private var todayDate: Date { Date() }
 
@@ -34,19 +37,46 @@ struct JournalView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: AppSpacing.section) {
-                    VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
                         Text(todayTitle)
                             .font(.largeTitle.weight(.semibold))
+                        Spacer()
+                        Button {
+                            showingSettings = true
+                        } label: {
+                            Image(systemName: "gearshape")
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                                .frame(width: 46, height: 46)
+                                .background(Color.white.opacity(0.08), in: Circle())
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                                )
+                        }
+                        .accessibilityLabel("Settings")
+                    }
+
+                    VStack(spacing: 8) {
                         Text(greetingTitle)
                             .font(.title.weight(.semibold))
+                            .multilineTextAlignment(.center)
                         Text("Log today, then review when you're done.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
                     }
+                    .frame(maxWidth: .infinity)
 
                     HStack {
                         Spacer()
-                        AICircleView(state: .attentive, size: 116, strokeWidth: 3)
+                        AICircleView(
+                            state: companionState,
+                            size: 116,
+                            strokeWidth: 3,
+                            tint: appModel.companionTint,
+                            lensFocusActive: companionLensFocusActive
+                        )
                         Spacer()
                     }
                     .padding(.vertical, 4)
@@ -68,6 +98,9 @@ struct JournalView: View {
                         dates: appModel.centeredTodayDates,
                         hasEntry: { date in
                             appModel.entries(on: date).isEmpty == false
+                        },
+                        dayMoodColor: { date in
+                            dayMoodColor(for: date)
                         }
                     )
                         .padding(.horizontal, -AppSpacing.page)
@@ -125,16 +158,6 @@ struct JournalView: View {
                 .padding(.bottom, 86)
             }
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showingSettings = true
-                    } label: {
-                        Image(systemName: "gearshape")
-                    }
-                    .accessibilityLabel("Settings")
-                }
-            }
             .overlay(alignment: .bottomTrailing) {
                 Button {
                     showingNewEntry = true
@@ -163,7 +186,7 @@ struct JournalView: View {
                 Text("You added or changed entries after saving this review. Updating will replace today’s previous review.")
             }
             .sheet(isPresented: $showingNewEntry) {
-                NewEntryView(initialMood: appModel.selectedMood, date: todayDate)
+                NewEntryView(initialMood: appModel.selectedMood, date: appModel.selectedJournalDate)
                     .presentationCornerRadius(28)
             }
             .sheet(isPresented: $showingSettings) {
@@ -187,6 +210,38 @@ struct JournalView: View {
             .onAppear {
                 handlePendingRouterActions()
             }
+            .task {
+                companionState = .attentive
+                companionLensFocusActive = false
+                while !Task.isCancelled {
+                    let wait = UInt64(Int.random(in: 3_700_000_000...6_100_000_000))
+                    try? await Task.sleep(nanoseconds: wait)
+                    guard !Task.isCancelled else { return }
+                    guard companionBusy == false else { continue }
+
+                    if Bool.random() {
+                        companionLensFocusActive = true
+                        try? await Task.sleep(nanoseconds: 1_450_000_000)
+                        companionLensFocusActive = false
+                    }
+
+                    let transient: [AICircleState] = [.attentive, .listening, .checkIn]
+                    companionState = transient.randomElement() ?? .attentive
+                    try? await Task.sleep(nanoseconds: 1_550_000_000)
+                    if companionBusy == false {
+                        companionState = .attentive
+                    }
+                }
+            }
+            .onChange(of: appModel.selectedJournalDate) {
+                companionBusy = true
+                companionState = .responding
+                Task {
+                    try? await Task.sleep(for: .milliseconds(420))
+                    companionState = .attentive
+                    companionBusy = false
+                }
+            }
             .onChange(of: router.pendingNewEntry) { _, _ in
                 handlePendingRouterActions()
             }
@@ -196,68 +251,87 @@ struct JournalView: View {
         }
     }
 
-    @ViewBuilder
     private var dayReviewSection: some View {
-        if todayEntries.isEmpty == false {
-            if let review = appModel.dailyReview(on: appModel.selectedJournalDate) {
-                let hasChangesSinceReview = hasEntryChangesSinceReview(review, for: appModel.selectedJournalDate)
+        let isSelectedDayToday = Calendar.current.isDate(appModel.selectedJournalDate, inSameDayAs: Date())
+        return Group {
+            if isSelectedDayToday == false {
                 ReferenceCard {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack(spacing: 12) {
-                            AICircleView(state: .settled, size: 44, strokeWidth: 2)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("Day reviewed")
-                                    .font(.subheadline.weight(.semibold))
-                                Text(review.summary)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(2)
-                            }
-                            Spacer()
-                        }
-
-                        HStack(spacing: 10) {
-                            Button {
-                                activeDailyReview = review
-                            } label: {
-                                Label("Open review", systemImage: "doc.text.magnifyingglass")
-                            }
-                            .buttonStyle(PrimaryCapsuleButtonStyle())
-
-                            if hasChangesSinceReview {
-                                Button {
-                                    pendingReReviewDate = appModel.selectedJournalDate
-                                    showingReReviewConfirm = true
-                                } label: {
-                                    Text("Update")
-                                        .font(.subheadline.weight(.semibold))
-                                }
-                                .buttonStyle(.bordered)
-                            }
-                        }
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Daily review is available for today only.")
+                            .font(.subheadline.weight(.semibold))
+                        Text("Past entries still improve weekly AI insights and trend quality.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
-            } else {
-                ReferenceCard {
-                    HStack(spacing: 12) {
-                        AICircleView(state: isReviewingDay ? .thinking : .attentive, size: 44, strokeWidth: 2)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("Save the day")
-                                .font(.subheadline.weight(.semibold))
-                            Text("When you are done writing, review this date once.")
-                                .font(.caption)
+            } else if todayEntries.isEmpty == false {
+                if let review = appModel.dailyReview(on: appModel.selectedJournalDate) {
+                    let hasChangesSinceReview = hasEntryChangesSinceReview(review, for: appModel.selectedJournalDate)
+                    ReferenceCard {
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.primary)
+                                Text("Review saved for this day")
+                                    .font(.subheadline.weight(.semibold))
+                                Spacer()
+                            }
+                            Text(review.summary)
+                                .font(.subheadline)
                                 .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            HStack(spacing: 10) {
+                                Button {
+                                    activeDailyReview = review
+                                } label: {
+                                    Label("Open review", systemImage: "doc.text.magnifyingglass")
+                                }
+                                .buttonStyle(PrimaryCapsuleButtonStyle())
+
+                                if hasChangesSinceReview {
+                                    Button {
+                                        pendingReReviewDate = appModel.selectedJournalDate
+                                        showingReReviewConfirm = true
+                                    } label: {
+                                        Text("Update")
+                                            .font(.subheadline.weight(.semibold))
+                                    }
+                                    .buttonStyle(.bordered)
+                                }
+                            }
                         }
-                        Spacer()
-                        Button {
-                            runReview(for: appModel.selectedJournalDate)
-                        } label: {
-                            Text(isReviewingDay ? "Saving" : "Review")
+                        .padding(.vertical, 2)
+                        .overlay(alignment: .topLeading) {
+                            RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                                .fill(appModel.companionTint.opacity(0.95))
+                                .frame(width: 72, height: 3)
+                                .offset(y: -8)
                         }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.primary)
-                        .foregroundStyle(Color(.systemBackground))
-                        .disabled(isReviewingDay)
+                    }
+                } else {
+                    ReferenceCard {
+                        HStack(spacing: 12) {
+                            AICircleView(state: isReviewingDay ? .thinking : .attentive, size: 44, strokeWidth: 2, tint: appModel.companionTint)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Save the day")
+                                    .font(.subheadline.weight(.semibold))
+                                Text("When you are done writing, review this date once.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Button {
+                                runReview(for: appModel.selectedJournalDate)
+                            } label: {
+                                Text(isReviewingDay ? "Saving" : "Review")
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(.primary)
+                            .foregroundStyle(Color(.systemBackground))
+                            .disabled(isReviewingDay)
+                        }
                     }
                 }
             }
@@ -265,12 +339,19 @@ struct JournalView: View {
     }
 
     private func runReview(for date: Date) {
+        guard Calendar.current.isDate(date, inSameDayAs: Date()) else { return }
         isReviewingDay = true
+        companionBusy = true
+        companionState = .thinking
         Task {
             if let review = await appModel.reviewDay(date) {
                 activeDailyReview = review
             }
             isReviewingDay = false
+            companionState = .responding
+            try? await Task.sleep(for: .milliseconds(450))
+            companionState = .attentive
+            companionBusy = false
         }
     }
 
@@ -290,6 +371,10 @@ struct JournalView: View {
         let currentIDs = Set(appModel.entries(on: date).map(\.id))
         let reviewedIDs = Set(review.entryIDs)
         return currentIDs != reviewedIDs
+    }
+
+    private func dayMoodColor(for date: Date) -> Color? {
+        appModel.latestEntry(on: date)?.mood.companionColor
     }
 }
 
@@ -332,6 +417,7 @@ struct NewEntryView: View {
     @State private var entryType: EntryType = .quickThought
     @State private var circleState: AICircleState = .idle
     @State private var isSaving = false
+    @State private var streakFeedbackMessage = ""
     @FocusState private var editorFocused: Bool
 
     private let date: Date
@@ -343,57 +429,69 @@ struct NewEntryView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 16) {
-                HStack {
-                    Spacer()
-                    AICircleView(state: circleState, size: 92, strokeWidth: 3)
-                    Spacer()
-                }
-                .padding(.top, -10)
-                .padding(.bottom, -4)
-
-                MoodSelectorView(selectedMood: $mood, size: 44, labelFont: .caption2)
-                    .padding(.top, -2)
-
-                EntryTypeSelectorView(selection: $entryType)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Label(entryType.label, systemImage: entryType.icon)
-                        .font(.subheadline.weight(.semibold))
-                    Text(entryTypePrompt)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                TextEditor(text: $text)
-                    .focused($editorFocused)
-                    .font(.body)
-                    .scrollContentBackground(.hidden)
-                    .padding(12)
-                    .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(AppSurface.stroke, lineWidth: 0.5)
+            ScrollView {
+                VStack(spacing: 16) {
+                    HStack {
+                        Spacer()
+                        AICircleView(state: circleState, size: 92, strokeWidth: 3, tint: mood.companionColor)
+                        Spacer()
                     }
-                    .frame(minHeight: 260)
-                    .onChange(of: text) { _, newValue in
-                        guard isSaving == false else { return }
-                        circleState = newValue.isEmpty ? (editorFocused ? .listening : .attentive) : .typing
+                    .padding(.top, 6)
+
+                    MoodSelectorView(selectedMood: $mood, size: 44, labelFont: .caption2, useMoodAccent: true)
+
+                    EntryTypeSelectorView(selection: $entryType, accentColor: mood.companionColor)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label(entryType.label, systemImage: entryType.icon)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(mood.companionColor)
+                        Text(entryTypePrompt)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                    .onChange(of: editorFocused) { _, focused in
-                        guard isSaving == false else { return }
-                        if focused, text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            circleState = .listening
-                        } else if focused {
-                            circleState = .typing
-                        } else if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            circleState = .attentive
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    TextEditor(text: $text)
+                        .focused($editorFocused)
+                        .font(.body)
+                        .scrollContentBackground(.hidden)
+                        .padding(12)
+                        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(AppSurface.stroke, lineWidth: 0.5)
                         }
-                    }
+                        .frame(minHeight: 260)
+                        .onChange(of: text) { _, newValue in
+                            guard isSaving == false else { return }
+                            circleState = newValue.isEmpty ? (editorFocused ? .listening : .attentive) : .typing
+                        }
+                        .onChange(of: editorFocused) { _, focused in
+                            guard isSaving == false else { return }
+                            if focused, text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                circleState = .listening
+                            } else if focused {
+                                circleState = .typing
+                            } else if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                circleState = .attentive
+                            }
+                        }
 
+                    if streakFeedbackMessage.isEmpty == false {
+                        Text(streakFeedbackMessage)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                            .transition(.opacity)
+                    }
+                }
+                .padding(AppSpacing.page)
+                .padding(.bottom, 24)
             }
-            .padding(AppSpacing.page)
+            .scrollDismissesKeyboard(.interactively)
             .background(
                 LinearGradient(
                     colors: [Color(.secondarySystemBackground), Color(.systemBackground)],
@@ -441,16 +539,49 @@ struct NewEntryView: View {
         circleState = .thinking
         Task {
             try? await Task.sleep(for: .milliseconds(550))
-            _ = appModel.addEntry(text: text, mood: mood, type: entryType, date: date)
+            let streakBefore = appModel.currentStreakDays
+            _ = appModel.addEntry(text: text, mood: mood, type: entryType, date: normalizedEntryDate(from: date))
+            let streakAfter = appModel.currentStreakDays
+            streakFeedbackMessage = streakFeedback(before: streakBefore, after: streakAfter, goal: appModel.streakGoalDays)
             circleState = .responding
-            try? await Task.sleep(for: .milliseconds(300))
+            try? await Task.sleep(for: .milliseconds(900))
             dismiss()
         }
+    }
+
+    private func normalizedEntryDate(from selectedDate: Date) -> Date {
+        let calendar = Calendar.current
+        let now = Date()
+
+        guard calendar.isDate(selectedDate, inSameDayAs: now) == false else {
+            return now
+        }
+
+        var day = calendar.dateComponents([.year, .month, .day], from: selectedDate)
+        let time = calendar.dateComponents([.hour, .minute, .second], from: now)
+        day.hour = time.hour
+        day.minute = time.minute
+        day.second = time.second
+        return calendar.date(from: day) ?? selectedDate
+    }
+
+    private func streakFeedback(before: Int, after: Int, goal: Int) -> String {
+        if after >= goal && before < goal {
+            return "Streak goal reached: \(after)/\(goal) days."
+        }
+        if after > before {
+            return "Streak updated: day \(after)."
+        }
+        if after == before && after > 0 {
+            return "Check-in saved. Streak stays at \(after) days."
+        }
+        return "Check-in saved. Next day continues your streak."
     }
 }
 
 struct EntryTypeSelectorView: View {
     @Binding var selection: EntryType
+    var accentColor: Color = .primary
 
     var body: some View {
         HStack(spacing: 8) {
@@ -468,11 +599,11 @@ struct EntryTypeSelectorView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 62)
-                    .foregroundStyle(selection == type ? Color(.systemBackground) : .primary)
-                    .background(selection == type ? Color.primary : AppSurface.fill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .foregroundStyle(selection == type ? Color.white : .primary)
+                    .background(selection == type ? accentColor : AppSurface.fill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(selection == type ? Color.primary : AppSurface.stroke, lineWidth: 0.5)
+                            .stroke(selection == type ? accentColor : AppSurface.stroke, lineWidth: 0.5)
                     }
                 }
                 .buttonStyle(.plain)

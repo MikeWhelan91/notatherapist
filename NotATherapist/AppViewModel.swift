@@ -33,6 +33,12 @@ final class AppViewModel: ObservableObject {
     private let widgetStylePresetKey = "widgetStylePreset"
     private let widgetAffirmationCategoriesKey = "widgetAffirmationCategories"
     private let widgetAffirmationIndexKey = "widgetAffirmationIndex"
+    private let onboardingCompletedAtKey = "onboardingCompletedAt"
+    private let midnightTimestampMigrationKey = "midnightTimestampMigrationV1"
+    private let weeklyReminderWeekdayKey = "weeklyReviewReminderWeekday"
+    private let weeklyReminderHourKey = "weeklyReviewReminderHour"
+    private let weeklyReminderMinuteKey = "weeklyReviewReminderMinute"
+    private let lastWeeklyCheckInAtKey = "lastWeeklyCheckInAt"
 
     init(seedWithMockData: Bool = false) {
         let defaults = UserDefaults.standard
@@ -58,6 +64,14 @@ final class AppViewModel: ObservableObject {
             healthSummary = snapshot.healthSummary
             reflectionGoals = snapshot.reflectionGoals
             dailyReviews = snapshot.dailyReviews
+
+            if defaults.bool(forKey: midnightTimestampMigrationKey) == false {
+                let didMigrate = migrateMidnightEntryTimestamps()
+                defaults.set(true, forKey: midnightTimestampMigrationKey)
+                if didMigrate {
+                    saveSnapshot()
+                }
+            }
         } else {
             journalEntries = []
             insights = []
@@ -126,8 +140,10 @@ final class AppViewModel: ObservableObject {
     func handle(_ command: AnchorAppCommand, router: AppRouter) {
         switch command {
         case .newQuickThought:
+            selectedJournalDate = Date()
             router.openNewQuickThought()
         case .runDailyReview:
+            selectedJournalDate = Date()
             router.runDailyReview()
         case .startWeeklyCheckIn:
             router.openWeeklyCheckIn()
@@ -143,6 +159,7 @@ final class AppViewModel: ObservableObject {
         focusAreas: [String],
         reflectionGoal: String,
         personalStory: String,
+        streakGoal: Int = 3,
         assessment: OnboardingProfile.AssessmentProfile? = nil
     ) {
         let defaults = UserDefaults.standard
@@ -152,6 +169,10 @@ final class AppViewModel: ObservableObject {
         defaults.set(focusAreas.joined(separator: "|"), forKey: "onboardingFocusAreas")
         defaults.set(reflectionGoal, forKey: "onboardingReflectionGoal")
         defaults.set(personalStory, forKey: "onboardingPersonalStory")
+        defaults.set(max(1, streakGoal), forKey: "onboardingStreakGoal")
+        if defaults.object(forKey: onboardingCompletedAtKey) == nil {
+            defaults.set(Date(), forKey: onboardingCompletedAtKey)
+        }
 
         let profile = OnboardingProfile(
             preferredName: preferredName,
@@ -160,6 +181,7 @@ final class AppViewModel: ObservableObject {
             focusAreas: focusAreas,
             reflectionGoal: reflectionGoal,
             personalStory: personalStory,
+            streakGoal: max(1, streakGoal),
             assessment: assessment
         )
         if let data = try? JSONEncoder().encode(profile) {
@@ -195,14 +217,24 @@ final class AppViewModel: ObservableObject {
     }
 
     var streakGoalDays: Int {
+        if onboardingProfile.streakGoal > 0 {
+            return onboardingProfile.streakGoal
+        }
         let marker = "Streak goal:"
-        guard let line = onboardingProfile.lifeContext.first(where: { $0.hasPrefix(marker) }) else { return 3 }
-        let digits = line.components(separatedBy: CharacterSet.decimalDigits.inverted).joined()
-        return max(1, Int(digits) ?? 3)
+        if let line = onboardingProfile.lifeContext.first(where: { $0.hasPrefix(marker) }) {
+            let digits = line.components(separatedBy: CharacterSet.decimalDigits.inverted).joined()
+            return max(1, Int(digits) ?? 3)
+        }
+        let stored = UserDefaults.standard.integer(forKey: "onboardingStreakGoal")
+        return stored > 0 ? stored : 3
     }
 
     var streakProgressText: String {
         "\(min(currentStreakDays, streakGoalDays))/\(streakGoalDays) days"
+    }
+
+    var companionTint: Color {
+        journalEntries.first?.mood.companionColor ?? .white
     }
 
     var adaptiveFollowUpQuestion: String? {
@@ -226,6 +258,46 @@ final class AppViewModel: ObservableObject {
             .sorted { $0.date > $1.date }
     }
 
+    func latestEntry(on date: Date) -> JournalEntry? {
+        journalEntries.first { Calendar.current.isDate($0.date, inSameDayAs: date) }
+    }
+
+    @discardableResult
+    private func migrateMidnightEntryTimestamps() -> Bool {
+        guard journalEntries.isEmpty == false else { return false }
+
+        let calendar = Calendar.current
+        let grouped = Dictionary(grouping: journalEntries.indices) { index in
+            calendar.startOfDay(for: journalEntries[index].date)
+        }
+        var updated = journalEntries
+        var didChange = false
+
+        for (_, indices) in grouped {
+            let midnightIndices = indices.filter { index in
+                let comps = calendar.dateComponents([.hour, .minute, .second], from: journalEntries[index].date)
+                return (comps.hour ?? 0) == 0 && (comps.minute ?? 0) == 0 && (comps.second ?? 0) == 0
+            }
+            guard midnightIndices.isEmpty == false else { continue }
+
+            // Preserve visible ordering by using current array order; assign a daytime timestamp so
+            // entries no longer collide at 00:00 and can supersede earlier same-day entries.
+            for (offset, index) in midnightIndices.sorted().enumerated() {
+                let baseDay = calendar.startOfDay(for: journalEntries[index].date)
+                let migrated = calendar.date(byAdding: .minute, value: 12 * 60 + offset, to: baseDay) ?? journalEntries[index].date
+                if updated[index].date != migrated {
+                    updated[index].date = migrated
+                    didChange = true
+                }
+            }
+        }
+
+        if didChange {
+            journalEntries = updated
+        }
+        return didChange
+    }
+
     func checkInCountThisWeek() -> Int {
         currentWeekDates.filter { day in
             journalEntries.contains { Calendar.current.isDate($0.date, inSameDayAs: day) }
@@ -233,8 +305,75 @@ final class AppViewModel: ObservableObject {
     }
 
     var hasWeeklyReview: Bool {
+        weeklyReadiness.ready
+    }
+
+    var isWeeklyCheckInAvailableNow: Bool {
+        guard hasWeeklyReview else { return false }
+        let now = Date()
+        let slot = mostRecentWeeklySlot(beforeOrAt: now)
+        guard now >= slot else { return false }
+        if let last = UserDefaults.standard.object(forKey: lastWeeklyCheckInAtKey) as? Date {
+            return last < slot
+        }
+        return true
+    }
+
+    var nextWeeklyCheckInDate: Date {
+        let now = Date()
+        let slot = mostRecentWeeklySlot(beforeOrAt: now)
+        if let last = UserDefaults.standard.object(forKey: lastWeeklyCheckInAtKey) as? Date, last >= slot {
+            return Calendar.current.date(byAdding: .day, value: 7, to: slot) ?? slot
+        }
+        if now < slot { return slot }
+        return isWeeklyCheckInAvailableNow ? now : (Calendar.current.date(byAdding: .day, value: 7, to: slot) ?? slot)
+    }
+
+    var weeklyCheckInAvailabilityText: String {
+        guard hasWeeklyReview else { return weeklyUnlockProgressText }
+        if isWeeklyCheckInAvailableNow {
+            return "Weekly check-in is ready now."
+        }
+        return "Next weekly check-in: \(nextWeeklyCheckInDate.formatted(date: .abbreviated, time: .shortened))."
+    }
+
+    var weeklyReadiness: (dayCount: Int, entryCount: Int, ready: Bool) {
         let dayCount = Set(journalEntries.map { Calendar.current.startOfDay(for: $0.date) }).count
-        return dayCount >= 3 || journalEntries.count >= 5
+        let entryCount = journalEntries.count
+        let ready = dayCount >= 3
+        return (dayCount, entryCount, ready)
+    }
+
+    var weeklyUnlockProgressText: String {
+        let readiness = weeklyReadiness
+        if readiness.ready {
+            return "Weekly check-in is unlocked."
+        }
+        let daysNeeded = max(0, 3 - readiness.dayCount)
+        return "Unlock weekly after \(daysNeeded) more active day\(daysNeeded == 1 ? "" : "s")."
+    }
+
+    var weeklyUnlockProgressRatio: Double {
+        let readiness = weeklyReadiness
+        if readiness.ready { return 1 }
+        return min(1.0, Double(readiness.dayCount) / 3.0)
+    }
+
+    var onboardingMission: [(title: String, done: Bool)] {
+        let today = Date()
+        let wroteToday = entries(on: today).isEmpty == false
+        let reviewedToday = dailyReview(on: today) != nil
+        return [
+            ("Write today's check-in", wroteToday),
+            ("Run today's review", reviewedToday),
+            ("Unlock weekly check-in", hasWeeklyReview)
+        ]
+    }
+
+    var onboardingMissionProgressText: String {
+        let mission = onboardingMission
+        let doneCount = mission.filter(\.done).count
+        return "\(doneCount)/\(mission.count) steps complete"
     }
 
     func addEntry(text: String, mood: MoodLevel, type: EntryType, date: Date = Date()) -> JournalEntry {
@@ -268,31 +407,70 @@ final class AppViewModel: ObservableObject {
     }
 
     @discardableResult
-    func reviewDay(_ date: Date) async -> DailyReview? {
+    func reviewDay(_ date: Date, preferLocal: Bool = false) async -> DailyReview? {
         onboardingProfile = .current
         let dayEntries = entries(on: date)
         guard dayEntries.isEmpty == false else { return nil }
         let recentEntries = dailyContextEntries(for: date)
+        let existingDayReview = dailyReviews.first { Calendar.current.isDate($0.date, inSameDayAs: date) }
+        let hasUsedAIDailyReview = existingDayReview?.source == "openai"
 
         let review: DailyReview
-        if planTier == .premium {
-            do {
-                review = try await apiService.dailyReview(
-                    date: date,
+        if planTier == .premium && hasUsedAIDailyReview == false && preferLocal == false {
+            var apiReview: DailyReview?
+            let maxAttempts = 3
+            for attempt in 1...maxAttempts {
+                do {
+                    let candidate = try await apiService.dailyReview(
+                        date: date,
+                        entries: dayEntries,
+                        recentEntries: recentEntries,
+                        profile: onboardingProfile,
+                        healthSummary: healthSummary,
+                        goals: reflectionGoals
+                    )
+                    if candidate.source == "openai" {
+                        apiReview = candidate
+                        break
+                    }
+                } catch {
+                    if attempt < maxAttempts {
+                        let delayNanos: UInt64 = attempt == 1 ? 450_000_000 : 900_000_000
+                        try? await Task.sleep(nanoseconds: delayNanos)
+                    }
+                }
+            }
+
+            if let apiReview {
+                review = apiReview
+            } else {
+                guard let fallback = insightService.dailyReview(
+                    for: date,
                     entries: dayEntries,
                     recentEntries: recentEntries,
                     profile: onboardingProfile,
-                    healthSummary: healthSummary,
-                    goals: reflectionGoals
-                )
-                if review.source != "openai" {
+                    healthSummary: healthSummary
+                ) else {
                     aiConnection = .unavailable
                     return nil
                 }
-            } catch {
                 aiConnection = .unavailable
-                return nil
+                var localReview = fallback
+                localReview.source = "fallback"
+                review = localReview
             }
+        } else if planTier == .premium {
+            guard let fallback = insightService.dailyReview(
+                for: date,
+                entries: dayEntries,
+                recentEntries: recentEntries,
+                profile: onboardingProfile,
+                healthSummary: healthSummary
+            ) else { return nil }
+            aiConnection = .connected(model: "openai")
+            var localReview = fallback
+            localReview.source = "fallback"
+            review = localReview
         } else {
             guard let fallback = insightService.dailyReview(
                 for: date,
@@ -301,10 +479,15 @@ final class AppViewModel: ObservableObject {
                 profile: onboardingProfile,
                 healthSummary: healthSummary
             ) else { return nil }
-            review = fallback
+            var localReview = fallback
+            localReview.source = "fallback"
+            review = localReview
         }
 
         var storedReview = sanitizedReview(review)
+        if planTier == .premium {
+            aiConnection = storedReview.source == "openai" ? .connected(model: "openai") : .unavailable
+        }
 
         if let existingIndex = dailyReviews.firstIndex(where: { Calendar.current.isDate($0.date, inSameDayAs: date) }) {
             storedReview.acceptedGoalID = dailyReviews[existingIndex].acceptedGoalID
@@ -327,29 +510,55 @@ final class AppViewModel: ObservableObject {
         guard dayEntries.isEmpty == false else { return nil }
         let recentEntries = dailyContextEntries(for: date)
 
-        let review: DailyReview
-        do {
-            review = try await apiService.onboardingDailyReview(
-                date: date,
-                entries: dayEntries,
-                recentEntries: recentEntries,
-                profile: onboardingProfile,
-                healthSummary: healthSummary,
-                goals: reflectionGoals
-            )
-            aiConnection = review.source == "openai" ? .connected(model: "openai") : .unknown
-        } catch {
+        var review: DailyReview?
+        let maxAttempts = 3
+        for attempt in 1...maxAttempts {
+            do {
+                review = try await apiService.onboardingDailyReview(
+                    date: date,
+                    entries: dayEntries,
+                    recentEntries: recentEntries,
+                    profile: onboardingProfile,
+                    healthSummary: healthSummary,
+                    goals: reflectionGoals
+                )
+                break
+            } catch {
+                if attempt < maxAttempts {
+                    let delayNanos: UInt64 = attempt == 1 ? 450_000_000 : 900_000_000
+                    try? await Task.sleep(nanoseconds: delayNanos)
+                }
+            }
+        }
+
+        guard let review else {
             guard let fallback = insightService.dailyReview(
                 for: date,
                 entries: dayEntries,
                 recentEntries: recentEntries,
                 profile: onboardingProfile,
                 healthSummary: healthSummary
-            ) else { return nil }
-            review = fallback
+            ) else {
+                aiConnection = .unavailable
+                return nil
+            }
             aiConnection = .unavailable
+            var storedFallback = sanitizedReview(fallback)
+            if let existingIndex = dailyReviews.firstIndex(where: { Calendar.current.isDate($0.date, inSameDayAs: date) }) {
+                storedFallback.acceptedGoalID = dailyReviews[existingIndex].acceptedGoalID
+                dailyReviews[existingIndex] = storedFallback
+            } else {
+                dailyReviews.insert(storedFallback, at: 0)
+            }
+
+            replaceInsights(for: storedFallback)
+            applyAdaptiveAssessmentAdjustment(reason: "onboarding_first_reflection")
+            await refreshWeeklyReview()
+            saveSnapshot()
+            return storedFallback
         }
 
+        aiConnection = review.source == "openai" ? .connected(model: "openai") : .unknown
         var storedReview = sanitizedReview(review)
         if let existingIndex = dailyReviews.firstIndex(where: { Calendar.current.isDate($0.date, inSameDayAs: date) }) {
             storedReview.acceptedGoalID = dailyReviews[existingIndex].acceptedGoalID
@@ -461,6 +670,23 @@ final class AppViewModel: ObservableObject {
     }
 
     func startWeeklyConversation() async -> Conversation {
+        guard isWeeklyCheckInAvailableNow else {
+            let preview = weeklyCheckInAvailabilityText
+            let blocked = Conversation(
+                id: UUID(),
+                title: "Weekly check-in",
+                date: Date(),
+                preview: preview,
+                messages: [ConversationMessage(id: UUID(), sender: .ai, text: preview, date: Date())],
+                status: .ended,
+                remainingTurns: 0,
+                maxTurns: 0,
+                deepeningUsed: false,
+                phase: .core
+            )
+            return blocked
+        }
+
         onboardingProfile = .current
         await refreshWeeklyReview()
 
@@ -472,14 +698,76 @@ final class AppViewModel: ObservableObject {
         }
 
         conversations.insert(conversation, at: 0)
+        UserDefaults.standard.set(Date(), forKey: lastWeeklyCheckInAtKey)
         saveSnapshot()
         return conversation
+    }
+
+    private func mostRecentWeeklySlot(beforeOrAt date: Date) -> Date {
+        let defaults = UserDefaults.standard
+        let weekdayRaw = defaults.integer(forKey: weeklyReminderWeekdayKey)
+        let weekday = weekdayRaw == 0 ? 1 : weekdayRaw
+        let hour = defaults.object(forKey: weeklyReminderHourKey) == nil ? 18 : defaults.integer(forKey: weeklyReminderHourKey)
+        let minute = defaults.integer(forKey: weeklyReminderMinuteKey)
+
+        var calendar = Calendar.current
+        calendar.firstWeekday = 1
+
+        var target = DateComponents()
+        target.weekday = weekday
+        target.hour = hour
+        target.minute = minute
+        target.second = 0
+
+        let end = date.addingTimeInterval(1)
+        if let next = calendar.nextDate(after: end, matching: target, matchingPolicy: .nextTimePreservingSmallerComponents, direction: .backward) {
+            return next
+        }
+        return date
     }
 
     func sendMessage(_ text: String, in conversation: Conversation, action: String? = nil) async -> Conversation {
         guard let index = conversations.firstIndex(where: { $0.id == conversation.id }) else { return conversation }
         var updated = conversations[index]
         guard updated.status == .active, updated.remainingTurns > 0 else { return updated }
+
+        if action == "Save suggested step", let suggestion = latestSuggestedGoal(from: updated) {
+            guard hasGoalAgreement(in: updated) else {
+                updated.messages.append(
+                    ConversationMessage(
+                        id: UUID(),
+                        sender: .ai,
+                        text: "Before I save it, I want your agreement. Does this feel realistic for 7 days, or what should I adjust?",
+                        date: Date()
+                    )
+                )
+                updated.preview = "Waiting for goal agreement"
+                conversations[index] = updated
+                saveSnapshot()
+                return updated
+            }
+
+            let synthesized = synthesizeWeeklyGoal(from: updated, fallback: suggestion)
+            let goal = addReflectionGoal(
+                title: synthesized.title,
+                reason: synthesized.reason,
+                sourceConversationID: updated.id,
+                durationDays: 7
+            )
+            updated.contextHints.removeAll { $0.hasPrefix("suggested_goal::") }
+            updated.messages.append(
+                ConversationMessage(
+                    id: UUID(),
+                    sender: .ai,
+                    text: "Saved: \(goal.title). You’ll see it in Next steps.",
+                    date: Date()
+                )
+            )
+            updated.preview = "Goal added: \(goal.title)"
+            conversations[index] = updated
+            saveSnapshot()
+            return updated
+        }
 
         let displayText = action ?? text
         updated.messages.append(ConversationMessage(id: UUID(), sender: .user, text: displayText, date: Date()))
@@ -518,16 +806,20 @@ final class AppViewModel: ObservableObject {
                 }
                 reply = response.reply
                 if let goal = response.suggestedGoal {
-                    reflectionGoals.insert(goal, at: 0)
-                    updated.preview = "Goal added: \(goal.title)"
+                    let encoded = encodeSuggestedGoal(title: goal.title, reason: goal.reason)
+                    updated.contextHints.removeAll { $0.hasPrefix("suggested_goal::") }
+                    updated.contextHints.append(encoded)
+                    updated.preview = "Suggested step: \(goal.title)"
                 }
             } else {
-                updated.remainingTurns -= 1
-                if updated.remainingTurns == 0 {
+                let isFinalTurn = updated.remainingTurns <= 1
+                let baseReply = conversationService.reply(to: text, action: action, remainingTurns: updated.remainingTurns, profile: onboardingProfile)
+                updated.remainingTurns = max(0, updated.remainingTurns - 1)
+                if isFinalTurn {
                     updated.status = .ended
-                    reply = "That's enough for today. Let it sit."
+                    reply = "\(baseReply) We’ll pause here for today. One weekly action: \(weeklyCloseAction(for: onboardingProfile))."
                 } else {
-                    reply = conversationService.reply(to: text, action: action, remainingTurns: updated.remainingTurns, profile: onboardingProfile)
+                    reply = baseReply
                 }
             }
 
@@ -545,20 +837,19 @@ final class AppViewModel: ObservableObject {
             updated.preview = reply
 
             if action == "Give me one action", response?.suggestedGoal == nil {
-                let goal = addReflectionGoal(
-                    title: "Finish one small unfinished thing",
-                    reason: "Agreed during the weekly check-in.",
-                    sourceConversationID: updated.id
-                )
+                let title = "Finish one small unfinished thing"
+                let reason = "Agreed during the weekly check-in."
+                updated.contextHints.removeAll { $0.hasPrefix("suggested_goal::") }
+                updated.contextHints.append(encodeSuggestedGoal(title: title, reason: reason))
                 updated.messages.append(
                     ConversationMessage(
                         id: UUID(),
                         sender: .ai,
-                        text: "I added this to Today: \(goal.title). We can check it at the next review.",
+                        text: "Suggested next step: \(title). If you want, tap “Save suggested step”.",
                         date: Date()
                     )
                 )
-                updated.preview = "Goal added: \(goal.title)"
+                updated.preview = "Suggested step: \(title)"
             }
         }
 
@@ -567,8 +858,78 @@ final class AppViewModel: ObservableObject {
         return updated
     }
 
+    private func encodeSuggestedGoal(title: String, reason: String) -> String {
+        let safeTitle = title.replacingOccurrences(of: "::", with: " - ")
+        let safeReason = reason.replacingOccurrences(of: "::", with: " - ")
+        return "suggested_goal::\(safeTitle)::\(safeReason)"
+    }
+
+    private func latestSuggestedGoal(from conversation: Conversation) -> (title: String, reason: String)? {
+        guard let raw = conversation.contextHints.last(where: { $0.hasPrefix("suggested_goal::") }) else { return nil }
+        let parts = raw.components(separatedBy: "::")
+        guard parts.count >= 3 else { return nil }
+        return (parts[1], parts[2])
+    }
+
+    private func synthesizeWeeklyGoal(from conversation: Conversation, fallback: (title: String, reason: String)) -> (title: String, reason: String) {
+        let userText = conversation.messages
+            .filter { $0.sender == .user }
+            .map { $0.text.lowercased() }
+            .joined(separator: " ")
+
+        let title: String
+        let reason: String
+
+        if userText.contains("sleep") || userText.contains("tired") || userText.contains("night") {
+            title = "7-day sleep consistency plan"
+            reason = "Agreed plan: for the next 7 days, keep one fixed wake time (±30 min), start wind-down 45 minutes before bed, and log the result each day."
+        } else if userText.contains("anxiety") || userText.contains("panic") || userText.contains("worry") {
+            title = "7-day anxiety reset plan"
+            reason = "Agreed plan: for the next 7 days, run one 60-second reset before your hardest moment and write one line on what changed."
+        } else if userText.contains("work") || userText.contains("deadline") || userText.contains("meeting") {
+            title = "7-day work pressure plan"
+            reason = "Agreed plan: for the next 7 days, close or park one unresolved work loop daily and set a next step before ending your day."
+        } else if userText.contains("driving") || userText.contains("drive") {
+            title = "7-day calmer driving plan"
+            reason = "Agreed plan: for the next 7 days, do one pre-drive calming step before each key drive and track your anxiety before/after."
+        } else {
+            title = fallback.title.hasPrefix("7-day") ? fallback.title : "7-day focus plan"
+            reason = "Agreed plan for the next 7 days: \(fallback.reason)"
+        }
+
+        return (title, reason)
+    }
+
+    private func hasGoalAgreement(in conversation: Conversation) -> Bool {
+        guard let lastUser = conversation.messages.last(where: { $0.sender == .user })?.text.lowercased() else {
+            return false
+        }
+        let signals = [
+            "yes",
+            "sounds good",
+            "let's do it",
+            "lets do it",
+            "i agree",
+            "works for me",
+            "that works",
+            "do that",
+            "save it"
+        ]
+        return signals.contains(where: { lastUser.contains($0) })
+    }
+
+    private func weeklyCloseAction(for profile: OnboardingProfile) -> String {
+        if let focus = profile.focusAreas.first?.lowercased(), focus.contains("sleep") {
+            return "Set a fixed wind-down time tonight and protect it for 3 nights."
+        }
+        if let focus = profile.focusAreas.first?.lowercased(), focus.contains("anxiety") {
+            return "Use one 60-second reset once daily before your hardest moment."
+        }
+        return "Pick one small unfinished item and close it within 20 minutes."
+    }
+
     @discardableResult
-    func addReflectionGoal(title: String, reason: String, sourceConversationID: UUID? = nil) -> ReflectionGoal {
+    func addReflectionGoal(title: String, reason: String, sourceConversationID: UUID? = nil, durationDays: Int = 3) -> ReflectionGoal {
         let existing = reflectionGoals.first {
             $0.status == .active && $0.title.caseInsensitiveCompare(title) == .orderedSame
         }
@@ -581,7 +942,7 @@ final class AppViewModel: ObservableObject {
             title: title,
             reason: reason,
             createdAt: Date(),
-            dueDate: Calendar.current.date(byAdding: .day, value: 3, to: Date()),
+            dueDate: Calendar.current.date(byAdding: .day, value: max(1, durationDays), to: Date()),
             status: .active,
             sourceConversationID: sourceConversationID,
             checkInPrompt: "How did this go: \(title.lowercased())?"
