@@ -244,7 +244,7 @@ struct JournalView: View {
                 handlePendingRouterActions()
             }
             .task {
-                companionState = .attentive
+                companionState = appModel.companionCircleState
                 companionLensFocusActive = false
                 while !Task.isCancelled {
                     let wait = UInt64(Int.random(in: 3_700_000_000...6_100_000_000))
@@ -258,11 +258,10 @@ struct JournalView: View {
                         companionLensFocusActive = false
                     }
 
-                    let transient: [AICircleState] = [.attentive, .listening, .checkIn]
-                    companionState = transient.randomElement() ?? .attentive
+                    companionState = appModel.companionCircleState
                     try? await Task.sleep(nanoseconds: 1_550_000_000)
                     if companionBusy == false {
-                        companionState = .attentive
+                        companionState = appModel.companionCircleState
                     }
                 }
             }
@@ -271,7 +270,7 @@ struct JournalView: View {
                 companionState = .responding
                 Task {
                     try? await Task.sleep(for: .milliseconds(420))
-                    companionState = .attentive
+                    companionState = appModel.companionCircleState
                     companionBusy = false
                 }
             }
@@ -282,9 +281,13 @@ struct JournalView: View {
                 companionState = .responding
                 Task {
                     try? await Task.sleep(for: .milliseconds(500))
-                    companionState = .attentive
+                    companionState = appModel.companionCircleState
                     companionBusy = false
                 }
+            }
+            .onChange(of: appModel.companionState) {
+                guard companionBusy == false else { return }
+                companionState = appModel.companionCircleState
             }
             .onChange(of: router.pendingNewEntry) { _, _ in
                 handlePendingRouterActions()
@@ -407,7 +410,7 @@ struct JournalView: View {
             isReviewingDay = false
             companionState = .responding
             try? await Task.sleep(for: .milliseconds(450))
-            companionState = .attentive
+            companionState = appModel.companionCircleState
             companionBusy = false
         }
     }

@@ -6,7 +6,6 @@ struct DailyReviewView: View {
 
     let review: DailyReview
     var embedded = false
-    @State private var companionState: AICircleState = .thinking
     @State private var showHeader = false
     @State private var showSummary = false
     @State private var showReviewSection = false
@@ -42,10 +41,10 @@ struct DailyReviewView: View {
                     }
 
                     AICircleView(
-                        state: companionState,
+                        state: appModel.companionCircleState,
                         size: 104,
                         strokeWidth: 3.1,
-                        tint: appModel.companionTint,
+                        tint: appModel.journalCompanionTint,
                         personality: appModel.companionPersonality
                     )
                 }
@@ -140,7 +139,6 @@ struct DailyReviewView: View {
                     showHeader = true
                 }
                 try? await Task.sleep(for: .milliseconds(120))
-                companionState = .responding
                 withAnimation(.easeOut(duration: 0.28)) {
                     showSummary = true
                 }

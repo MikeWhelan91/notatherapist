@@ -561,13 +561,13 @@ struct TodayView: View {
             } message: {
                 Text("Deep review is limited to once per day. Local review is instant and unlimited.")
             }
-            .onAppear { circleState = .idle }
+            .onAppear { circleState = appModel.companionCircleState }
             .onAppear {
                 lastMissionDoneCount = appModel.onboardingMission.filter(\.done).count
                 lastStreakValue = appModel.currentStreakDays
             }
             .task {
-                circleState = .attentive
+                circleState = appModel.companionCircleState
                 companionLensFocusActive = false
                 while !Task.isCancelled {
                     let wait = UInt64(Int.random(in: 3_600_000_000...6_200_000_000))
@@ -581,23 +581,10 @@ struct TodayView: View {
                         companionLensFocusActive = false
                     }
 
-                    let ambient: [AICircleState]
-                    switch appModel.companionState {
-                    case .overwhelmed:
-                        ambient = [.thinking, .responding, .checkIn, .listening]
-                    case .activated:
-                        ambient = [.responding, .checkIn, .listening, .attentive]
-                    case .steadying:
-                        ambient = [.checkIn, .listening, .attentive]
-                    case .balanced:
-                        ambient = [.attentive, .listening, .checkIn]
-                    case .thriving:
-                        ambient = [.settled, .attentive, .listening]
-                    }
-                    circleState = ambient.randomElement() ?? .attentive
+                    circleState = appModel.companionCircleState
                     try? await Task.sleep(nanoseconds: 1_500_000_000)
                     if companionBusy == false {
-                        circleState = .attentive
+                        circleState = appModel.companionCircleState
                     }
                 }
             }
@@ -606,9 +593,13 @@ struct TodayView: View {
                 circleState = .responding
                 Task {
                     try? await Task.sleep(for: .milliseconds(450))
-                    circleState = .attentive
+                    circleState = appModel.companionCircleState
                     companionBusy = false
                 }
+            }
+            .onChange(of: appModel.companionState) {
+                guard companionBusy == false else { return }
+                circleState = appModel.companionCircleState
             }
             .onChange(of: appModel.onboardingMission.filter(\.done).count) { oldValue, newValue in
                 guard newValue > oldValue else { return }
@@ -685,7 +676,7 @@ struct TodayView: View {
             isReviewingToday = false
             circleState = .responding
             try? await Task.sleep(for: .milliseconds(450))
-            circleState = .attentive
+            circleState = appModel.companionCircleState
             companionBusy = false
         }
     }

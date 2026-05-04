@@ -267,18 +267,7 @@ private struct GlobalCompanionOverlay: View {
     }
 
     private var journalOverlayState: AICircleState {
-        switch appModel.companionState {
-        case .overwhelmed:
-            .thinking
-        case .activated:
-            .responding
-        case .steadying:
-            .checkIn
-        case .balanced:
-            .attentive
-        case .thriving:
-            .settled
-        }
+        appModel.companionCircleState
     }
 
     private var overlayTopPadding: CGFloat {

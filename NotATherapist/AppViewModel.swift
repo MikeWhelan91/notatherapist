@@ -298,6 +298,21 @@ final class AppViewModel: ObservableObject {
         companionRegulation.state
     }
 
+    var companionCircleState: AICircleState {
+        switch companionState {
+        case .overwhelmed:
+            .thinking
+        case .activated:
+            .responding
+        case .steadying:
+            .checkIn
+        case .balanced:
+            .attentive
+        case .thriving:
+            .settled
+        }
+    }
+
     var companionConfidence: Double {
         companionRegulation.confidence
     }
