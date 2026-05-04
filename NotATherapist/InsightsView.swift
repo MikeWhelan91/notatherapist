@@ -65,7 +65,6 @@ private enum InsightTab: String, CaseIterable, Identifiable {
 
 private struct InsightFeedView: View {
     @EnvironmentObject private var appModel: AppViewModel
-    @State private var selectedStory = 0
 
     private var stories: [InsightStory] {
         var output: [InsightStory] = []
@@ -100,39 +99,53 @@ private struct InsightFeedView: View {
                 )
                 .padding(.top, 80)
             } else {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("Insight deck")
+                            Text("Key insights")
                                 .font(.title3.weight(.bold))
-                            Text("Swipe through the strongest signals. Fewer cards, better context.")
+                            Text("The clearest patterns from your recent entries and reviews.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
                         ExplainerButton(
-                            title: "Insight deck",
-                            body: "The deck is a curated set of the strongest signals from daily reviews, local observations, and weekly reports.",
+                            title: "Key insights",
+                            body: "These are the clearest patterns Anchor can explain from your recent journal activity.",
                             bullets: [
-                                "It favors repeated patterns over one-off noise.",
-                                "Premium cards include baseline comparison and next experiments.",
-                                "The goal is fewer, clearer insights instead of a long feed."
+                                "Repeated signals are shown before one-off notes.",
+                                "Daily reviews add emotional reads, reframes, and actions.",
+                                "Weekly reports add broader patterns when enough entries exist."
                             ]
                         )
-                        Text("\(min(selectedStory + 1, max(1, stories.count)))/\(max(1, stories.count))")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
                     }
 
-                    TabView(selection: $selectedStory) {
-                        ForEach(Array(stories.enumerated()), id: \.element.id) { index, story in
-                            InsightStoryCard(story: story)
-                                .tag(index)
-                                .padding(.horizontal, 1)
+                    VStack(spacing: 10) {
+                        ForEach(stories.prefix(6)) { story in
+                            ReferenceCard {
+                                HStack(alignment: .top, spacing: 12) {
+                                    Image(systemName: story.symbol)
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(story.tint)
+                                        .frame(width: 24)
+                                    VStack(alignment: .leading, spacing: 5) {
+                                        HStack {
+                                            Text(story.title)
+                                                .font(.subheadline.weight(.semibold))
+                                            Spacer()
+                                            Text(story.kind)
+                                                .font(.caption2.weight(.semibold))
+                                                .foregroundStyle(.tertiary)
+                                        }
+                                        Text(story.subtitle)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                }
+                            }
                         }
                     }
-                    .tabViewStyle(.page(indexDisplayMode: .never))
-                    .frame(height: 390)
 
                     if appModel.isPremium == false {
                         ReferenceCard {
@@ -140,7 +153,7 @@ private struct InsightFeedView: View {
                                 Label("Premium report preview", systemImage: "lock.fill")
                                     .font(.caption.weight(.semibold))
                                     .foregroundStyle(.secondary)
-                                Text("Premium turns the deck into a weekly pattern report with baseline comparison, action feedback, and next experiments.")
+                                Text("Premium adds a weekly pattern report with baseline comparison, action feedback, and next experiments.")
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                             }

@@ -283,7 +283,7 @@ final class AppViewModel: ObservableObject {
     }
 
     var companionTint: Color {
-        companionRegulation.tint
+        journalCompanionTint
     }
 
     var journalCompanionTint: Color {

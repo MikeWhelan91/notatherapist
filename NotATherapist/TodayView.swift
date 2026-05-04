@@ -495,7 +495,7 @@ struct TodayView: View {
                 }
             }
             .sheet(isPresented: $showingNewEntry) {
-                NewEntryView(initialMood: appModel.selectedMood)
+                NewEntryView(initialMood: .okay)
                     .presentationCornerRadius(28)
             }
             .sheet(isPresented: $showingHistory) {

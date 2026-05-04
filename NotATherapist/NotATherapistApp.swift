@@ -296,9 +296,9 @@ private struct GlobalCompanionOverlay: View {
             return false
         }
         switch router.companionPresentation {
-        case .insights, .messages, .calm, .transitioningToComposer:
+        case .insights, .messages, .calm:
             return true
-        case .journal, .hidden, .composer:
+        case .journal, .transitioningToComposer, .hidden, .composer:
             return false
         }
     }

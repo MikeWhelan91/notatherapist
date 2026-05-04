@@ -217,7 +217,7 @@ struct JournalView: View {
                 Text("You added or changed entries after saving this review. Updating will replace today’s previous review.")
             }
             .sheet(isPresented: $showingNewEntry) {
-                NewEntryView(initialMood: appModel.selectedMood, date: appModel.selectedJournalDate)
+                NewEntryView(initialMood: .okay, date: appModel.selectedJournalDate)
                     .presentationCornerRadius(28)
             }
             .sheet(isPresented: $showingSettings) {
@@ -498,13 +498,12 @@ struct NewEntryView: View {
                     HStack {
                         Spacer()
                         AICircleView(state: circleState, size: 92, strokeWidth: 3, tint: mood.companionColor)
-                            .scaleEffect(companionDocked ? 1 : 1.2)
-                            .opacity(companionDocked ? 1 : 0.35)
-                            .offset(x: 0, y: companionDocked ? 0 : -210)
+                            .scaleEffect(companionDocked ? 1 : 0.96)
+                            .opacity(companionDocked ? 1 : 0.82)
                         Spacer()
                     }
                     .padding(.top, 6)
-                    .animation(.spring(response: 0.52, dampingFraction: 0.86, blendDuration: 0.18), value: companionDocked)
+                    .animation(.easeOut(duration: 0.24), value: companionDocked)
 
                     VStack(spacing: 16) {
                         MoodSelectorView(selectedMood: $mood, size: 44, labelFont: .caption2, useMoodAccent: true)
@@ -594,7 +593,7 @@ struct NewEntryView: View {
                 router.companionPresentation = .composer
                 companionDocked = false
                 composeContentVisible = false
-                withAnimation(.spring(response: 0.52, dampingFraction: 0.86, blendDuration: 0.18)) {
+                withAnimation(.easeOut(duration: 0.24)) {
                     companionDocked = true
                 }
                 withAnimation(.easeOut(duration: 0.28).delay(0.2)) {
