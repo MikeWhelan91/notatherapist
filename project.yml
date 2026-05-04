@@ -11,13 +11,8 @@ targets:
     type: application
     platform: iOS
     sources:
-      - path: NotATherapist
-        excludes:
-          - WhisperModels/**
+      - NotATherapist
       - Shared
-      - path: NotATherapist/WhisperModels
-        type: folder
-        buildPhase: resources
     dependencies:
       - package: Lottie
       - package: ArgmaxOSS

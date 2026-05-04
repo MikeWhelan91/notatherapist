@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		05318CCA12581DD266B17D5B /* JournalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F48090E8FBC274AA5AC7FEF0 /* JournalView.swift */; };
+		08BC963723BD6C33707EAADF /* VoiceModelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67226F0879E563CCE13765F5 /* VoiceModelManager.swift */; };
 		15B56F4F277B74CA35082415 /* MockData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 688255F7CDA2BEFF17229452 /* MockData.swift */; };
 		15D4B0EC2CAF818C19BA5636 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 79D6D423A903CEE62D528BA1 /* Assets.xcassets */; };
 		185BB7FD01E8C2197A29F58D /* NotATherapistApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF4164741B6CEEAF043F3B68 /* NotATherapistApp.swift */; };
@@ -21,7 +22,6 @@
 		490A0CA5BBB8AA1E75CD71FB /* AppViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 468F4E2B1C96DE08C27E8932 /* AppViewModel.swift */; };
 		4A88039FEB9C25179005E169 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECEEDCC536C1CF382A1A0BC1 /* OnboardingView.swift */; };
 		4AD903C2B8BA5C9BD432D316 /* VoiceJournalRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7951D921ECA3D863378BA5FB /* VoiceJournalRecorder.swift */; };
-		577C5EF9E360F9B6264117D2 /* WhisperModels in Resources */ = {isa = PBXBuildFile; fileRef = 4DEF63875B57846D282A388B /* WhisperModels */; };
 		5BBBC8A86BDEDDCD82B938BB /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 972FA017E24658E48B6793EB /* Lottie */; };
 		5CB4E1E98B52800A1060DCCC /* AppAttestService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B0B142BADCE1059B06422DD /* AppAttestService.swift */; };
 		652C2C72A60CF787391116AE /* LocalAppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82855229C977B660683AA568 /* LocalAppStore.swift */; };
@@ -82,10 +82,10 @@
 		468F4E2B1C96DE08C27E8932 /* AppViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppViewModel.swift; sourceTree = "<group>"; };
 		47AFDDF38EB4DD7FDB8A2441 /* AnchorWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = AnchorWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		4B2A86DD82E5AEA38D2581EF /* InsightsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsightsView.swift; sourceTree = "<group>"; };
-		4DEF63875B57846D282A388B /* WhisperModels */ = {isa = PBXFileReference; lastKnownFileType = folder; name = WhisperModels; path = NotATherapist/WhisperModels; sourceTree = SOURCE_ROOT; };
 		4EC1FCDA511960C4285A6A2C /* WidgetShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetShared.swift; sourceTree = "<group>"; };
 		59389A36ADA0EEE4C28117C9 /* NotATherapist.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = NotATherapist.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5A4B528419784EBC6ADC1296 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
+		67226F0879E563CCE13765F5 /* VoiceModelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceModelManager.swift; sourceTree = "<group>"; };
 		688255F7CDA2BEFF17229452 /* MockData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockData.swift; sourceTree = "<group>"; };
 		7951D921ECA3D863378BA5FB /* VoiceJournalRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceJournalRecorder.swift; sourceTree = "<group>"; };
 		79D6D423A903CEE62D528BA1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -123,7 +123,6 @@
 		40260BFEFE657DBA75570F1C = {
 			isa = PBXGroup;
 			children = (
-				4DEF63875B57846D282A388B /* WhisperModels */,
 				B00956FD37C52376A7D018CC /* AnchorWidgets */,
 				E71753DD28C86F1F2D786E8E /* NotATherapist */,
 				775E40D6FA333D4B84F483C4 /* Shared */,
@@ -190,6 +189,7 @@
 				ECEEDCC536C1CF382A1A0BC1 /* OnboardingView.swift */,
 				F8A850C4E98B449C9F2599F1 /* TodayView.swift */,
 				7951D921ECA3D863378BA5FB /* VoiceJournalRecorder.swift */,
+				67226F0879E563CCE13765F5 /* VoiceModelManager.swift */,
 			);
 			path = NotATherapist;
 			sourceTree = "<group>";
@@ -277,7 +277,6 @@
 			files = (
 				15D4B0EC2CAF818C19BA5636 /* Assets.xcassets in Resources */,
 				317C03C49922F0EE8510B3E8 /* Confetti.json in Resources */,
-				577C5EF9E360F9B6264117D2 /* WhisperModels in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -314,6 +313,7 @@
 				4A88039FEB9C25179005E169 /* OnboardingView.swift in Sources */,
 				1EE768C413114529764E4D84 /* TodayView.swift in Sources */,
 				4AD903C2B8BA5C9BD432D316 /* VoiceJournalRecorder.swift in Sources */,
+				08BC963723BD6C33707EAADF /* VoiceModelManager.swift in Sources */,
 				EDD1A77B06A5BB2AF70237B9 /* WidgetShared.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

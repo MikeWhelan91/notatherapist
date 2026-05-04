@@ -658,7 +658,7 @@ struct NewEntryView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             case .preparingModel:
-                Text("Preparing the bundled on-device voice model.")
+                Text("Preparing the on-device voice model.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             case .transcribing:

@@ -19,7 +19,12 @@ final class VoiceJournalRecorder: NSObject, ObservableObject, AVAudioRecorderDel
     private var recorder: AVAudioRecorder?
     private var recordingURL: URL?
     private var whisperKit: WhisperKit?
-    private let bundledModelName = "openai_whisper-tiny"
+    private let voiceModelManager: VoiceModelManager
+
+    override init() {
+        self.voiceModelManager = VoiceModelManager.shared
+        super.init()
+    }
 
     var isRecording: Bool {
         state == .recording
@@ -34,6 +39,11 @@ final class VoiceJournalRecorder: NSObject, ObservableObject, AVAudioRecorderDel
     }
 
     func start() async {
+        guard voiceModelManager.isVoiceEnabled else {
+            state = .unavailable("Voice journaling is optional. Enable it in Settings to download the on-device model.")
+            return
+        }
+
         state = .requestingPermission
         let granted = await requestMicrophoneAccess()
         guard granted else {
@@ -105,13 +115,13 @@ final class VoiceJournalRecorder: NSObject, ObservableObject, AVAudioRecorderDel
         if let whisperKit {
             return whisperKit
         }
-        guard let modelFolder = bundledModelFolderURL() else {
-            throw VoiceJournalRecorderError.bundledModelMissing
+        guard let modelFolder = voiceModelManager.modelFolderURL else {
+            throw VoiceJournalRecorderError.modelNotDownloaded
         }
         let config = WhisperKitConfig(
             model: "tiny",
             modelFolder: modelFolder.path,
-            tokenizerFolder: modelFolder,
+            tokenizerFolder: voiceModelManager.downloadBaseURL,
             verbose: false,
             prewarm: true,
             load: true,
@@ -120,19 +130,6 @@ final class VoiceJournalRecorder: NSObject, ObservableObject, AVAudioRecorderDel
         let kit = try await WhisperKit(config)
         whisperKit = kit
         return kit
-    }
-
-    private func bundledModelFolderURL() -> URL? {
-        let candidates = [
-            Bundle.main.url(forResource: bundledModelName, withExtension: nil),
-            Bundle.main.url(forResource: bundledModelName, withExtension: nil, subdirectory: "WhisperModels"),
-            Bundle.main.resourceURL?.appending(path: bundledModelName, directoryHint: .isDirectory),
-            Bundle.main.resourceURL?.appending(path: "WhisperModels/\(bundledModelName)", directoryHint: .isDirectory)
-        ]
-
-        return candidates.compactMap(\.self).first { url in
-            FileManager.default.fileExists(atPath: url.appending(path: "AudioEncoder.mlmodelc", directoryHint: .isDirectory).path)
-        }
     }
 
     private func makeRecordingURL() throws -> URL {
@@ -152,5 +149,5 @@ final class VoiceJournalRecorder: NSObject, ObservableObject, AVAudioRecorderDel
 }
 
 private enum VoiceJournalRecorderError: Error {
-    case bundledModelMissing
+    case modelNotDownloaded
 }

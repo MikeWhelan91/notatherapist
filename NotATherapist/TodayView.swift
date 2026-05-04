@@ -724,6 +724,7 @@ struct TodayView: View {
             showingHistory = true
         }
     }
+
 }
 
 private struct StreakCardView: View {
@@ -819,6 +820,7 @@ private struct StreakCardView: View {
             }
         }
     }
+
 }
 
 private struct ReflectionGoalRow: View {
@@ -857,6 +859,7 @@ struct SettingsView: View {
     @EnvironmentObject private var healthKitManager: HealthKitManager
     @EnvironmentObject private var notificationService: NotificationService
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = true
+    @StateObject private var voiceModelManager = VoiceModelManager.shared
     @State private var exportURL: URL?
     @State private var showingDeleteConfirmation = false
 
@@ -907,6 +910,43 @@ struct SettingsView: View {
                     Text("Profile")
                 } footer: {
                     Text(appModel.baselineReassessmentStatusText)
+                }
+
+                Section {
+                    HStack {
+                        Text("Voice journaling")
+                        Spacer()
+                        Text(voiceModelManager.statusLabel)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    switch voiceModelManager.status {
+                    case .downloading(let progress):
+                        ProgressView(value: progress)
+                    case .failed(let message):
+                        Text(message)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    default:
+                        EmptyView()
+                    }
+
+                    Button {
+                        Task { await voiceModelManager.downloadTinyModel() }
+                    } label: {
+                        Label(voiceModelManager.isVoiceEnabled ? "Voice model downloaded" : "Download voice model", systemImage: voiceModelManager.isVoiceEnabled ? "checkmark.circle.fill" : "arrow.down.circle")
+                    }
+                    .disabled(voiceModelManager.isVoiceEnabled || isVoiceModelDownloading)
+
+                    if voiceModelManager.isVoiceEnabled {
+                        Button("Disable voice journaling", role: .destructive) {
+                            voiceModelManager.disableVoice()
+                        }
+                    }
+                } header: {
+                    Text("Voice")
+                } footer: {
+                    Text("Voice is optional. The Whisper model downloads once and stays on this device.")
                 }
 
                 Section {
@@ -1210,6 +1250,11 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    private var isVoiceModelDownloading: Bool {
+        if case .downloading = voiceModelManager.status { return true }
+        return false
     }
 }
 

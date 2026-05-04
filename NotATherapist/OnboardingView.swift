@@ -7,6 +7,7 @@ struct OnboardingView: View {
     @EnvironmentObject private var notificationService: NotificationService
     @EnvironmentObject private var healthKitManager: HealthKitManager
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @StateObject private var voiceModelManager = VoiceModelManager.shared
 
     @State private var page = 0
     @State private var preferredName = ""
@@ -60,7 +61,7 @@ struct OnboardingView: View {
     @State private var isCompletingOnboarding = false
     @FocusState private var focusedField: OnboardingField?
 
-    private let pageCount = 17
+    private let pageCount = 18
 
     private let introPageIndex = 0
     private let goalsPageIndex = 1
@@ -78,7 +79,8 @@ struct OnboardingView: View {
     private let storyPageIndex = 13
     private let firstCheckInPageIndex = 14
     private let firstReflectionPageIndex = 15
-    private let completionPageIndex = 16
+    private let voicePageIndex = 16
+    private let completionPageIndex = 17
 
     var body: some View {
         VStack(spacing: 0) {
@@ -108,6 +110,7 @@ struct OnboardingView: View {
                 storyPage.tag(storyPageIndex)
                 firstCheckInPage.tag(firstCheckInPageIndex)
                 firstReflectionPage.tag(firstReflectionPageIndex)
+                voicePage.tag(voicePageIndex)
                 completionPage.tag(completionPageIndex)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
@@ -249,7 +252,7 @@ struct OnboardingView: View {
     private var onboardingCompanionPersonality: CompanionPersonality {
         switch page {
         case introPageIndex, completionPageIndex: .grounded
-        case goalsPageIndex, reasonPageIndex, firstCheckInPageIndex: .calm
+        case goalsPageIndex, reasonPageIndex, firstCheckInPageIndex, voicePageIndex: .calm
         case assessmentPageIndex: .analytic
         case scoreSummaryPageIndex, scoreTrendPageIndex: .calm
         case planPageIndex, firstReflectionPageIndex: .energetic
@@ -304,6 +307,7 @@ struct OnboardingView: View {
         if page == planPageIndex { return .responding }
         if page == firstCheckInPageIndex { return .listening }
         if page == firstReflectionPageIndex { return .responding }
+        if page == voicePageIndex { return .attentive }
         if page == completionPageIndex { return .checkIn }
         return .idle
     }
@@ -477,6 +481,8 @@ struct OnboardingView: View {
             return .interactiveSpring(response: 0.5, dampingFraction: 0.82, blendDuration: 0.2)
         case storyPageIndex, firstReflectionPageIndex:
             return .easeInOut(duration: 0.28)
+        case voicePageIndex:
+            return .easeInOut(duration: 0.22)
         default:
             return .easeInOut(duration: 0.24)
         }
@@ -494,6 +500,9 @@ struct OnboardingView: View {
             return !emotionAwarenessLevel.isEmpty
         case reminderPageIndex:
             return !checkInTime.isEmpty
+        case voicePageIndex:
+            if case .downloading = voiceModelManager.status { return false }
+            return true
         default:
             return true
         }
@@ -1156,6 +1165,55 @@ struct OnboardingView: View {
         .padding(.horizontal, 2)
     }
 
+    private var voicePage: some View {
+        OnboardingQuestionPage(
+            title: "Voice journaling",
+            subtitle: "Voice is optional. If you want it, Anchor downloads a private on-device Whisper model now.",
+            motionStyle: .form
+        ) {
+            VStack(spacing: 14) {
+                singleRow("Text journaling works either way", symbol: "keyboard")
+                singleRow("Voice transcription runs on device after setup", symbol: "mic")
+                singleRow("The tiny model downloads once and stays local", symbol: "arrow.down.circle")
+
+                switch voiceModelManager.status {
+                case .downloading(let progress):
+                    ProgressView(value: progress)
+                    Text("Downloading voice model \(Int(progress * 100))%")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                case .ready:
+                    singleRow("Voice is ready", symbol: "checkmark.circle.fill")
+                case .failed(let message):
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                case .notEnabled:
+                    EmptyView()
+                }
+
+                Button {
+                    Task { await voiceModelManager.downloadTinyModel() }
+                } label: {
+                    Label(voiceModelManager.isVoiceEnabled ? "Voice ready" : "Download voice model", systemImage: voiceModelManager.isVoiceEnabled ? "checkmark.circle.fill" : "arrow.down.circle.fill")
+                        .font(.headline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 52)
+                }
+                .foregroundStyle(Color(.systemBackground))
+                .background(Color.primary, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .buttonStyle(.plain)
+                .disabled(voiceModelManager.isVoiceEnabled || isVoiceModelDownloading)
+
+                Text("Skip this step if you prefer typing. You can enable voice later in Settings.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+        }
+    }
+
     private var completionPage: some View {
         OnboardingQuestionPage(
             title: "You’re ready",
@@ -1167,9 +1225,15 @@ struct OnboardingView: View {
                 singleRow("Streak goal: \(streakGoal) days", symbol: "flame")
                 singleRow(onboardingStreakMessage, symbol: "calendar.badge.clock")
                 singleRow("Reminder: \(checkInTime)", symbol: "clock")
+                singleRow("Voice journaling: \(voiceModelManager.isVoiceEnabled ? "enabled" : "not enabled")", symbol: "mic")
                 singleRow("Pattern memory and tone personalization enabled", symbol: "sparkles")
             }
         }
+    }
+
+    private var isVoiceModelDownloading: Bool {
+        if case .downloading = voiceModelManager.status { return true }
+        return false
     }
 
     private var firstCheckInCanGenerate: Bool {
