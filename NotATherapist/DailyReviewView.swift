@@ -28,19 +28,11 @@ struct DailyReviewView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppSpacing.section) {
-                VStack(spacing: 10) {
+                VStack(spacing: 14) {
                     HStack(alignment: .center, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Daily review")
-                                .font(.headline)
-                                .foregroundStyle(appModel.companionTint)
-                            Text(currentReview.date.formatted(date: .complete, time: .omitted))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text(reviewSourceLabel)
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                        }
+                        Text(currentReview.date.formatted(.dateTime.weekday(.wide).day().month(.wide)))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
                         Spacer()
                         if embedded == false {
                             Button("Done") { dismiss() }
@@ -49,7 +41,13 @@ struct DailyReviewView: View {
                         }
                     }
 
-                    AICircleView(state: companionState, size: 94, strokeWidth: 3.1, tint: appModel.companionTint)
+                    AICircleView(
+                        state: companionState,
+                        size: 104,
+                        strokeWidth: 3.1,
+                        tint: appModel.companionTint,
+                        personality: appModel.companionPersonality
+                    )
                 }
                 .padding(.top, -10)
                 .padding(.bottom, 4)
@@ -57,7 +55,7 @@ struct DailyReviewView: View {
                 .offset(y: showHeader ? 0 : 12)
 
                 Text(currentReview.summary)
-                    .font(.title3.weight(.semibold))
+                    .font(.largeTitle.weight(.bold))
                     .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -65,21 +63,14 @@ struct DailyReviewView: View {
                     .opacity(showSummary ? 1 : 0)
                     .offset(y: showSummary ? 0 : 10)
 
-                VStack(alignment: .leading, spacing: 8) {
-                    SectionLabel(title: "Review")
-                        .foregroundStyle(appModel.companionTint)
-                    VStack(spacing: 12) {
-                        reviewBlock(title: "What stood out", body: currentReview.insight.emotionalRead, symbol: "sparkle.magnifyingglass")
-                        Divider().background(AppSurface.stroke.opacity(0.55))
-                        reviewBlock(title: "What came up most", body: currentReview.insight.pattern, symbol: InsightType.pattern.symbol)
-                        Divider().background(AppSurface.stroke.opacity(0.55))
-                        reviewBlock(title: "One useful next step", body: currentReview.insight.action, symbol: InsightType.action.symbol)
-                        if appModel.isPremium, currentReview.evidenceStrength.isEmpty == false {
-                            Divider().background(AppSurface.stroke.opacity(0.55))
-                            reviewBlock(title: "Evidence strength", body: currentReview.evidenceStrength, symbol: "dial.medium")
-                        }
+                VStack(alignment: .leading, spacing: 18) {
+                    reviewBlock(title: "Noticed", body: currentReview.insight.emotionalRead, symbol: "sparkle.magnifyingglass")
+                    reviewBlock(title: "Pattern", body: currentReview.insight.pattern, symbol: InsightType.pattern.symbol)
+                    reviewBlock(title: "Reframe", body: currentReview.insight.reframe, symbol: InsightType.reframe.symbol, emphasized: true)
+                    reviewBlock(title: "Try next", body: currentReview.insight.action, symbol: InsightType.action.symbol)
+                    if appModel.isPremium, currentReview.evidenceStrength.isEmpty == false {
+                        reviewBlock(title: "Evidence", body: currentReview.evidenceStrength, symbol: "dial.medium")
                     }
-                    .padding(.top, 2)
                 }
                 .opacity(showReviewSection ? 1 : 0)
                 .offset(y: showReviewSection ? 0 : 10)
@@ -107,6 +98,7 @@ struct DailyReviewView: View {
                             Label("\(acceptedGoal.title) was saved in Next steps.", systemImage: "checkmark.circle.fill")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
+                            feedbackControls(for: acceptedGoal)
                         } else {
                             HStack(spacing: 10) {
                                 Button {
@@ -118,10 +110,15 @@ struct DailyReviewView: View {
                                 }
                                 .buttonStyle(PrimaryCapsuleButtonStyle())
 
-                                Button("Skip for now") {}
-                                    .buttonStyle(.plain)
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(.secondary)
+                                Button {} label: {
+                                    Text("Skip for now")
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(.secondary)
+                                        .padding(.horizontal, 12)
+                                        .frame(height: 44)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                     }
@@ -159,18 +156,40 @@ struct DailyReviewView: View {
         }
     }
 
-    private var reviewSourceLabel: String {
-        switch currentReview.source {
-        case "openai":
-            "AI daily review"
-        case "fallback":
-            "Local review"
-        default:
-            appModel.planTier.dailyReviewLabel
+    private func feedbackControls(for goal: ReflectionGoal) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Did this help?")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                feedbackButton("Helped", feedback: "helped", goal: goal, symbol: "checkmark.circle")
+                feedbackButton("Didn't", feedback: "didnt_help", goal: goal, symbol: "xmark.circle")
+                feedbackButton("Skipped", feedback: "skipped", goal: goal, symbol: "forward.circle")
+            }
         }
+        .padding(.top, 6)
     }
 
-    private func reviewBlock(title: String, body: String, symbol: String) -> some View {
+    private func feedbackButton(_ title: String, feedback: String, goal: ReflectionGoal, symbol: String) -> some View {
+        let selected = goal.feedback == feedback
+        return Button {
+            appModel.setGoalFeedback(goal, feedback: feedback)
+        } label: {
+            Label(title, systemImage: symbol)
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 10)
+                .frame(height: 34)
+                .foregroundStyle(selected ? Color(.systemBackground) : .primary)
+                .background(selected ? appModel.companionTint : AppSurface.fill, in: Capsule())
+                .overlay {
+                    Capsule().stroke(selected ? appModel.companionTint : AppSurface.stroke, lineWidth: 0.5)
+                }
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func reviewBlock(title: String, body: String, symbol: String, emphasized: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Image(systemName: symbol)
@@ -178,11 +197,13 @@ struct DailyReviewView: View {
                     .frame(width: 18)
                     .foregroundStyle(appModel.companionTint)
                 Text(title)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(appModel.companionTint)
+                    .font(.caption.weight(.bold))
+                    .tracking(1.4)
+                    .textCase(.uppercase)
+                    .foregroundStyle(.secondary)
             }
             Text(body)
-                .font(.body)
+                .font(emphasized ? .title3.weight(.semibold) : .body)
                 .foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)
         }

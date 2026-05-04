@@ -8,94 +8,96 @@ struct MessagesView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: AppSpacing.section) {
-                    ReferenceCard {
-                        HStack(spacing: 14) {
-                            AICircleView(state: .attentive, size: 50, strokeWidth: 2.2, tint: appModel.companionTint)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("Anchor")
-                                    .font(.headline)
-                                Text("A guided space to reflect")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                        }
-                    }
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: 0) {
+                        Color.clear
+                            .frame(height: 1)
+                            .id("messages-top")
+                        CompanionTabHeader(title: "Messages", state: .attentive, tint: appModel.journalCompanionTint)
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        SectionLabel(title: "Weekly check-in")
-                        if appModel.hasWeeklyReview {
-                            ReferenceCard {
-                                VStack(alignment: .leading, spacing: 12) {
-                                    Text("I reviewed your entries and noticed a few patterns.")
-                                        .font(.subheadline)
-                                    Text(appModel.weeklyCheckInAvailabilityText)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                    Button {
-                                        startConversation()
-                                    } label: {
-                                        Text(isStartingConversation ? "Starting" : (appModel.isWeeklyCheckInAvailableNow ? "Start check-in" : "Not available yet"))
-                                    }
-                                    .buttonStyle(PrimaryCapsuleButtonStyle())
-                                    .disabled(isStartingConversation || appModel.isWeeklyCheckInAvailableNow == false)
-                                }
-                            }
-                        } else {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("Weekly check-ins appear automatically.")
-                                    .font(.headline.weight(.semibold))
-                                Text("They unlock after enough activity. \(appModel.weeklyUnlockProgressText)")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.vertical, 4)
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        SectionLabel(title: "Recent conversations")
-                        VStack(spacing: 10) {
-                            ForEach(appModel.conversations) { conversation in
-                                NavigationLink(value: conversation) {
+                        VStack(alignment: .leading, spacing: AppSpacing.section) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                SectionLabel(title: "Weekly check-in")
+                                if appModel.hasWeeklyReview {
                                     ReferenceCard {
-                                        HStack {
-                                            VStack(alignment: .leading, spacing: 4) {
-                                                Text(conversation.date.compactDate)
-                                                    .font(.caption2)
-                                                    .foregroundStyle(.secondary)
-                                                Text(conversation.title)
-                                                    .font(.subheadline.weight(.semibold))
-                                                Text(conversation.preview)
-                                                    .font(.caption)
-                                                    .foregroundStyle(.secondary)
-                                                    .lineLimit(1)
+                                        VStack(alignment: .leading, spacing: 12) {
+                                            Text("I reviewed your entries and noticed a few patterns.")
+                                                .font(.subheadline)
+                                            Text(appModel.weeklyCheckInAvailabilityText)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                            Button {
+                                                startConversation()
+                                            } label: {
+                                                Text(isStartingConversation ? "Starting" : (appModel.isWeeklyCheckInAvailableNow ? "Start check-in" : "Not available yet"))
                                             }
-                                            Spacer()
-                                            Image(systemName: "chevron.right")
-                                                .font(.caption.weight(.semibold))
-                                                .foregroundStyle(.tertiary)
+                                            .buttonStyle(PrimaryCapsuleButtonStyle())
+                                            .disabled(isStartingConversation || appModel.isWeeklyCheckInAvailableNow == false)
                                         }
                                     }
+                                } else {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text("Weekly check-ins appear automatically.")
+                                            .font(.headline.weight(.semibold))
+                                        Text("They unlock after enough activity. \(appModel.weeklyUnlockProgressText)")
+                                            .font(.subheadline)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.vertical, 4)
                                 }
-                                .buttonStyle(.plain)
+                            }
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                SectionLabel(title: "Recent conversations")
+                                VStack(spacing: 10) {
+                                    ForEach(appModel.conversations) { conversation in
+                                        NavigationLink(value: conversation) {
+                                            ReferenceCard {
+                                                HStack {
+                                                    VStack(alignment: .leading, spacing: 4) {
+                                                        Text(conversation.date.compactDate)
+                                                            .font(.caption2)
+                                                            .foregroundStyle(.secondary)
+                                                        Text(conversation.title)
+                                                            .font(.subheadline.weight(.semibold))
+                                                        Text(conversation.preview)
+                                                            .font(.caption)
+                                                            .foregroundStyle(.secondary)
+                                                            .lineLimit(1)
+                                                    }
+                                                    Spacer()
+                                                    Image(systemName: "chevron.right")
+                                                        .font(.caption.weight(.semibold))
+                                                        .foregroundStyle(.tertiary)
+                                                }
+                                            }
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
                             }
                         }
+                        .padding(AppSpacing.page)
                     }
                 }
-                .padding(AppSpacing.page)
+                .onChange(of: router.selectedTab) { _, tab in
+                    guard tab == .messages else { return }
+                    proxy.scrollTo("messages-top", anchor: .top)
+                }
             }
             .scrollIndicators(.hidden)
-            .navigationTitle("Messages")
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: Conversation.self) { conversation in
                 ConversationView(conversation: conversation)
             }
         }
         .onAppear {
             openPendingWeeklyCheckInIfNeeded()
+        }
+        .onChange(of: router.selectedTab) { _, tab in
+            guard tab == .messages else { return }
         }
         .onChange(of: router.pendingWeeklyCheckIn) { _, _ in
             openPendingWeeklyCheckInIfNeeded()
@@ -132,6 +134,7 @@ struct ConversationView: View {
     @State private var text = ""
     @State private var circleState: AICircleState = .idle
     @State private var isGenerating = false
+    @State private var companionTrigger = 0
     @FocusState private var composerFocused: Bool
     @State private var pendingUserMessage: String?
 
@@ -218,7 +221,14 @@ struct ConversationView: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            AICircleView(state: circleState, size: 36, strokeWidth: 2, tint: appModel.companionTint)
+            AICircleView(
+                state: circleState,
+                size: 36,
+                strokeWidth: 2,
+                tint: appModel.companionTint,
+                personality: conversation.phase == .deeper ? .analytic : appModel.companionPersonality,
+                trigger: companionTrigger
+            )
             VStack(alignment: .leading, spacing: 2) {
                 Text("Anchor")
                     .font(.subheadline.weight(.semibold))
@@ -296,6 +306,7 @@ struct ConversationView: View {
         guard action != nil || rawText.isEmpty == false else { return }
         let baseConversation = conversation
         let displayText = action ?? rawText
+        companionTrigger += 1
         pendingUserMessage = displayText
         text = ""
         isGenerating = true

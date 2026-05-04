@@ -134,6 +134,50 @@ struct MockAIInsightService {
             action: "Use a 5-minute starter rule on the avoided task, then decide whether to continue.",
             goalTitle: "Run one 5-minute starter",
             goalReason: "Avoidance language appeared; very short starts break inertia reliably."
+        ),
+        IssueRule(
+            key: "rumination",
+            label: "Rumination",
+            includes: ["overthinking", "replaying", "can't stop thinking", "cant stop thinking", "looping", "spiral", "spiraling", "stuck in my head", "kept thinking"],
+            excludes: ["stopped overthinking", "not overthinking", "less overthinking", "no spiral"],
+            severityTerms: ["all day", "couldn't stop", "cant stop", "hours"],
+            calmingTerms: ["let it go", "moved on", "clearer", "wrote it down"],
+            action: "Set a 10-minute worry window, write the next decision, then move your body for 2 minutes.",
+            goalTitle: "Use one worry window",
+            goalReason: "Rumination language appeared, so containing the loop makes tomorrow easier to compare."
+        ),
+        IssueRule(
+            key: "rejection",
+            label: "Rejection sensitivity",
+            includes: ["rejected", "ignored", "left out", "they hate me", "annoyed with me", "mad at me", "embarrassed", "ashamed", "humiliated"],
+            excludes: ["not rejected", "wasn't ignored", "was not ignored", "talked it through"],
+            severityTerms: ["everyone hates me", "ruined everything", "can't face them", "cant face them"],
+            calmingTerms: ["clarified", "repaired", "talked", "reassured"],
+            action: "Before reacting, write the story your mind made and one softer explanation that could also fit.",
+            goalTitle: "Check one relationship story",
+            goalReason: "Rejection sensitivity signals appeared, so testing the story is the useful next step."
+        ),
+        IssueRule(
+            key: "numbing",
+            label: "Emotional numbing",
+            includes: ["numb", "numbing", "scrolling", "doomscroll", "drank", "weed", "food", "binged", "zoned out", "shut down", "shutdown"],
+            excludes: ["didn't numb", "did not numb", "stopped scrolling", "less scrolling"],
+            severityTerms: ["all night", "all day", "couldn't stop", "cant stop", "blackout"],
+            calmingTerms: ["stopped", "paused", "noticed", "chose"],
+            action: "When the urge to switch off appears, name the feeling underneath before choosing what to do.",
+            goalTitle: "Name the feeling first",
+            goalReason: "Numbing signals appeared, so naming the need underneath gives you more choice."
+        ),
+        IssueRule(
+            key: "perfectionism",
+            label: "Perfection pressure",
+            includes: ["perfect", "not good enough", "failed", "failure", "should have", "should've", "mess up", "messed up", "disappointed"],
+            excludes: ["good enough", "not perfect but", "didn't fail", "did not fail"],
+            severityTerms: ["ruined", "useless", "worthless", "everything wrong"],
+            calmingTerms: ["good enough", "finished", "accepted", "okay"],
+            action: "Choose one good-enough version of the task and stop when that version is complete.",
+            goalTitle: "Finish one good-enough version",
+            goalReason: "Perfection pressure appeared, so a defined stopping point reduces the loop."
         )
     ]
 
@@ -157,6 +201,27 @@ struct MockAIInsightService {
         let count: Int
         let weightedScore: Double
         let severityHits: Int
+    }
+
+    private struct LocalReviewContext {
+        let sortedEntries: [JournalEntry]
+        let combinedText: String
+        let normalizedText: String
+        let averageMood: Double
+        let moodRange: ClosedRange<Int>
+        let themes: [String]
+        let topTheme: String?
+        let hasPreviousData: Bool
+        let topIssue: IssueSignal?
+        let secondaryIssue: IssueSignal?
+        let recentTopIssue: IssueSignal?
+        let topRule: IssueRule?
+        let topDomain: String?
+        let domainDefault: (emotionalRead: String, pattern: String, action: String, goalTitle: String, goalReason: String)
+        let anchors: [String]
+        let improvementSignals: [String]
+        let protectiveSignals: [String]
+        let strainScore: Double
     }
 
     private func containsPhrase(_ phrase: String, in text: String) -> Bool {
@@ -253,6 +318,179 @@ struct MockAIInsightService {
             }
     }
 
+    private func hasUrgentSafetySignal(in text: String) -> Bool {
+        let lower = normalized(text)
+        let phrases = [
+            "kill myself", "end my life", "want to die", "suicide", "suicidal",
+            "hurt myself", "self harm", "self-harm", "overdose", "cant stay safe",
+            "can't stay safe", "not safe", "abuse", "being abused"
+        ]
+        let excluded = [
+            "not suicidal", "not suicide", "no suicidal", "no suicide",
+            "dont want to die", "don't want to die", "do not want to die",
+            "would never hurt myself", "not going to hurt myself"
+        ]
+        if excluded.contains(where: { lower.contains($0) }) {
+            return false
+        }
+        return phrases.contains(where: { lower.contains($0) })
+    }
+
+    private func topAssessmentDomain(from profile: OnboardingProfile) -> String? {
+        profile.assessment?.domains
+            .filter { $0.maxScore > 0 }
+            .sorted {
+                if $0.score == $1.score { return $0.domain < $1.domain }
+                return $0.score > $1.score
+            }
+            .first?
+            .domain
+    }
+
+    private func domainDefault(for domain: String?) -> (emotionalRead: String, pattern: String, action: String, goalTitle: String, goalReason: String) {
+        switch domain?.lowercased() {
+        case "anxiety":
+            return (
+                "Your baseline points toward anxiety as a useful lens today.",
+                "One possible pattern to watch is worry, avoidance, or body alarm showing up before action.",
+                "If tension rises tomorrow, name the feared outcome and take the smallest safe next step.",
+                "Name one feared outcome",
+                "Your baseline suggests anxiety tracking may make tomorrow's pattern clearer."
+            )
+        case "mood":
+            return (
+                "Your baseline points toward mood and energy as useful signals today.",
+                "One possible pattern to watch is lower energy making ordinary tasks feel bigger.",
+                "If energy dips tomorrow, do one 5-minute action before judging the whole day.",
+                "Do one 5-minute action",
+                "Your baseline suggests small activation steps may be useful to test."
+            )
+        case "functioning":
+            return (
+                "Your baseline points toward daily functioning as the useful lens today.",
+                "One possible pattern to watch is sleep, focus, support, or load changing what feels doable.",
+                "Tomorrow, choose one practical support: simplify, ask, schedule, or remove one blocker.",
+                "Set one practical support",
+                "Your baseline suggests functioning improves when support is made concrete."
+            )
+        default:
+            return (
+                "Your baseline points toward stress load as a useful lens today.",
+                "One possible pattern to watch is overload building before your body or patience catches up.",
+                "If pressure builds tomorrow, remove, delay, or finish one thing before adding more.",
+                "Reduce one pressure point",
+                "Your baseline suggests stress tracking may make the next step clearer."
+            )
+        }
+    }
+
+    private func educationalPatternLine(for issueKey: String) -> String? {
+        switch issueKey {
+        case "avoidance", "focus":
+            return "This resembles an avoidance loop, which can be worth learning about if it keeps costing you."
+        case "anxiety":
+            return "This resembles a worry or body-alarm pattern, not a diagnosis."
+        case "mood", "motivation":
+            return "This resembles a low-energy or withdrawal pattern, not a label."
+        case "social":
+            return "This resembles a rejection-sensitivity or repair loop, if it repeats across relationships."
+        case "stress", "work":
+            return "This resembles overload or burnout load, especially if recovery keeps getting delayed."
+        case "sleep":
+            return "This resembles sleep debt shaping mood and focus."
+        case "rumination":
+            return "This resembles rumination: the mind trying to solve discomfort by replaying it."
+        case "rejection":
+            return "This resembles rejection sensitivity, especially if one interaction changes the whole day."
+        case "numbing":
+            return "This resembles emotional numbing: switching off because the feeling is too much."
+        case "perfectionism":
+            return "This resembles perfection pressure, where the standard keeps moving out of reach."
+        default:
+            return nil
+        }
+    }
+
+    private func improvementSignals(in text: String) -> [String] {
+        let checks: [(String, String)] = [
+            ("calmer", "calmer"),
+            ("better", "better"),
+            ("easier", "easier"),
+            ("managed", "managed it"),
+            ("handled", "handled it"),
+            ("started", "started"),
+            ("finished", "finished"),
+            ("done", "got something done"),
+            ("less anxious", "less anxious"),
+            ("slept better", "slept better"),
+            ("talked it through", "talked it through")
+        ]
+        return checks.compactMap { phrase, label in text.contains(phrase) ? label : nil }
+    }
+
+    private func protectiveSignals(in entries: [JournalEntry], text: String) -> [String] {
+        var signals: [String] = []
+        if entries.contains(where: { $0.entryType == .win }) { signals.append("you recorded a win") }
+        if text.contains("walk") || text.contains("outside") || text.contains("gym") { signals.append("movement or outside time showed up") }
+        if text.contains("friend") || text.contains("partner") || text.contains("family") || text.contains("support") { signals.append("support or connection showed up") }
+        if text.contains("breathe") || text.contains("breathing") || text.contains("grounded") || text.contains("meditat") { signals.append("a calming skill showed up") }
+        if text.contains("plan") || text.contains("list") || text.contains("schedule") { signals.append("planning showed up") }
+        return Array(signals.prefix(2))
+    }
+
+    private func strainScore(entries: [JournalEntry], issues: [IssueSignal]) -> Double {
+        let moodLoad = entries.map { max(0, 3 - $0.mood.score) }.reduce(0, +)
+        let rantLoad = entries.filter { $0.entryType == .rant }.count
+        let issueLoad = issues.prefix(3).map { $0.weightedScore + Double($0.severityHits) }.reduce(0, +)
+        return Double(moodLoad) + Double(rantLoad) + issueLoad
+    }
+
+    private func buildContext(
+        date: Date,
+        entries: [JournalEntry],
+        recentEntries: [JournalEntry],
+        profile: OnboardingProfile
+    ) -> LocalReviewContext {
+        let sortedEntries = entries.sorted { $0.date < $1.date }
+        let combinedText = sortedEntries.map(\.text).joined(separator: " ")
+        let normalizedText = normalized(combinedText)
+        let moodScores = sortedEntries.map(\.mood.score)
+        let averageMood = Double(moodScores.reduce(0, +)) / Double(max(1, moodScores.count))
+        let moodRange = (moodScores.min() ?? 3)...(moodScores.max() ?? 3)
+        let themes = sortedEntries.flatMap(\.themes)
+        let topTheme = Dictionary(grouping: themes, by: { $0 })
+            .mapValues(\.count)
+            .max { $0.value < $1.value }?
+            .key
+        let hasPreviousData = recentEntries.contains { Calendar.current.isDate($0.date, inSameDayAs: date) == false }
+        let issueSignals = detectIssueSignals(in: sortedEntries)
+        let recentSignals = detectIssueSignals(in: recentEntries)
+        let topIssue = issueSignals.first
+        let secondaryIssue = issueSignals.dropFirst().first
+        let topRule = topIssue.flatMap { signal in issueRules.first(where: { $0.key == signal.key }) }
+        let topDomain = topAssessmentDomain(from: profile)
+        return LocalReviewContext(
+            sortedEntries: sortedEntries,
+            combinedText: combinedText,
+            normalizedText: normalizedText,
+            averageMood: averageMood,
+            moodRange: moodRange,
+            themes: themes,
+            topTheme: topTheme,
+            hasPreviousData: hasPreviousData,
+            topIssue: topIssue,
+            secondaryIssue: secondaryIssue,
+            recentTopIssue: recentSignals.first,
+            topRule: topRule,
+            topDomain: topDomain,
+            domainDefault: domainDefault(for: topDomain),
+            anchors: contextAnchors(from: sortedEntries, profile: profile),
+            improvementSignals: improvementSignals(in: normalizedText),
+            protectiveSignals: protectiveSignals(in: sortedEntries, text: normalizedText),
+            strainScore: strainScore(entries: sortedEntries, issues: issueSignals)
+        )
+    }
+
     private func contextAnchors(from entries: [JournalEntry], profile: OnboardingProfile) -> [String] {
         let text = normalized(entries.map(\.text).joined(separator: " "))
         var anchors: [String] = []
@@ -301,6 +539,7 @@ struct MockAIInsightService {
     ) -> DailyReview? {
         guard entries.isEmpty == false else { return nil }
 
+        let context = buildContext(date: date, entries: entries, recentEntries: recentEntries, profile: profile)
         let sortedEntries = entries.sorted { $0.date < $1.date }
         let combinedText = sortedEntries.map(\.text).joined(separator: " ")
         let lowerText = combinedText.lowercased()
@@ -318,12 +557,48 @@ struct MockAIInsightService {
         let topRule = topIssue.flatMap { signal in
             issueRules.first(where: { $0.key == signal.key })
         }
+        let topDomain = topAssessmentDomain(from: profile)
+        let domainDefault = domainDefault(for: topDomain)
+
+        if hasUrgentSafetySignal(in: combinedText) {
+            return DailyReview(
+                id: UUID(),
+                date: date,
+                summary: "This entry includes a safety signal.",
+                insight: StructuredInsight(
+                    emotionalRead: "This needs real-world support, not a reflection exercise.",
+                    pattern: "When safety is in question, the next step is immediate support from a person or service.",
+                    reframe: "You do not have to handle this alone or wait for it to pass.",
+                    action: "Contact local emergency services, a crisis line, or a trusted nearby person now."
+                ),
+                evidenceStrength: "Strong safety signal from today's words.",
+                suggestedGoalTitle: "Get support now",
+                suggestedGoalReason: "Safety signals should be handled with immediate real-world support.",
+                acceptedGoalID: nil,
+                entryIDs: sortedEntries.map(\.id),
+                createdAt: Date(),
+                source: "local"
+            )
+        }
 
         let summary: String
         if sortedEntries.count == 1, let entry = sortedEntries.first {
-            summary = "You logged one \(entry.entryType.label.lowercased()) today."
+            if let topIssue {
+                summary = "You logged one \(entry.entryType.label.lowercased()); \(topIssue.label.lowercased()) was the clearest signal."
+            } else if context.improvementSignals.isEmpty == false {
+                summary = "You logged one \(entry.entryType.label.lowercased()) with a progress signal."
+            } else {
+                summary = "You logged one \(entry.entryType.label.lowercased()) today."
+            }
         } else {
-            summary = "You wrote \(sortedEntries.count) entries today."
+            let moodMoved = context.moodRange.lowerBound != context.moodRange.upperBound
+            if let topIssue, let secondary = context.secondaryIssue {
+                summary = "You wrote \(sortedEntries.count) entries; \(topIssue.label.lowercased()) led, with \(secondary.label.lowercased()) behind it."
+            } else if moodMoved {
+                summary = "You wrote \(sortedEntries.count) entries, and your mood shifted during the day."
+            } else {
+                summary = "You wrote \(sortedEntries.count) entries today."
+            }
         }
 
         let emotionalRead: String
@@ -348,6 +623,10 @@ struct MockAIInsightService {
             emotionalRead = "Unfinished decisions seem to be taking up space."
         } else if lowerText.contains("overwhel") || lowerText.contains("too much") || averageMood <= 2.4 {
             emotionalRead = "Today sounds heavy and a little crowded."
+        } else if topDomain != nil {
+            emotionalRead = domainDefault.emotionalRead
+        } else if averageMood >= 3.0 {
+            emotionalRead = "Today does not show a clear struggle, which is useful baseline information."
         } else {
             emotionalRead = "Today has a few threads worth noticing."
         }
@@ -368,6 +647,8 @@ struct MockAIInsightService {
             pattern = "Driving showed up as something you were watching closely."
         } else if let topTheme {
             pattern = "\(topTheme) was the clearest theme today."
+        } else if topDomain != nil {
+            pattern = domainDefault.pattern
         } else {
             pattern = "A clearer pattern will emerge as you keep checking in."
         }
@@ -377,17 +658,32 @@ struct MockAIInsightService {
             patternWithContext = "\(pattern) This also showed up in recent entries, so it looks like a repeating pattern."
         } else if let topIssue, let recentTopIssue, topIssue.key != recentTopIssue.key, hasPreviousData {
             patternWithContext = "\(pattern) Compared with recent entries, today's main theme shifted."
+        } else if let topIssue, let secondary = context.secondaryIssue {
+            let education = educationalPatternLine(for: topIssue.key).map { " \($0)" } ?? ""
+            patternWithContext = "\(pattern) \(secondary.label) was the next signal, so this may be a layered day.\(education)"
+        } else if let topIssue, let education = educationalPatternLine(for: topIssue.key) {
+            patternWithContext = "\(pattern) \(education)"
+        } else if context.improvementSignals.isEmpty == false {
+            patternWithContext = "\(pattern) Progress signal: \(context.improvementSignals[0])."
+        } else if context.protectiveSignals.isEmpty == false {
+            patternWithContext = "\(pattern) Protective signal: \(context.protectiveSignals[0])."
         } else {
             patternWithContext = pattern
         }
 
         let reframe: String
-        if sortedEntries.contains(where: { $0.entryType == .win }) {
+        if context.improvementSignals.isEmpty == false {
+            reframe = "The useful detail is not that everything was fine; it is that something shifted: \(context.improvementSignals[0])."
+        } else if sortedEntries.contains(where: { $0.entryType == .win }) {
             reframe = "This is worth recording as evidence of what can go right."
+        } else if context.protectiveSignals.isEmpty == false, topIssue != nil {
+            reframe = "The strain was real, and there was also a support signal: \(context.protectiveSignals[0])."
         } else if topIssue?.severityHits ?? 0 > 0 {
             reframe = "Even high-intensity moments can be handled one concrete step at a time."
         } else if lowerText.contains("again") || lowerText.contains("same") {
             reframe = "A repeated thought may need one clear next step, not more time in your head."
+        } else if topDomain != nil {
+            reframe = "This is information for your next decision, not a verdict about you."
         } else {
             reframe = "You do not need to solve the whole pattern from one day."
         }
@@ -396,10 +692,22 @@ struct MockAIInsightService {
         let action: String
         let goalTitle: String
         let goalReason: String
-        if let topRule {
+        if let topIssue, topIssue.severityHits > 0, context.anchors.isEmpty == false {
+            action = "Keep tomorrow narrow: use \(context.anchors[0]) first, then do only the next concrete step."
+            goalTitle = "Use one stabilizing anchor"
+            goalReason = "Today's language was intense, so tomorrow should start with a known stabilizer."
+        } else if let topRule {
             action = topRule.action + anchorAdviceSuffix(anchors)
             goalTitle = topRule.goalTitle
             goalReason = topRule.goalReason
+        } else if context.improvementSignals.isEmpty == false {
+            action = "Repeat the condition linked to \(context.improvementSignals[0]) once tomorrow, then write whether it still helped."
+            goalTitle = "Repeat one helpful condition"
+            goalReason = "A progress signal appeared today, so repeating the condition makes it testable."
+        } else if context.protectiveSignals.isEmpty == false {
+            action = "Use \(context.protectiveSignals[0]) deliberately tomorrow before the day gets crowded."
+            goalTitle = "Use one support signal"
+            goalReason = "A protective signal appeared today, so using it earlier is a practical experiment."
         } else if lowerText.contains("drove") || lowerText.contains("driving") {
             action = "If the drive feels tense again, name one thing that helped today before leaving."
             goalTitle = "Capture one driving anchor"
@@ -416,6 +724,10 @@ struct MockAIInsightService {
             action = "If anxiety rises tomorrow, do a 60-second reset before deciding what to do next."
             goalTitle = "Use a 60-second reset once"
             goalReason = "Anxiety appeared in today's entries, so this is a direct test."
+        } else if topDomain != nil {
+            action = domainDefault.action
+            goalTitle = domainDefault.goalTitle
+            goalReason = domainDefault.goalReason
         } else {
             action = anchors.isEmpty
                 ? "If the same thought comes back tomorrow, write one next action and stop there."
@@ -428,9 +740,25 @@ struct MockAIInsightService {
         var normalizedGoalTitle = goalTitle
         var normalizedGoalReason = goalReason
         if normalizedGoalTitle.isEmpty {
-            normalizedAction = "If the same thought comes back tomorrow, write one next action and stop there."
-            normalizedGoalTitle = "Write one concrete next step"
-            normalizedGoalReason = "A single concrete next step keeps tomorrow measurable and reduces rumination."
+            let hasActionableSignal = topIssue != nil ||
+                context.improvementSignals.isEmpty == false ||
+                context.protectiveSignals.isEmpty == false ||
+                lowerText.contains("drove") ||
+                lowerText.contains("driving") ||
+                sortedEntries.contains(where: { $0.entryType == .win }) ||
+                themes.contains("Work") ||
+                themes.contains("Anxiety") ||
+                topDomain != nil
+
+            if hasActionableSignal {
+                normalizedAction = "If the same thought comes back tomorrow, write one next action and stop there."
+                normalizedGoalTitle = "Write one concrete next step"
+                normalizedGoalReason = "A single concrete next step keeps tomorrow measurable and reduces rumination."
+            } else {
+                normalizedAction = "Notice what helped today stay relatively clear, then protect one small piece of it tomorrow."
+                normalizedGoalTitle = ""
+                normalizedGoalReason = ""
+            }
         }
 
         return DailyReview(
@@ -443,12 +771,52 @@ struct MockAIInsightService {
                 reframe: reframe,
                 action: normalizedAction
             ),
+            evidenceStrength: evidenceStrength(
+                issue: topIssue,
+                entryCount: sortedEntries.count,
+                hasRecentContext: hasPreviousData,
+                usedBaseline: topDomain != nil,
+                improvementCount: context.improvementSignals.count,
+                protectiveCount: context.protectiveSignals.count,
+                strainScore: context.strainScore
+            ),
             suggestedGoalTitle: normalizedGoalTitle,
             suggestedGoalReason: normalizedGoalReason,
             acceptedGoalID: nil,
             entryIDs: sortedEntries.map(\.id),
-            createdAt: Date()
+            createdAt: Date(),
+            source: "local"
         )
+    }
+
+    private func evidenceStrength(
+        issue: IssueSignal?,
+        entryCount: Int,
+        hasRecentContext: Bool,
+        usedBaseline: Bool,
+        improvementCount: Int = 0,
+        protectiveCount: Int = 0,
+        strainScore: Double = 0
+    ) -> String {
+        if let issue, issue.severityHits > 0 {
+            return "Strong: today's wording included an intense \(issue.label.lowercased()) signal."
+        }
+        if strainScore >= 4.0 {
+            return "Strong: several local signals pointed in the same direction."
+        }
+        if let issue, issue.count > 1 || hasRecentContext {
+            return "Moderate: \(issue.label.lowercased()) appeared with supporting context."
+        }
+        if improvementCount > 0 || protectiveCount > 0 {
+            return "Moderate: today's entry included a concrete shift or support signal."
+        }
+        if issue != nil {
+            return "Early: based on today's entry language."
+        }
+        if usedBaseline {
+            return "Early: based on today's entry plus your baseline."
+        }
+        return entryCount > 1 ? "Early: based on today's entries." : "Light: based on one entry."
     }
 
     func insight(
@@ -720,7 +1088,7 @@ struct MockConversationService {
 }
 
 struct MockWeeklyReviewService {
-    func latestReview(from entries: [JournalEntry], healthSummary: HealthSummary? = nil) -> WeeklyReview {
+    func latestReview(from entries: [JournalEntry], healthSummary: HealthSummary? = nil, goals: [ReflectionGoal] = []) -> WeeklyReview {
         guard entries.isEmpty == false else {
             return WeeklyReview(
                 id: UUID(),
@@ -742,7 +1110,14 @@ struct MockWeeklyReviewService {
             patterns: generatedPatterns,
             risk: risk(from: entries),
             suggestion: suggestion(from: entries),
-            healthPatterns: healthPatterns(from: entries, summary: healthSummary)
+            healthPatterns: healthPatterns(from: entries, summary: healthSummary),
+            goalFollowThrough: goalFollowThrough(from: entries, goals: goals),
+            progressSignal: progressSignal(from: entries),
+            primaryLoop: primaryLoop(from: entries),
+            nextExperiment: nextExperiment(from: entries),
+            baselineComparison: baselineComparison(from: entries),
+            suggestedTemplate: suggestedTemplate(from: entries),
+            researchPrompt: researchPrompt(from: entries)
         )
     }
 
@@ -817,5 +1192,107 @@ struct MockWeeklyReviewService {
         }
 
         return Array(patterns.prefix(2))
+    }
+
+    private func progressSignal(from entries: [JournalEntry]) -> String {
+        let progressWords = ["calmer", "better", "easier", "handled", "managed", "finished", "started", "done"]
+        let wins = entries.filter { $0.entryType == .win || progressWords.contains(where: $0.text.lowercased().contains) }
+        if let latest = wins.sorted(by: { $0.date > $1.date }).first {
+            return "Progress signal: \(latest.entryType == .win ? "you recorded a win" : "your wording included a shift toward progress")."
+        }
+        return "Progress signal is still light. Track what helps, not only what hurts."
+    }
+
+    private func primaryLoop(from entries: [JournalEntry]) -> String {
+        let themes = entries.flatMap(\.themes)
+        let counts = Dictionary(grouping: themes, by: { $0 }).mapValues(\.count)
+        if (counts["Anxiety"] ?? 0) >= 2 || (counts["Open loops"] ?? 0) >= 2 {
+            return "Likely loop: worry or unfinished decisions build pressure, then action gets harder."
+        }
+        if (counts["Stress"] ?? 0) >= 2 || (counts["Work"] ?? 0) >= 2 {
+            return "Likely loop: load builds, recovery gets delayed, then everything feels more urgent."
+        }
+        if (counts["Sleep"] ?? 0) >= 2 {
+            return "Likely loop: sleep disruption lowers energy, then smaller tasks feel heavier."
+        }
+        if (counts["Relationships"] ?? 0) >= 2 {
+            return "Likely loop: an interaction sticks, the story grows, and repair gets delayed."
+        }
+        return "Likely loop is still forming. Keep entries concrete so next week can compare better."
+    }
+
+    private func nextExperiment(from entries: [JournalEntry]) -> String {
+        let themes = entries.flatMap(\.themes)
+        if themes.contains("Anxiety") || themes.contains("Open loops") {
+            return "Next 7 days: use one 60-second reset before the hardest decision, then log whether it changed the next step."
+        }
+        if themes.contains("Sleep") {
+            return "Next 7 days: set one wind-down cue and log sleep quality the next morning."
+        }
+        if themes.contains("Work") {
+            return "Next 7 days: close or park one work loop before opening a new one."
+        }
+        return "Next 7 days: pick one small action daily and mark whether it helped."
+    }
+
+    private func baselineComparison(from entries: [JournalEntry]) -> String {
+        let low = entries.filter { $0.mood.score <= 2 }.count
+        let high = entries.filter { $0.mood.score >= 4 }.count
+        if high > low {
+            return "Compared with your starting baseline, this week contains more steadiness signals than strain signals."
+        }
+        if low > high {
+            return "Compared with your starting baseline, this week still needs a smaller, stabilizing plan."
+        }
+        return "Compared with your starting baseline, this week looks mixed rather than clearly better or worse."
+    }
+
+    private func suggestedTemplate(from entries: [JournalEntry]) -> String {
+        let themes = entries.flatMap(\.themes)
+        if themes.contains("Anxiety") { return "Worry loop" }
+        if themes.contains("Sleep") { return "Sleep" }
+        if themes.contains("Relationships") { return "Interaction" }
+        if themes.contains("Stress") || themes.contains("Work") { return "Overload" }
+        return "Harder today"
+    }
+
+    private func researchPrompt(from entries: [JournalEntry]) -> String {
+        let text = entries.map(\.text).joined(separator: " ").lowercased()
+        if text.contains("avoid") || text.contains("procrastinat") {
+            return "Worth learning about: avoidance loops and behavioral activation."
+        }
+        if text.contains("overthinking") || text.contains("replay") || text.contains("spiral") {
+            return "Worth learning about: rumination and worry windows."
+        }
+        if text.contains("ignored") || text.contains("rejected") || text.contains("ashamed") {
+            return "Worth learning about: rejection sensitivity and repair conversations."
+        }
+        if text.contains("burnout") || text.contains("too much") || text.contains("overwhel") {
+            return "Worth learning about: burnout load and recovery debt."
+        }
+        return "Worth learning about: the pattern that repeats most, not every possible label."
+    }
+
+    private func goalFollowThrough(from entries: [JournalEntry], goals: [ReflectionGoal]) -> String {
+        guard goals.isEmpty == false else {
+            return "No experiments were tracked this week."
+        }
+        if goals.contains(where: { $0.feedback == "helped" }) {
+            return "At least one experiment was marked helpful, so repeat the condition before changing the plan."
+        }
+        if goals.contains(where: { $0.feedback == "didnt_help" }) {
+            return "One experiment did not help; that is useful data for choosing a smaller or different next step."
+        }
+        if goals.contains(where: { $0.feedback == "skipped" }) {
+            return "Some next steps were skipped, so next week should reduce friction rather than add pressure."
+        }
+        let progressWords = ["done", "finished", "completed", "sent", "followed through"]
+        let progressSignals = entries.filter { entry in
+            progressWords.contains { entry.text.lowercased().contains($0) }
+        }.count
+        if goals.contains(where: { $0.status == .completed }) || progressSignals >= 2 {
+            return "Your notes show follow-through on at least one planned step."
+        }
+        return "Goals stayed active, but progress signals were limited this week."
     }
 }

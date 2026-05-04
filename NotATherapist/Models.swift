@@ -1,6 +1,34 @@
 import Foundation
 import SwiftUI
 
+enum CompanionEmotionalState: String, CaseIterable, Codable {
+    case overwhelmed
+    case activated
+    case steadying
+    case balanced
+    case thriving
+
+    var title: String {
+        switch self {
+        case .overwhelmed: "Overwhelmed"
+        case .activated: "Activated"
+        case .steadying: "Steadying"
+        case .balanced: "Balanced"
+        case .thriving: "Thriving"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .overwhelmed: "High strain right now. Keep steps short and calming."
+        case .activated: "Still tense, but starting to stabilize."
+        case .steadying: "You are finding rhythm and recovering faster."
+        case .balanced: "Mostly steady with healthy day-to-day regulation."
+        case .thriving: "Strong momentum and consistent emotional recovery."
+        }
+    }
+}
+
 enum MoodLevel: String, CaseIterable, Identifiable, Codable {
     case terrible
     case low
@@ -64,9 +92,17 @@ enum MoodLevel: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .terrible: Color(red: 0.82, green: 0.40, blue: 0.39)
         case .low: Color(red: 0.86, green: 0.60, blue: 0.34)
-        case .okay: Color(red: 0.80, green: 0.84, blue: 0.90)
+        case .okay: .white
         case .good: Color(red: 0.30, green: 0.61, blue: 0.95)
         case .great: Color(red: 0.36, green: 0.76, blue: 0.56)
+        }
+    }
+
+    // UI accent keeps "okay" readable on dark surfaces while preserving companion white.
+    var interfaceAccentColor: Color {
+        switch self {
+        case .okay: Color(red: 0.78, green: 0.80, blue: 0.84)
+        default: companionColor
         }
     }
 }
@@ -82,7 +118,7 @@ enum EntryType: String, CaseIterable, Identifiable, Codable {
     var label: String {
         switch self {
         case .quickThought: "Quick thought"
-        case .rant: "Rant"
+        case .rant: "Unload"
         case .reflection: "Reflection"
         case .win: "Win"
         }
@@ -189,7 +225,7 @@ enum AppPlanTier: String, CaseIterable, Identifiable, Codable {
     var dailyReviewLabel: String {
         switch self {
         case .free: "Clear daily reflection and one small next step"
-        case .premium: "Deeper AI daily review with evidence strength"
+        case .premium: "Deeper daily review with evidence strength"
         }
     }
 
@@ -202,8 +238,8 @@ enum AppPlanTier: String, CaseIterable, Identifiable, Codable {
 
     var weeklyReviewLabel: String {
         switch self {
-        case .free: "Core weekly insights and consistency metrics"
-        case .premium: "Full weekly synthesis with pattern shifts"
+        case .free: "Weekly summary and consistency stats"
+        case .premium: "Weekly pattern report with change tracking"
         }
     }
 
@@ -269,6 +305,12 @@ struct WeeklyReview: Identifiable, Codable, Hashable {
     var healthPatterns: [String] = []
     var patternShift: String = ""
     var goalFollowThrough: String = ""
+    var progressSignal: String?
+    var primaryLoop: String?
+    var nextExperiment: String?
+    var baselineComparison: String?
+    var suggestedTemplate: String?
+    var researchPrompt: String?
 }
 
 enum HealthTrend: String, Codable, Hashable {
@@ -298,6 +340,8 @@ struct ReflectionGoal: Identifiable, Codable, Hashable {
     var status: ReflectionGoalStatus
     var sourceConversationID: UUID?
     var checkInPrompt: String
+    var feedback: String?
+    var feedbackAt: Date?
 }
 
 struct OnboardingProfile: Codable, Hashable {
@@ -393,7 +437,7 @@ enum AIConnectionState: Equatable {
     case unknown
     case checking
     case connected(model: String)
-    case fallback(model: String)
+    case unconfigured(model: String)
     case unavailable
 
     var label: String {
@@ -401,7 +445,7 @@ enum AIConnectionState: Equatable {
         case .unknown: "Not checked"
         case .checking: "Checking"
         case .connected(let model): "Connected · \(model)"
-        case .fallback(let model): "Fallback · \(model)"
+        case .unconfigured(let model): "Unconfigured · \(model)"
         case .unavailable: "Unavailable"
         }
     }

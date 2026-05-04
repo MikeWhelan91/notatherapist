@@ -51,6 +51,23 @@ assert.equal(typeof dailyReview.insight.action, "string");
 assert.equal(typeof dailyReview.suggestedGoalTitle, "string");
 assert.equal(typeof dailyReview.evidenceStrength, "string");
 
+const calmDailyReview = createDailyReview({
+  date: "2026-05-04T00:00:00.000Z",
+  entries: normalizeEntries([
+    {
+      id: "calm-entry",
+      date: "2026-05-04T18:00:00.000Z",
+      mood: "okay",
+      entryType: "reflection",
+      text: "I felt calm today and got through work without spiralling about the meeting."
+    }
+  ]),
+  profile: { preferredName: "Mike" },
+  healthSummary: null
+});
+assert.equal(calmDailyReview.insight.pattern.includes("Progress signal"), true);
+assert.equal(calmDailyReview.suggestedGoalTitle, "");
+
 const goal = createGoalFromReview(dailyReview);
 if (dailyReview.suggestedGoalTitle.trim().length > 0) {
   assert.equal(goal.status, "active");

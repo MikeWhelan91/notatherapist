@@ -6,7 +6,7 @@ module.exports = (req, res) => handleEndpoint(req, res, ["GET"], async () => {
   sendJSON(res, 200, {
     ok: true,
     service: "anchor-api",
-    ai: hasOpenAIConfig() ? "configured" : "fallback",
+    ai: hasOpenAIConfig() ? "configured" : "unconfigured",
     model: modelName(),
     appAttest: appAttestEnabled() ? "enforced" : "optional",
     endpoints: [

@@ -1,9 +1,41 @@
 import Foundation
 import SwiftUI
+import UIKit
 import WidgetKit
 
 @MainActor
 final class AppViewModel: ObservableObject {
+    enum CompanionTrend {
+        case improving
+        case stable
+        case regressing
+    }
+
+    struct CompanionStatePoint: Identifiable {
+        let id = UUID()
+        let date: Date
+        let score: Double
+        let confidence: Double
+        let state: CompanionEmotionalState
+    }
+
+    struct CompanionRegulationSnapshot {
+        let score: Double // 0 = frantic, 1 = calm
+        let confidence: Double
+        let state: CompanionEmotionalState
+        let trend: CompanionTrend
+        let personality: CompanionPersonality
+        let tint: Color
+    }
+
+    struct CompanionDriver: Identifiable {
+        let id = UUID()
+        let name: String
+        let contribution: Double
+        let direction: String
+        let tip: String
+    }
+
     @Published var selectedMood: MoodLevel = .okay
     @Published var journalEntries: [JournalEntry]
     @Published var insights: [Insight]
@@ -39,6 +71,8 @@ final class AppViewModel: ObservableObject {
     private let weeklyReminderHourKey = "weeklyReviewReminderHour"
     private let weeklyReminderMinuteKey = "weeklyReviewReminderMinute"
     private let lastWeeklyCheckInAtKey = "lastWeeklyCheckInAt"
+    private let calmSessionDatesKey = "calmSessionDatesV1"
+    private var calmSessionDates: [Date] = []
 
     init(seedWithMockData: Bool = false) {
         let defaults = UserDefaults.standard
@@ -77,6 +111,9 @@ final class AppViewModel: ObservableObject {
             insights = []
             weeklyReview = weeklyReviewService.latestReview(from: [])
         }
+        if let stored = defaults.array(forKey: calmSessionDatesKey) as? [TimeInterval] {
+            calmSessionDates = stored.map(Date.init(timeIntervalSince1970:))
+        }
         refreshWidgetPayload()
     }
 
@@ -94,7 +131,11 @@ final class AppViewModel: ObservableObject {
     }
 
     var hasInsightContent: Bool {
-        insights.isEmpty == false || localSignals.isEmpty == false
+        insights.isEmpty == false ||
+        localSignals.isEmpty == false ||
+        weeklyReview.primaryLoop?.isEmpty == false ||
+        weeklyReview.nextExperiment?.isEmpty == false ||
+        weeklyReview.progressSignal?.isEmpty == false
     }
 
     var isPremium: Bool {
@@ -234,10 +275,161 @@ final class AppViewModel: ObservableObject {
     }
 
     var companionTint: Color {
-        journalEntries.first?.mood.companionColor ?? .white
+        companionRegulation.tint
+    }
+
+    var journalCompanionTint: Color {
+        latestJournalEntry?.mood.companionColor ?? .white
+    }
+
+    var companionPersonality: CompanionPersonality {
+        companionRegulation.personality
+    }
+
+    var companionState: CompanionEmotionalState {
+        companionRegulation.state
+    }
+
+    var companionConfidence: Double {
+        companionRegulation.confidence
+    }
+
+    var companionStateTimeline: [CompanionStatePoint] {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let days = (-13...0).compactMap { cal.date(byAdding: .day, value: $0, to: today) }
+        let raw = days.map { regulationScore(upTo: $0) }
+        let smoothed = smoothCompanionScores(raw)
+        return zip(days, smoothed).map { day, score in
+            let confidence = regulationConfidence(upTo: day)
+            return CompanionStatePoint(
+                date: day,
+                score: score,
+                confidence: confidence,
+                state: mapState(from: score)
+            )
+        }
+    }
+
+    var companionRegulation: CompanionRegulationSnapshot {
+        let timeline = companionStateTimeline
+        let blended = timeline.last?.score ?? regulationScore(upTo: Date())
+        let confidence = regulationConfidence(upTo: Date())
+        let state = mapState(from: blended)
+        let trend = companionTrend(from: timeline)
+
+        let personality: CompanionPersonality
+        switch state {
+        case .overwhelmed:
+            personality = .grounded
+        case .activated:
+            personality = .analytic
+        case .steadying:
+            personality = .grounded
+        case .balanced, .thriving:
+            personality = .calm
+        }
+
+        // Move from warm/high-alert tone to cooler calm tone.
+        let frantic = Color(red: 0.94, green: 0.58, blue: 0.36)
+        let calm = Color(red: 0.58, green: 0.82, blue: 0.98)
+        let tint = interpolateColor(from: frantic, to: calm, t: blended)
+
+        return CompanionRegulationSnapshot(
+            score: blended,
+            confidence: confidence,
+            state: state,
+            trend: trend,
+            personality: personality,
+            tint: tint
+        )
+    }
+
+    var companionStateHeroText: String {
+        let state = companionState
+        let confidence = companionConfidence
+        if confidence < 0.35 {
+            return "Early signal: \(state.summary)"
+        }
+        switch companionRegulation.trend {
+        case .improving:
+            return "\(state.summary) Trend is improving."
+        case .stable:
+            return "\(state.summary) Trend is steady."
+        case .regressing:
+            return "\(state.summary) Tough week signal detected. We will dial support calmer and simpler."
+        }
+    }
+
+    var signalClarityPercent: Int {
+        Int((companionRegulation.score * 100).rounded())
+    }
+
+    var signalClarityDeltaWeek: Int {
+        let cal = Calendar.current
+        guard let start = cal.date(byAdding: .day, value: -7, to: Date()) else { return 0 }
+        let now = regulationScore(upTo: Date())
+        let before = regulationScore(upTo: start)
+        return Int(((now - before) * 100).rounded())
+    }
+
+    var companionDriversToday: [CompanionDriver] {
+        let momentum = journalingMomentumScore(upTo: Date())
+        let mood = recentMoodStabilityScore(upTo: Date())
+        let consistency = streakConsistencyScore(upTo: Date())
+        let calmRecovery = calmRecoveryScore(upTo: Date())
+        let recovery = recoveryBehaviorScore
+
+        return [
+            CompanionDriver(
+                name: "Check-in consistency",
+                contribution: consistency,
+                direction: consistency >= 0.55 ? "up" : "down",
+                tip: "Do one short check-in daily. Even 30 seconds keeps this stable."
+            ),
+            CompanionDriver(
+                name: "Recent mood trend",
+                contribution: mood,
+                direction: mood >= 0.55 ? "up" : "down",
+                tip: "Tag your mood honestly and add one sentence about what helped or hurt it."
+            ),
+            CompanionDriver(
+                name: "Calm sessions",
+                contribution: calmRecovery,
+                direction: calmRecovery >= 0.45 ? "up" : "down",
+                tip: "Complete one guided breathing session for at least 1 minute."
+            ),
+            CompanionDriver(
+                name: "Journaling momentum",
+                contribution: momentum,
+                direction: momentum >= 0.5 ? "up" : "down",
+                tip: "Write small and often. Short entries beat waiting for a perfect one."
+            ),
+            CompanionDriver(
+                name: "Follow-through",
+                contribution: recovery,
+                direction: recovery >= 0.4 ? "up" : "down",
+                tip: "Mark one suggested next step as done to reinforce progress."
+            )
+        ]
     }
 
     var adaptiveFollowUpQuestion: String? {
+        switch companionState {
+        case .overwhelmed:
+            return "Follow-up: What helped you feel even 5% safer or calmer today?"
+        case .activated:
+            return "Follow-up: Where did your stress peak, and what brought it down even a little?"
+        case .steadying:
+            return "Follow-up: What is one pattern you handled better than last week?"
+        case .balanced:
+            return "Follow-up: What habit is keeping you steady right now?"
+        case .thriving:
+            return "Follow-up: What is one small stretch goal you feel ready for this week?"
+        }
+    }
+
+    var domainFollowUpQuestion: String? {
         guard let assessment = onboardingProfile.assessment else { return nil }
         let sortedDomains = assessment.domains.sorted { $0.score > $1.score }
         guard let top = sortedDomains.first else { return nil }
@@ -247,6 +439,8 @@ final class AppViewModel: ObservableObject {
             return "Follow-up: What was one moment today where your worry dropped even slightly, and what helped?"
         case "mood":
             return "Follow-up: What gave you even a small lift in energy or mood today?"
+        case "functioning":
+            return "Follow-up: What made the day easier to get through, even by a small amount?"
         default:
             return "Follow-up: What boundary or pause helped your stress stay more manageable today?"
         }
@@ -260,6 +454,10 @@ final class AppViewModel: ObservableObject {
 
     func latestEntry(on date: Date) -> JournalEntry? {
         journalEntries.first { Calendar.current.isDate($0.date, inSameDayAs: date) }
+    }
+
+    var latestJournalEntry: JournalEntry? {
+        journalEntries.max(by: { $0.date < $1.date })
     }
 
     @discardableResult
@@ -296,6 +494,156 @@ final class AppViewModel: ObservableObject {
             journalEntries = updated
         }
         return didChange
+    }
+
+    private var baselineRegulationFromAssessment: Double {
+        guard let assessment = onboardingProfile.assessment else { return 0.45 }
+        guard assessment.maxScore > 0 else { return 0.45 }
+        // Higher assessment score => less regulated starting state.
+        return clamp01(1.0 - (Double(assessment.totalScore) / Double(assessment.maxScore)))
+    }
+
+    private var journalingMomentumScore: Double {
+        journalingMomentumScore(upTo: Date())
+    }
+
+    private func journalingMomentumScore(upTo date: Date) -> Double {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: date)
+        let last7 = (-6...0).compactMap { cal.date(byAdding: .day, value: $0, to: today) }
+        let active = last7.filter { entries(on: $0).isEmpty == false }.count
+        return clamp01(Double(active) / 7.0)
+    }
+
+    private var recentMoodStabilityScore: Double {
+        recentMoodStabilityScore(upTo: Date())
+    }
+
+    private func recentMoodStabilityScore(upTo date: Date) -> Double {
+        let recent = journalEntries
+            .filter { $0.date <= date }
+            .sorted { $0.date > $1.date }
+            .prefix(12)
+        guard recent.isEmpty == false else { return 0.42 }
+        let avg = recent.map(\.mood.score).reduce(0, +) / recent.count
+        return clamp01((Double(avg) - 1.0) / 4.0)
+    }
+
+    private var streakConsistencyScore: Double {
+        streakConsistencyScore(upTo: Date())
+    }
+
+    private func streakConsistencyScore(upTo date: Date) -> Double {
+        let goal = max(1, streakGoalDays)
+        let current = streakDays(upTo: date)
+        return clamp01(Double(min(current, goal)) / Double(goal))
+    }
+
+    private var recoveryBehaviorScore: Double {
+        let completed = reflectionGoals.filter { $0.status == .completed }.count
+        let denominator = max(1, reflectionGoals.count)
+        return clamp01(Double(completed) / Double(denominator))
+    }
+
+    private func calmRecoveryScore(upTo date: Date) -> Double {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: date)
+        let last7 = (-6...0).compactMap { cal.date(byAdding: .day, value: $0, to: today) }
+        let unique = Set(calmSessionDates.map { cal.startOfDay(for: $0) })
+        let activeDays = last7.filter { unique.contains($0) }.count
+        return clamp01(Double(activeDays) / 5.0)
+    }
+
+    private func regulationScore(upTo date: Date) -> Double {
+        let baseline = baselineRegulationFromAssessment
+        let momentum = journalingMomentumScore(upTo: date)
+        let mood = recentMoodStabilityScore(upTo: date)
+        let consistency = streakConsistencyScore(upTo: date)
+        let recovery = recoveryBehaviorScore
+        let calmRecovery = calmRecoveryScore(upTo: date)
+        return clamp01((baseline * 0.38) + (momentum * 0.18) + (mood * 0.2) + (consistency * 0.1) + (recovery * 0.06) + (calmRecovery * 0.08))
+    }
+
+    private func smoothCompanionScores(_ raw: [Double]) -> [Double] {
+        guard raw.isEmpty == false else { return [] }
+        var out: [Double] = [raw[0]]
+        let alpha = 0.34
+        let maxStep = 0.08
+        for idx in 1..<raw.count {
+            let previous = out[idx - 1]
+            let target = (alpha * raw[idx]) + ((1 - alpha) * previous)
+            let delta = max(-maxStep, min(maxStep, target - previous))
+            out.append(clamp01(previous + delta))
+        }
+        return out
+    }
+
+    private func companionTrend(from timeline: [CompanionStatePoint]) -> CompanionTrend {
+        guard timeline.count >= 14 else { return .stable }
+        let firstHalf = timeline.prefix(7).map(\.score).reduce(0, +) / 7.0
+        let secondHalf = timeline.suffix(7).map(\.score).reduce(0, +) / 7.0
+        let delta = secondHalf - firstHalf
+        if delta > 0.045 { return .improving }
+        if delta < -0.045 { return .regressing }
+        return .stable
+    }
+
+    private func regulationConfidence(upTo date: Date) -> Double {
+        let cal = Calendar.current
+        let start = cal.date(byAdding: .day, value: -13, to: cal.startOfDay(for: date)) ?? date
+        let sample = journalEntries.filter { $0.date >= start && $0.date <= date }
+        let activeDays = Set(sample.map { cal.startOfDay(for: $0.date) }).count
+        let density = clamp01(Double(sample.count) / 20.0)
+        let coverage = clamp01(Double(activeDays) / 14.0)
+        return clamp01((density * 0.55) + (coverage * 0.45))
+    }
+
+    private func mapState(from score: Double) -> CompanionEmotionalState {
+        switch score {
+        case ..<0.25: .overwhelmed
+        case ..<0.45: .activated
+        case ..<0.65: .steadying
+        case ..<0.82: .balanced
+        default: .thriving
+        }
+    }
+
+    private func streakDays(upTo date: Date) -> Int {
+        let cal = Calendar.current
+        let unique = Set(journalEntries.map { cal.startOfDay(for: $0.date) })
+        var cursor = cal.startOfDay(for: date)
+        var streak = 0
+        while unique.contains(cursor) {
+            streak += 1
+            guard let prev = cal.date(byAdding: .day, value: -1, to: cursor) else { break }
+            cursor = prev
+        }
+        return streak
+    }
+
+    private func clamp01(_ value: Double) -> Double {
+        min(1, max(0, value))
+    }
+
+    private func interpolateColor(from: Color, to: Color, t: Double) -> Color {
+        let tt = clamp01(t)
+        let fromRGBA = UIColor(from).rgba
+        let toRGBA = UIColor(to).rgba
+        return Color(
+            red: fromRGBA.r + ((toRGBA.r - fromRGBA.r) * tt),
+            green: fromRGBA.g + ((toRGBA.g - fromRGBA.g) * tt),
+            blue: fromRGBA.b + ((toRGBA.b - fromRGBA.b) * tt)
+        )
+    }
+
+    func completeCalmSession(mode: BreathingMode, duration: TimeInterval) {
+        guard duration >= 45 else { return }
+        calmSessionDates.append(Date())
+        let cutoff = Date().addingTimeInterval(-(21 * 24 * 60 * 60))
+        calmSessionDates.removeAll { $0 < cutoff }
+        let raw = calmSessionDates.map(\.timeIntervalSince1970)
+        UserDefaults.standard.set(raw, forKey: calmSessionDatesKey)
+        saveSnapshot()
     }
 
     func checkInCountThisWeek() -> Int {
@@ -365,8 +713,8 @@ final class AppViewModel: ObservableObject {
         let reviewedToday = dailyReview(on: today) != nil
         return [
             ("Write today's check-in", wroteToday),
-            ("Run today's review", reviewedToday),
-            ("Unlock weekly check-in", hasWeeklyReview)
+            ("Get one AI read and action", reviewedToday),
+            ("Unlock your weekly pattern review", hasWeeklyReview)
         ]
     }
 
@@ -374,6 +722,24 @@ final class AppViewModel: ObservableObject {
         let mission = onboardingMission
         let doneCount = mission.filter(\.done).count
         return "\(doneCount)/\(mission.count) steps complete"
+    }
+
+    var baselineReassessmentStatusText: String {
+        guard let completedAt = onboardingProfile.assessment?.completedAt else {
+            return "No baseline saved yet."
+        }
+        let days = Calendar.current.dateComponents([.day], from: completedAt, to: Date()).day ?? 0
+        if days >= 14 {
+            return "Baseline refresh is due. Retake it to compare the last 2 weeks."
+        }
+        let remaining = max(0, 14 - days)
+        return "Next baseline refresh in \(remaining) day\(remaining == 1 ? "" : "s")."
+    }
+
+    var isBaselineReassessmentDue: Bool {
+        guard let completedAt = onboardingProfile.assessment?.completedAt else { return false }
+        let days = Calendar.current.dateComponents([.day], from: completedAt, to: Date()).day ?? 0
+        return days >= 14
     }
 
     func addEntry(text: String, mood: MoodLevel, type: EntryType, date: Date = Date()) -> JournalEntry {
@@ -393,7 +759,7 @@ final class AppViewModel: ObservableObject {
         journalEntries.insert(entry, at: 0)
 
         checkForGoalProgress(in: entry)
-        weeklyReview = weeklyReviewService.latestReview(from: journalEntries, healthSummary: healthSummary)
+        weeklyReview = weeklyReviewService.latestReview(from: journalEntries, healthSummary: healthSummary, goals: reflectionGoals)
         applyAdaptiveAssessmentAdjustment(reason: "entry_update")
         selectedMood = mood
         saveSnapshot()
@@ -444,23 +810,11 @@ final class AppViewModel: ObservableObject {
             if let apiReview {
                 review = apiReview
             } else {
-                guard let fallback = insightService.dailyReview(
-                    for: date,
-                    entries: dayEntries,
-                    recentEntries: recentEntries,
-                    profile: onboardingProfile,
-                    healthSummary: healthSummary
-                ) else {
-                    aiConnection = .unavailable
-                    return nil
-                }
                 aiConnection = .unavailable
-                var localReview = fallback
-                localReview.source = "fallback"
-                review = localReview
+                return nil
             }
         } else if planTier == .premium {
-            guard let fallback = insightService.dailyReview(
+            guard let local = insightService.dailyReview(
                 for: date,
                 entries: dayEntries,
                 recentEntries: recentEntries,
@@ -468,19 +822,19 @@ final class AppViewModel: ObservableObject {
                 healthSummary: healthSummary
             ) else { return nil }
             aiConnection = .connected(model: "openai")
-            var localReview = fallback
-            localReview.source = "fallback"
+            var localReview = local
+            localReview.source = "local"
             review = localReview
         } else {
-            guard let fallback = insightService.dailyReview(
+            guard let local = insightService.dailyReview(
                 for: date,
                 entries: dayEntries,
                 recentEntries: recentEntries,
                 profile: onboardingProfile,
                 healthSummary: healthSummary
             ) else { return nil }
-            var localReview = fallback
-            localReview.source = "fallback"
+            var localReview = local
+            localReview.source = "local"
             review = localReview
         }
 
@@ -532,30 +886,8 @@ final class AppViewModel: ObservableObject {
         }
 
         guard let review else {
-            guard let fallback = insightService.dailyReview(
-                for: date,
-                entries: dayEntries,
-                recentEntries: recentEntries,
-                profile: onboardingProfile,
-                healthSummary: healthSummary
-            ) else {
-                aiConnection = .unavailable
-                return nil
-            }
             aiConnection = .unavailable
-            var storedFallback = sanitizedReview(fallback)
-            if let existingIndex = dailyReviews.firstIndex(where: { Calendar.current.isDate($0.date, inSameDayAs: date) }) {
-                storedFallback.acceptedGoalID = dailyReviews[existingIndex].acceptedGoalID
-                dailyReviews[existingIndex] = storedFallback
-            } else {
-                dailyReviews.insert(storedFallback, at: 0)
-            }
-
-            replaceInsights(for: storedFallback)
-            applyAdaptiveAssessmentAdjustment(reason: "onboarding_first_reflection")
-            await refreshWeeklyReview()
-            saveSnapshot()
-            return storedFallback
+            return nil
         }
 
         aiConnection = review.source == "openai" ? .connected(model: "openai") : .unknown
@@ -640,18 +972,25 @@ final class AppViewModel: ObservableObject {
 
     func updateHealthSummary(_ summary: HealthSummary?) {
         healthSummary = summary
-        weeklyReview = weeklyReviewService.latestReview(from: journalEntries, healthSummary: summary)
+        weeklyReview = weeklyReviewService.latestReview(from: journalEntries, healthSummary: summary, goals: reflectionGoals)
         saveSnapshot()
     }
 
     func refreshWeeklyReview() async {
         let scopedEntries = weeklyContextEntries()
         guard hasWeeklyReview else {
-            weeklyReview = weeklyReviewService.latestReview(from: scopedEntries, healthSummary: healthSummary)
+            weeklyReview = weeklyReviewService.latestReview(from: scopedEntries, healthSummary: healthSummary, goals: reflectionGoals)
             return
         }
 
         onboardingProfile = .current
+        guard planTier == .premium else {
+            weeklyReview = weeklyReviewService.latestReview(from: scopedEntries, healthSummary: healthSummary, goals: reflectionGoals)
+            applyAdaptiveAssessmentAdjustment(reason: "weekly_review")
+            saveSnapshot()
+            return
+        }
+
         do {
             if let review = try await apiService.weeklyReview(
                 entries: scopedEntries,
@@ -663,7 +1002,8 @@ final class AppViewModel: ObservableObject {
                 weeklyReview = review
             }
         } catch {
-            weeklyReview = weeklyReviewService.latestReview(from: scopedEntries, healthSummary: healthSummary)
+            aiConnection = .unavailable
+            return
         }
         applyAdaptiveAssessmentAdjustment(reason: "weekly_review")
         saveSnapshot()
@@ -690,12 +1030,30 @@ final class AppViewModel: ObservableObject {
         onboardingProfile = .current
         await refreshWeeklyReview()
 
-        let conversation: Conversation
-        do {
-            conversation = try await apiService.startConversation(weeklyReview: weeklyReview, profile: onboardingProfile)
-        } catch {
-            conversation = conversationService.newWeeklyConversation(review: weeklyReview, profile: onboardingProfile)
-        }
+            let conversation: Conversation
+            do {
+                conversation = try await apiService.startConversation(weeklyReview: weeklyReview, profile: onboardingProfile)
+            } catch {
+            conversation = Conversation(
+                id: UUID(),
+                title: "AI unavailable",
+                date: Date(),
+                preview: "AI check-in could not be generated. Try again when the service is available.",
+                messages: [
+                    ConversationMessage(
+                        id: UUID(),
+                        sender: .ai,
+                        text: "AI check-in could not be generated. Try again when the service is available.",
+                        date: Date()
+                    )
+                ],
+                status: .ended,
+                remainingTurns: 0,
+                maxTurns: 0,
+                deepeningUsed: false,
+                phase: .core
+            )
+            }
 
         conversations.insert(conversation, at: 0)
         UserDefaults.standard.set(Date(), forKey: lastWeeklyCheckInAtKey)
@@ -747,7 +1105,7 @@ final class AppViewModel: ObservableObject {
                 return updated
             }
 
-            let synthesized = synthesizeWeeklyGoal(from: updated, fallback: suggestion)
+            let synthesized = synthesizeWeeklyGoal(from: updated, suggestion: suggestion)
             let goal = addReflectionGoal(
                 title: synthesized.title,
                 reason: synthesized.reason,
@@ -812,15 +1170,9 @@ final class AppViewModel: ObservableObject {
                     updated.preview = "Suggested step: \(goal.title)"
                 }
             } else {
-                let isFinalTurn = updated.remainingTurns <= 1
-                let baseReply = conversationService.reply(to: text, action: action, remainingTurns: updated.remainingTurns, profile: onboardingProfile)
-                updated.remainingTurns = max(0, updated.remainingTurns - 1)
-                if isFinalTurn {
-                    updated.status = .ended
-                    reply = "\(baseReply) We’ll pause here for today. One weekly action: \(weeklyCloseAction(for: onboardingProfile))."
-                } else {
-                    reply = baseReply
-                }
+                updated.status = .ended
+                updated.remainingTurns = 0
+                reply = "AI reply could not be generated. I am stopping here instead of giving you a weaker local answer."
             }
 
             let replyContext = response?.replyContext?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -836,21 +1188,6 @@ final class AppViewModel: ObservableObject {
             )
             updated.preview = reply
 
-            if action == "Give me one action", response?.suggestedGoal == nil {
-                let title = "Finish one small unfinished thing"
-                let reason = "Agreed during the weekly check-in."
-                updated.contextHints.removeAll { $0.hasPrefix("suggested_goal::") }
-                updated.contextHints.append(encodeSuggestedGoal(title: title, reason: reason))
-                updated.messages.append(
-                    ConversationMessage(
-                        id: UUID(),
-                        sender: .ai,
-                        text: "Suggested next step: \(title). If you want, tap “Save suggested step”.",
-                        date: Date()
-                    )
-                )
-                updated.preview = "Suggested step: \(title)"
-            }
         }
 
         conversations[index] = updated
@@ -871,7 +1208,7 @@ final class AppViewModel: ObservableObject {
         return (parts[1], parts[2])
     }
 
-    private func synthesizeWeeklyGoal(from conversation: Conversation, fallback: (title: String, reason: String)) -> (title: String, reason: String) {
+    private func synthesizeWeeklyGoal(from conversation: Conversation, suggestion: (title: String, reason: String)) -> (title: String, reason: String) {
         let userText = conversation.messages
             .filter { $0.sender == .user }
             .map { $0.text.lowercased() }
@@ -893,8 +1230,8 @@ final class AppViewModel: ObservableObject {
             title = "7-day calmer driving plan"
             reason = "Agreed plan: for the next 7 days, do one pre-drive calming step before each key drive and track your anxiety before/after."
         } else {
-            title = fallback.title.hasPrefix("7-day") ? fallback.title : "7-day focus plan"
-            reason = "Agreed plan for the next 7 days: \(fallback.reason)"
+            title = suggestion.title.hasPrefix("7-day") ? suggestion.title : "7-day focus plan"
+            reason = "Agreed plan for the next 7 days: \(suggestion.reason)"
         }
 
         return (title, reason)
@@ -945,9 +1282,12 @@ final class AppViewModel: ObservableObject {
             dueDate: Calendar.current.date(byAdding: .day, value: max(1, durationDays), to: Date()),
             status: .active,
             sourceConversationID: sourceConversationID,
-            checkInPrompt: "How did this go: \(title.lowercased())?"
+            checkInPrompt: "How did this go: \(title.lowercased())?",
+            feedback: nil,
+            feedbackAt: nil
         )
         reflectionGoals.insert(goal, at: 0)
+        pruneActiveGoals(limit: 3)
         saveSnapshot()
         return goal
     }
@@ -955,14 +1295,41 @@ final class AppViewModel: ObservableObject {
     func toggleGoal(_ goal: ReflectionGoal) {
         guard let index = reflectionGoals.firstIndex(where: { $0.id == goal.id }) else { return }
         reflectionGoals[index].status = reflectionGoals[index].status == .active ? .completed : .active
+        if reflectionGoals[index].status == .completed, reflectionGoals[index].feedback == nil {
+            reflectionGoals[index].feedback = "helped"
+            reflectionGoals[index].feedbackAt = Date()
+        }
         saveSnapshot()
+    }
+
+    func setGoalFeedback(_ goal: ReflectionGoal, feedback: String) {
+        guard let index = reflectionGoals.firstIndex(where: { $0.id == goal.id }) else { return }
+        reflectionGoals[index].feedback = feedback
+        reflectionGoals[index].feedbackAt = Date()
+        if feedback == "helped" {
+            reflectionGoals[index].status = .completed
+        }
+        weeklyReview = weeklyReviewService.latestReview(from: journalEntries, healthSummary: healthSummary, goals: reflectionGoals)
+        saveSnapshot()
+    }
+
+    private func pruneActiveGoals(limit: Int) {
+        let activeIndices = reflectionGoals.indices.filter { reflectionGoals[$0].status == .active }
+        guard activeIndices.count > limit else { return }
+        for index in activeIndices.dropFirst(limit) {
+            reflectionGoals[index].status = .completed
+            if reflectionGoals[index].feedback == nil {
+                reflectionGoals[index].feedback = "replaced"
+                reflectionGoals[index].feedbackAt = Date()
+            }
+        }
     }
 
     func refreshAIConnection() async {
         aiConnection = .checking
         do {
             let health = try await apiService.health()
-            aiConnection = health.ai == "configured" ? .connected(model: health.model) : .fallback(model: health.model)
+            aiConnection = health.ai == "configured" ? .connected(model: health.model) : .unconfigured(model: health.model)
         } catch {
             aiConnection = .unavailable
         }
@@ -976,7 +1343,7 @@ final class AppViewModel: ObservableObject {
         journalEntries = []
         insights = []
         conversations = []
-        weeklyReview = weeklyReviewService.latestReview(from: [])
+        weeklyReview = weeklyReviewService.latestReview(from: [], goals: reflectionGoals)
         healthSummary = nil
         reflectionGoals = []
         dailyReviews = []
@@ -1326,5 +1693,16 @@ final class AppViewModel: ObservableObject {
             return onboardingProfile.focusAreas.joined(separator: " · ")
         }
         return "General reflection"
+    }
+}
+
+private extension UIColor {
+    var rgba: (r: Double, g: Double, b: Double, a: Double) {
+        var r: CGFloat = 0
+        var g: CGFloat = 0
+        var b: CGFloat = 0
+        var a: CGFloat = 0
+        getRed(&r, green: &g, blue: &b, alpha: &a)
+        return (Double(r), Double(g), Double(b), Double(a))
     }
 }

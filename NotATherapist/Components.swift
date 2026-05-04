@@ -5,32 +5,50 @@ enum AICircleMotionStyle {
     case intro
 }
 
+enum CompanionPersonality {
+    case grounded
+    case energetic
+    case calm
+    case analytic
+}
+
 struct AICircleView: View {
     let state: AICircleState
     var size: CGFloat = 64
     var strokeWidth: CGFloat = 2.5
     var motionStyle: AICircleMotionStyle = .continuous
-    var tint: Color = .white
+    var tint: Color = AppTheme.accentSoft
     var lensFocusActive: Bool = false
+    var personality: CompanionPersonality = .grounded
+    var trigger: Int = 0
+    var centerLabel: String? = nil
+    var ringRotationDegrees: Double = 0
 
     @State private var animationStart = Date()
     @State private var responseKick = false
     @State private var lensRotation: Double = 0
     @State private var lensScale: CGFloat = 1
+    @State private var burstPulse = false
+    @State private var burstTask: Task<Void, Never>?
+    @State private var responseKickTask: Task<Void, Never>?
+    @State private var lensTask: Task<Void, Never>?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let profile = AICircleProfile(state: state)
+        let personality = CompanionPersonalityProfile(kind: personality)
         let brushWidth = max(strokeWidth * 2.2, size * 0.093)
         let hairlineWidth = max(strokeWidth * 0.5, size * 0.018)
         TimelineView(.animation) { timeline in
             let time = timeline.date.timeIntervalSinceReferenceDate
             let elapsed = timeline.date.timeIntervalSince(animationStart)
-            let pulse = (sin((time / profile.breatheDuration) * .pi * 2) + 1) / 2
+            let pulse = (sin((time / (profile.breatheDuration * personality.breatheSpeed)) * .pi * 2) + 1) / 2
             let introProgress = min(max(elapsed / 18, 0), 1)
             let easedIntroProgress = introProgress * introProgress * (3 - 2 * introProgress)
             let drift = motionStyle == .intro ? easedIntroProgress * 88 : (elapsed / profile.motionDuration) * profile.motionOffset
             let lineMotion = motionStyle == .intro ? easedIntroProgress * 420 : (elapsed / profile.lineDuration) * profile.lineTravel
-            let maxScale = motionStyle == .intro ? CGFloat(1.006) : profile.maxScale
+            let maxScale = motionStyle == .intro ? CGFloat(1.006) : profile.maxScale + personality.extraScale
+            let ringRotation = ringRotationDegrees + (reduceMotion ? 0 : sin(time * personality.swaySpeed) * personality.swayAmount)
 
             ZStack {
                 Circle()
@@ -144,6 +162,30 @@ struct AICircleView: View {
                         .scaleEffect(1.08)
                 }
 
+                if state == .responding || state == .checkIn || state == .typing {
+                    ForEach(0..<personality.orbitDots, id: \.self) { index in
+                        let phase = (Double(index) / 6.0) * .pi * 2
+                        let orbit = size * (state == .responding ? 0.62 : 0.56) * personality.orbitRadius
+                        let x = cos((time * personality.orbitSpeed) + phase) * orbit
+                        let y = sin((time * personality.orbitSpeed) + phase) * orbit
+                        Circle()
+                            .fill(tint.opacity(state == .responding ? personality.respondingOpacity : personality.idleOrbitOpacity))
+                            .frame(width: max(2, size * personality.dotSize), height: max(2, size * personality.dotSize))
+                            .offset(x: x, y: y)
+                            .blur(radius: state == .responding ? 0.9 : 0.35)
+                    }
+                }
+
+                if burstPulse {
+                    Circle()
+                        .stroke(tint.opacity(0.5), style: StrokeStyle(lineWidth: hairlineWidth * 2))
+                        .scaleEffect(1.2 + CGFloat(pulse) * 0.22)
+                        .blur(radius: 0.6)
+                    Circle()
+                        .stroke(tint.opacity(0.24), style: StrokeStyle(lineWidth: hairlineWidth * 1.4))
+                        .scaleEffect(1.38 + CGFloat(pulse) * 0.18)
+                }
+
                 if lensFocusActive {
                     Circle()
                         .stroke(tint.opacity(0.4), style: StrokeStyle(lineWidth: hairlineWidth * 1.3))
@@ -162,8 +204,44 @@ struct AICircleView: View {
                         .rotationEffect(.degrees(138 - lensRotation))
                         .scaleEffect(0.86 * lensScale)
                 }
+
+                CompanionGlyphView(
+                    state: state,
+                    tint: tint,
+                    size: size,
+                    pulse: CGFloat(pulse),
+                    time: time,
+                    drift: drift,
+                    personality: personality.kind,
+                    lensFocusActive: lensFocusActive,
+                    responseKick: responseKick,
+                    reduceMotion: reduceMotion
+                )
+                .rotationEffect(.degrees(-ringRotation))
+
+                if let label = resolvedCenterLabel {
+                    Text(label)
+                        .font(.system(size: max(12, size * 0.16), weight: .semibold, design: .rounded))
+                        .foregroundStyle(tint.opacity(0.92))
+                        .tracking(0.3)
+                        .minimumScaleFactor(0.7)
+                        .lineLimit(1)
+                        .padding(.horizontal, size * 0.12)
+                        .padding(.vertical, size * 0.055)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(Color.black.opacity(0.22))
+                        )
+                        .overlay {
+                            Capsule(style: .continuous)
+                                .stroke(tint.opacity(0.22), lineWidth: 0.6)
+                        }
+                        .scaleEffect(1 + (CGFloat(pulse) * 0.02))
+                        .rotationEffect(.degrees(-ringRotation))
+                }
             }
             .frame(width: size, height: size)
+            .rotationEffect(.degrees(ringRotation))
             .scaleEffect((responseKick ? 1.045 : 1.0) * (1 + (maxScale - 1) * CGFloat(pulse)))
             .opacity(profile.totalOpacity)
         }
@@ -175,60 +253,701 @@ struct AICircleView: View {
         .onChange(of: state) { _, _ in
             configureAnimation()
         }
+        .onChange(of: trigger) { _, _ in
+            burstTask?.cancel()
+            withAnimation(reduceMotion ? .linear(duration: 0.01) : .easeOut(duration: 0.22)) {
+                burstPulse = true
+            }
+            burstTask = Task {
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                guard Task.isCancelled == false else { return }
+                await MainActor.run {
+                    withAnimation(reduceMotion ? .linear(duration: 0.01) : .easeOut(duration: 0.22)) {
+                        burstPulse = false
+                    }
+                }
+            }
+        }
         .onChange(of: lensFocusActive) { _, active in
             if active {
                 runLensFocusSequence()
             } else {
-                withAnimation(.easeOut(duration: 0.25)) {
+                lensTask?.cancel()
+                withAnimation(reduceMotion ? .linear(duration: 0.01) : .easeOut(duration: 0.25)) {
                     lensRotation = 0
                     lensScale = 1
                 }
             }
         }
+        .onDisappear {
+            burstTask?.cancel()
+            responseKickTask?.cancel()
+            lensTask?.cancel()
+        }
         .animation(.easeInOut(duration: 0.52), value: state)
         .accessibilityHidden(true)
     }
 
+    private var resolvedCenterLabel: String? {
+        if let centerLabel {
+            let trimmed = centerLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : String(trimmed.prefix(10))
+        }
+        return nil
+    }
+
     private func configureAnimation() {
-        withAnimation(.easeOut(duration: 0.18)) {
+        responseKickTask?.cancel()
+
+        withAnimation(reduceMotion ? .linear(duration: 0.01) : .easeOut(duration: 0.18)) {
             responseKick = false
         }
 
         if state == .responding {
-            withAnimation(.easeOut(duration: 0.24)) {
+            withAnimation(reduceMotion ? .linear(duration: 0.01) : .easeOut(duration: 0.24)) {
                 responseKick = true
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
-                responseKick = false
+            responseKickTask = Task {
+                try? await Task.sleep(nanoseconds: 280_000_000)
+                guard Task.isCancelled == false else { return }
+                await MainActor.run {
+                    responseKick = false
+                }
             }
         }
     }
 
     private func runLensFocusSequence() {
-        withAnimation(.easeInOut(duration: 0.62)) {
-            lensRotation = 26
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.62) {
-            withAnimation(.easeOut(duration: 0.48)) {
-                lensRotation = -10
-            }
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) {
-            withAnimation(.easeInOut(duration: 0.34)) {
-                lensScale = 1.06
-            }
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.44) {
-            withAnimation(.easeInOut(duration: 0.34)) {
-                lensScale = 0.97
-            }
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.78) {
-            withAnimation(.interactiveSpring(response: 0.46, dampingFraction: 0.86, blendDuration: 0.14)) {
+        lensTask?.cancel()
+
+        if reduceMotion {
+            withAnimation(.linear(duration: 0.01)) {
                 lensRotation = 0
                 lensScale = 1
             }
+            return
         }
+
+        withAnimation(.easeInOut(duration: 0.62)) {
+            lensRotation = 26
+        }
+
+        lensTask = Task {
+            try? await Task.sleep(nanoseconds: 620_000_000)
+            guard Task.isCancelled == false else { return }
+            await MainActor.run {
+                withAnimation(.easeOut(duration: 0.48)) {
+                    lensRotation = -10
+                }
+            }
+
+            try? await Task.sleep(nanoseconds: 480_000_000)
+            guard Task.isCancelled == false else { return }
+            await MainActor.run {
+                withAnimation(.easeInOut(duration: 0.34)) {
+                    lensScale = 1.06
+                }
+            }
+
+            try? await Task.sleep(nanoseconds: 340_000_000)
+            guard Task.isCancelled == false else { return }
+            await MainActor.run {
+                withAnimation(.easeInOut(duration: 0.34)) {
+                    lensScale = 0.97
+                }
+            }
+
+            try? await Task.sleep(nanoseconds: 340_000_000)
+            guard Task.isCancelled == false else { return }
+            await MainActor.run {
+                withAnimation(.interactiveSpring(response: 0.46, dampingFraction: 0.86, blendDuration: 0.14)) {
+                    lensRotation = 0
+                    lensScale = 1
+                }
+            }
+        }
+    }
+}
+
+struct CompanionTabHeader: View {
+    let title: String
+    let state: AICircleState
+    let tint: Color
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text(title)
+                    .font(.title2.weight(.semibold))
+                Spacer()
+            }
+            .padding(.horizontal, AppSpacing.page)
+            .padding(.top, 8)
+
+            HStack {
+                Spacer()
+                AICircleView(state: state, size: 122, strokeWidth: 3.1, tint: tint)
+                    .opacity(0)
+                Spacer()
+            }
+            .padding(.top, 6)
+            .padding(.bottom, 10)
+        }
+    }
+}
+
+private struct CompanionPersonalityProfile {
+    let kind: CompanionPersonality
+
+    var breatheSpeed: Double {
+        switch kind {
+        case .grounded: 1.0
+        case .energetic: 0.8
+        case .calm: 1.24
+        case .analytic: 0.94
+        }
+    }
+
+    var orbitSpeed: Double {
+        switch kind {
+        case .grounded: 1.35
+        case .energetic: 1.9
+        case .calm: 1.05
+        case .analytic: 1.6
+        }
+    }
+
+    var orbitDots: Int {
+        switch kind {
+        case .grounded: 6
+        case .energetic: 8
+        case .calm: 5
+        case .analytic: 7
+        }
+    }
+
+    var orbitRadius: CGFloat {
+        switch kind {
+        case .grounded: 1
+        case .energetic: 1.07
+        case .calm: 0.93
+        case .analytic: 1.02
+        }
+    }
+
+    var swaySpeed: Double {
+        switch kind {
+        case .grounded: 0.58
+        case .energetic: 1.2
+        case .calm: 0.36
+        case .analytic: 0.88
+        }
+    }
+
+    var swayAmount: Double {
+        switch kind {
+        case .grounded: 1.1
+        case .energetic: 2.6
+        case .calm: 0.7
+        case .analytic: 1.4
+        }
+    }
+
+    var dotSize: CGFloat {
+        switch kind {
+        case .grounded: 0.045
+        case .energetic: 0.05
+        case .calm: 0.04
+        case .analytic: 0.043
+        }
+    }
+
+    var extraScale: CGFloat {
+        switch kind {
+        case .grounded: 0
+        case .energetic: 0.01
+        case .calm: -0.003
+        case .analytic: 0.004
+        }
+    }
+
+    var respondingOpacity: Double {
+        switch kind {
+        case .grounded: 0.55
+        case .energetic: 0.72
+        case .calm: 0.46
+        case .analytic: 0.6
+        }
+    }
+
+    var idleOrbitOpacity: Double {
+        switch kind {
+        case .grounded: 0.35
+        case .energetic: 0.46
+        case .calm: 0.28
+        case .analytic: 0.4
+        }
+    }
+}
+
+private struct CompanionGlyphView: View {
+    let state: AICircleState
+    let tint: Color
+    let size: CGFloat
+    let pulse: CGFloat
+    let time: TimeInterval
+    let drift: Double
+    let personality: CompanionPersonality
+    let lensFocusActive: Bool
+    let responseKick: Bool
+    let reduceMotion: Bool
+
+    private var faceSize: CGFloat { size * 0.48 }
+    private var showsSignalMarks: Bool { size >= 56 }
+
+    var body: some View {
+        ZStack {
+            innerPresence
+            eyes
+            stateMarks
+        }
+        .frame(width: faceSize, height: faceSize)
+        .offset(y: stateProfile.verticalOffset * size)
+        .scaleEffect(stateProfile.scale + (pulse * stateProfile.pulseAmount) + (responseKick ? 0.045 : 0))
+        .animation(.spring(response: 0.42, dampingFraction: 0.82), value: state)
+        .animation(.spring(response: 0.32, dampingFraction: 0.74), value: responseKick)
+    }
+
+    private var innerPresence: some View {
+        ZStack {
+            Circle()
+                .fill(tint.opacity(stateProfile.innerMistOpacity))
+                .frame(width: faceSize * 1.12, height: faceSize * 1.12)
+                .blur(radius: max(3, size * 0.035))
+
+            Circle()
+                .stroke(tint.opacity(stateProfile.innerRingOpacity), style: StrokeStyle(lineWidth: max(0.7, size * 0.01), lineCap: .round))
+                .frame(width: faceSize * 1.06, height: faceSize * 1.06)
+                .scaleEffect(0.98 + pulse * 0.035)
+        }
+    }
+
+    private var eyes: some View {
+        HStack(spacing: faceSize * stateProfile.eyeSpacing) {
+            RingCompanionEye(
+                size: faceSize * stateProfile.eyeSize,
+                tint: tint,
+                shape: stateProfile.eyeShape,
+                offset: stateProfile.leftEyeOffset,
+                tilt: stateProfile.leftEyeTilt,
+                pulse: pulse,
+                time: time,
+                blinkScale: synchronizedBlinkScale,
+                glancePhase: 0
+            )
+            RingCompanionEye(
+                size: faceSize * stateProfile.eyeSize,
+                tint: tint,
+                shape: stateProfile.eyeShape,
+                offset: stateProfile.rightEyeOffset,
+                tilt: stateProfile.rightEyeTilt,
+                pulse: pulse,
+                time: time,
+                blinkScale: synchronizedBlinkScale,
+                glancePhase: 0
+            )
+        }
+        .offset(y: faceSize * stateProfile.eyeY)
+    }
+
+    private var synchronizedBlinkScale: CGFloat {
+        guard reduceMotion == false else { return 1 }
+        let period = 5.8
+        let position = time.truncatingRemainder(dividingBy: period)
+        let blinkCenter = 0.22
+        let distance = abs(position - blinkCenter)
+        let squint = 0.92 + (sin(time * 0.9) * 0.08)
+        guard distance < 0.12 else { return squint }
+        let blink = 1 - CGFloat(distance / 0.12)
+        return max(0.16, squint * (1 - blink * 0.84))
+    }
+
+    private var stateMarks: some View {
+        ZStack {
+            if showsSignalMarks && (state == .responding || state == .checkIn || state == .thinking) {
+                ForEach(0..<stateProfile.signalCount, id: \.self) { index in
+                    let angle = stateProfile.signalStartAngle + (Double(index) * 58)
+                    let radius = faceSize * 0.48
+                    Circle()
+                        .fill(tint.opacity(0.34 - Double(index) * 0.045))
+                        .frame(width: max(2, faceSize * 0.055), height: max(2, faceSize * 0.055))
+                        .offset(
+                            x: cos(angle * .pi / 180) * radius,
+                            y: sin(angle * .pi / 180) * radius
+                        )
+                        .scaleEffect(0.85 + pulse * 0.2)
+                }
+            }
+
+            if state == .typing || state == .listening {
+                HStack(spacing: faceSize * 0.055) {
+                    ForEach(0..<3, id: \.self) { index in
+                        Circle()
+                            .fill(tint.opacity(0.36 + Double(index) * 0.12))
+                            .frame(width: faceSize * 0.06, height: faceSize * 0.06)
+                            .scaleEffect(0.82 + pulse * (0.25 + CGFloat(index) * 0.08))
+                    }
+                }
+                .offset(y: faceSize * 0.36)
+            }
+
+            if lensFocusActive || state == .thinking {
+                Circle()
+                    .trim(from: 0.05, to: 0.32)
+                    .stroke(tint.opacity(0.36), style: StrokeStyle(lineWidth: max(0.8, faceSize * 0.02), lineCap: .round))
+                    .frame(width: faceSize * 0.86, height: faceSize * 0.86)
+                    .rotationEffect(.degrees(18 + Double(pulse * 8)))
+            }
+        }
+    }
+
+    private var stateProfile: CompanionGlyphProfile {
+        CompanionGlyphProfile(state: state, personality: personality)
+    }
+}
+
+private struct CompanionGlyphProfile {
+    let state: AICircleState
+    let personality: CompanionPersonality
+
+    var scale: CGFloat {
+        switch state {
+        case .settled: 0.88
+        case .responding, .checkIn: 1.03
+        case .listening: 1.01
+        default: 0.96
+        }
+    }
+
+    var pulseAmount: CGFloat {
+        switch state {
+        case .settled: 0.015
+        case .typing, .responding, .checkIn: 0.045
+        default: 0.028
+        }
+    }
+
+    var verticalOffset: CGFloat {
+        switch state {
+        case .settled: 0.008
+        case .listening, .checkIn: -0.006
+        default: 0
+        }
+    }
+
+    var sway: Double {
+        switch personality {
+        case .energetic: 3.2
+        case .analytic: 1.6
+        case .calm: 0.7
+        case .grounded: 1.2
+        }
+    }
+
+    var innerMistOpacity: Double {
+        switch state {
+        case .settled: 0.04
+        case .thinking, .typing, .listening: 0.13
+        case .responding, .checkIn: 0.16
+        default: 0.1
+        }
+    }
+
+    var innerRingOpacity: Double {
+        switch state {
+        case .settled: 0.12
+        case .responding, .checkIn: 0.32
+        default: 0.2
+        }
+    }
+
+    var eyeSize: CGFloat {
+        switch state {
+        case .checkIn, .responding: 0.26
+        case .thinking: 0.2
+        case .typing, .settled: 0.22
+        default: 0.25
+        }
+    }
+
+    var eyeSpacing: CGFloat {
+        switch state {
+        case .listening, .checkIn: 0.22
+        case .settled: 0.28
+        default: 0.25
+        }
+    }
+
+    var eyeShape: RingCompanionEye.ShapeKind {
+        switch state {
+        case .settled: .resting
+        case .thinking: .pixelChevron
+        case .typing: .softCapsule
+        case .responding: .smileArc
+        case .checkIn: .brightOval
+        case .attentive, .idle: .displayOval
+        case .listening: .sideOval
+        }
+    }
+
+    var leftEyeOffset: CGPoint {
+        switch state {
+        case .thinking: CGPoint(x: 0.02, y: -0.01)
+        case .listening: CGPoint(x: -0.02, y: 0)
+        case .typing: CGPoint(x: 0.012, y: 0.015)
+        default: CGPoint(x: 0, y: 0)
+        }
+    }
+
+    var rightEyeOffset: CGPoint {
+        switch state {
+        case .thinking: CGPoint(x: -0.005, y: -0.015)
+        case .listening: CGPoint(x: -0.02, y: 0)
+        case .typing: CGPoint(x: 0.012, y: 0.015)
+        default: CGPoint(x: 0, y: 0)
+        }
+    }
+
+    var eyeY: CGFloat {
+        switch state {
+        case .settled: -0.02
+        case .responding, .checkIn: -0.04
+        default: -0.03
+        }
+    }
+
+    var leftEyeTilt: Double {
+        switch state {
+        case .thinking: -8
+        case .typing: -2
+        case .responding, .checkIn: 2
+        default: 0
+        }
+    }
+
+    var rightEyeTilt: Double {
+        switch state {
+        case .thinking: 6
+        case .typing: -2
+        case .responding, .checkIn: -2
+        default: 0
+        }
+    }
+
+    var signalCount: Int {
+        switch state {
+        case .thinking: 2
+        case .responding, .checkIn: 3
+        default: 0
+        }
+    }
+
+    var signalStartAngle: Double {
+        switch state {
+        case .thinking: 235
+        default: 210
+        }
+    }
+}
+
+private struct RingCompanionEye: View {
+    enum ShapeKind {
+        case displayOval
+        case sideOval
+        case brightOval
+        case softCapsule
+        case pixelChevron
+        case smileArc
+        case resting
+    }
+
+    let size: CGFloat
+    let tint: Color
+    let shape: ShapeKind
+    let offset: CGPoint
+    let tilt: Double
+    let pulse: CGFloat
+    let time: TimeInterval
+    let blinkScale: CGFloat
+    let glancePhase: Double
+
+    @ViewBuilder
+    var body: some View {
+        switch shape {
+        case .pixelChevron:
+            pixelEye
+                .offset(x: size * offset.x, y: size * offset.y)
+                .rotationEffect(.degrees(tilt))
+                .scaleEffect(1 + pulse * pulseScale)
+                .scaleEffect(x: glanceXScale, y: blinkScale, anchor: .center)
+                .opacity(opacity)
+        case .smileArc:
+            arcEye
+                .offset(x: size * offset.x, y: size * offset.y)
+                .rotationEffect(.degrees(tilt))
+                .scaleEffect(1 + pulse * pulseScale)
+                .scaleEffect(x: glanceXScale, y: blinkScale, anchor: .center)
+                .opacity(opacity)
+        default:
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(fill)
+                .frame(width: animatedWidth, height: animatedHeight)
+                .overlay {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(Color.white.opacity(edgeOpacity), lineWidth: max(0.4, size * 0.035))
+                }
+                .shadow(color: tint.opacity(shadowOpacity), radius: shadowRadius)
+                .offset(x: size * (offset.x + glanceOffset), y: size * offset.y)
+                .rotationEffect(.degrees(tilt))
+                .scaleEffect(1 + pulse * pulseScale)
+                .opacity(opacity)
+        }
+    }
+
+    private var pixelEye: some View {
+        HStack(spacing: max(0.8, size * 0.09)) {
+            ForEach(0..<5, id: \.self) { index in
+                RoundedRectangle(cornerRadius: max(0.6, size * 0.08), style: .continuous)
+                    .fill(fill)
+                    .frame(width: max(1.9, size * 0.24), height: max(1.9, size * 0.24))
+                    .offset(y: pixelOffset(for: index))
+                    .shadow(color: tint.opacity(0.34), radius: max(0.7, size * 0.12))
+            }
+        }
+    }
+
+    private func pixelOffset(for index: Int) -> CGFloat {
+        let pattern: [CGFloat] = [0.22, 0.08, -0.04, 0.08, 0.22]
+        return size * pattern[index]
+    }
+
+    private var arcEye: some View {
+        RingCompanionArcEye()
+            .stroke(
+                fill,
+                style: StrokeStyle(lineWidth: max(1.2, size * 0.2), lineCap: .round, lineJoin: .round)
+            )
+            .frame(width: size * 1.18, height: size * 0.72)
+            .shadow(color: tint.opacity(0.28), radius: max(0.8, size * 0.14))
+    }
+
+    private var fill: Color {
+        switch shape {
+        case .brightOval, .sideOval, .displayOval, .smileArc, .pixelChevron:
+            tint.opacity(0.96)
+        case .resting:
+            tint.opacity(0.78)
+        case .softCapsule:
+            tint.opacity(0.88)
+        }
+    }
+
+    private var width: CGFloat {
+        switch shape {
+        case .displayOval, .sideOval, .brightOval: size * 0.68
+        case .softCapsule: size * 1.34
+        case .resting: size * 1.28
+        case .smileArc, .pixelChevron: size
+        }
+    }
+
+    private var height: CGFloat {
+        switch shape {
+        case .displayOval, .brightOval: size * 1.08
+        case .sideOval: size * 0.96
+        case .softCapsule: size * 0.58
+        case .resting: max(1.6, size * 0.22)
+        case .smileArc, .pixelChevron: size
+        }
+    }
+
+    private var cornerRadius: CGFloat {
+        switch shape {
+        case .displayOval, .sideOval, .brightOval: size * 0.36
+        default: size * 0.28
+        }
+    }
+
+    private var pulseScale: CGFloat {
+        switch shape {
+        case .brightOval, .displayOval, .sideOval, .smileArc: 0.04
+        case .softCapsule: 0.025
+        default: 0.012
+        }
+    }
+
+    private var shadowOpacity: Double {
+        switch shape {
+        case .brightOval, .displayOval, .sideOval, .smileArc, .pixelChevron: 0.38
+        default: 0.14
+        }
+    }
+
+    private var shadowRadius: CGFloat {
+        switch shape {
+        case .brightOval, .displayOval, .sideOval: max(1.2, size * 0.28)
+        case .smileArc, .pixelChevron: max(0.8, size * 0.18)
+        default: max(0.6, size * 0.08)
+        }
+    }
+
+    private var edgeOpacity: Double {
+        switch shape {
+        case .brightOval, .displayOval, .sideOval: 0.24
+        default: 0.08
+        }
+    }
+
+    private var opacity: Double {
+        switch shape {
+        case .resting: 0.76
+        default: 1
+        }
+    }
+
+    private var animatedWidth: CGFloat {
+        switch shape {
+        case .displayOval, .brightOval, .sideOval:
+            width * glanceXScale
+        default:
+            width
+        }
+    }
+
+    private var animatedHeight: CGFloat {
+        max(1.4, height * blinkScale)
+    }
+
+    private var glanceOffset: CGFloat {
+        guard shape == .displayOval || shape == .brightOval || shape == .sideOval else { return 0 }
+        return CGFloat(sin((time + glancePhase) * 0.42)) * 0.08
+    }
+
+    private var glanceXScale: CGFloat {
+        guard shape == .displayOval || shape == .brightOval || shape == .sideOval else { return 1 }
+        return 1 + CGFloat(cos((time + glancePhase) * 0.36)) * 0.06
+    }
+}
+
+private struct RingCompanionArcEye: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX + rect.width * 0.14, y: rect.midY))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.maxX - rect.width * 0.14, y: rect.midY),
+            control: CGPoint(x: rect.midX, y: rect.minY + rect.height * 0.12)
+        )
+        return path
     }
 }
 
@@ -530,12 +1249,12 @@ struct MoodSelectorView: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            ForEach(MoodLevel.allCases) { mood in
-                let isSelected = selectedMood == mood
-                let activeFill = useMoodAccent ? mood.companionColor : Color.primary
-                Button {
-                    selectedMood = mood
-                } label: {
+                ForEach(MoodLevel.allCases) { mood in
+                    let isSelected = selectedMood == mood
+                let activeFill = useMoodAccent ? mood.interfaceAccentColor : Color.primary
+                    Button {
+                        selectedMood = mood
+                    } label: {
                     VStack(spacing: 7) {
                         Image(systemName: mood.symbol)
                             .font(.system(size: size * 0.34, weight: .semibold))
@@ -545,18 +1264,26 @@ struct MoodSelectorView: View {
                                 Circle()
                                     .stroke(AppSurface.stroke, lineWidth: 0.5)
                             }
-                            .foregroundStyle(isSelected ? Color(.systemBackground) : .primary)
+                            .foregroundStyle(isSelected ? selectedForeground(for: mood) : .primary)
                         Text(mood.label)
                             .font(labelFont)
                             .foregroundStyle(isSelected ? activeFill : .secondary)
                             .lineLimit(1)
                     }
                     .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(mood.label)
             }
         }
+    }
+
+    private func selectedForeground(for mood: MoodLevel) -> Color {
+        if useMoodAccent && mood == .okay {
+            return Color.black.opacity(0.78)
+        }
+        return Color(.systemBackground)
     }
 }
 
@@ -564,28 +1291,51 @@ struct WeekCalendarStripView: View {
     @Binding var selectedDate: Date
     let dates: [Date]
     var hasEntry: (Date) -> Bool = { _ in false }
-    var dayMoodColor: (Date) -> Color? = { _ in nil }
 
     var body: some View {
+        let today = Calendar.current.startOfDay(for: Date())
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(dates, id: \.self) { date in
                     let isSelected = Calendar.current.isDate(date, inSameDayAs: selectedDate)
                     let hasSavedEntry = hasEntry(date)
-                    let moodColor = dayMoodColor(date)
+                    let day = Calendar.current.startOfDay(for: date)
+                    let isToday = Calendar.current.isDate(day, inSameDayAs: today)
+                    let isPast = day < today
+                    let isFuture = day > today
+
+                    let fillColor: Color = {
+                        if isToday, hasSavedEntry { return Color.white.opacity(0.2) }
+                        if isToday { return Color.white.opacity(0.08) }
+                        if isPast, hasSavedEntry { return Color.white.opacity(0.13) }
+                        return Color.clear
+                    }()
+
+                    let ringColor: Color = {
+                        if isToday { return Color.white.opacity(0.98) }
+                        if isPast, hasSavedEntry { return Color.white.opacity(0.85) }
+                        if isFuture { return Color.white.opacity(0.35) }
+                        return Color.white.opacity(0.75)
+                    }()
+
+                    let dayTextColor: Color = {
+                        if isFuture { return Color.secondary.opacity(0.68) }
+                        return .primary
+                    }()
+
                     Button {
                         selectedDate = date
                     } label: {
                         VStack(spacing: 6) {
                             Text(date.shortDay)
                                 .font(.caption2)
-                                .foregroundStyle(isSelected ? .primary : .secondary)
+                                .foregroundStyle(dayTextColor.opacity(isSelected ? 1 : 0.85))
                             ZStack {
                                 Circle()
-                                    .fill(hasSavedEntry ? (moodColor ?? Color.primary) : Color.clear)
+                                    .fill(fillColor)
                                     .frame(width: 40, height: 40)
                                 Circle()
-                                    .stroke(Color.primary.opacity(0.95), lineWidth: 1.2)
+                                    .stroke(ringColor, lineWidth: isToday ? 1.35 : 1.15)
                                     .frame(width: 40, height: 40)
 
                                 if isSelected {
@@ -596,11 +1346,11 @@ struct WeekCalendarStripView: View {
 
                                 Text(date.dayNumber)
                                     .font(.headline.weight(.semibold))
-                                    .foregroundStyle(hasSavedEntry ? Color.white : .primary)
+                                    .foregroundStyle(dayTextColor)
 
                                 if hasSavedEntry {
                                     Circle()
-                                        .fill(Color.white)
+                                        .fill(isFuture ? Color.clear : Color.white.opacity(0.95))
                                         .frame(width: 4, height: 4)
                                         .offset(y: 13)
                                 }
@@ -608,6 +1358,7 @@ struct WeekCalendarStripView: View {
                         }
                         .frame(height: 68)
                         .frame(width: 50)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }

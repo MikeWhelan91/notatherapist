@@ -8,7 +8,7 @@ module.exports = (req, res) => handleEndpoint(req, res, ["GET"], async () => {
     ok: true,
     service: "anchor-api",
     status: "healthy",
-    ai: hasOpenAIConfig() ? "configured" : "fallback",
+    ai: hasOpenAIConfig() ? "configured" : "unconfigured",
     model: modelName(),
     appAttest: appAttestEnabled() ? "enforced" : "optional",
     kv: hasKV() ? "configured" : "missing",

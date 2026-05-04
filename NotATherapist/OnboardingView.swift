@@ -2,6 +2,7 @@ import SwiftUI
 
 struct OnboardingView: View {
     @EnvironmentObject private var appModel: AppViewModel
+    @EnvironmentObject private var router: AppRouter
     @EnvironmentObject private var notificationService: NotificationService
     @EnvironmentObject private var healthKitManager: HealthKitManager
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
@@ -38,6 +39,10 @@ struct OnboardingView: View {
     @State private var animatedAnxietyScore: Double = 0
     @State private var animatedMoodScore: Double = 0
     @State private var animatedStressScore: Double = 0
+    @State private var animatedFunctioningScore: Double = 0
+    @State private var animatedTotalScore: Double = 0
+    @State private var scoreLineProgress: CGFloat = 0
+    @State private var rangeLineProgress: CGFloat = 0
     @State private var planRevealCount = 0
     @State private var transientCircleState: AICircleState?
     @State private var circleSpinDegrees: Double = 0
@@ -47,8 +52,10 @@ struct OnboardingView: View {
     @State private var pageNudgeY: CGFloat = 0
     @State private var pageScale: CGFloat = 1
     @State private var onboardingConfettiTrigger = 0
+    @State private var companionTrigger = 0
     @State private var onboardingStreakCelebrationMessage: String?
     @State private var onboardingStreakCelebrationPending = false
+    @State private var isCompletingOnboarding = false
     @FocusState private var focusedField: OnboardingField?
 
     private let pageCount = 17
@@ -80,6 +87,7 @@ struct OnboardingView: View {
             circleHeader
                 .padding(.top, 30)
                 .padding(.bottom, 18)
+                .opacity(isCompletingOnboarding ? 0 : 1)
 
             TabView(selection: $page) {
                 introPage.tag(introPageIndex)
@@ -115,6 +123,18 @@ struct OnboardingView: View {
         .background(onboardingBackground)
         .fontDesign(.rounded)
         .onTapGesture { focusedField = nil }
+        .onChange(of: preferredName) { _, value in
+            guard page == introPageIndex else { return }
+            if value.count % 3 == 0, value.isEmpty == false { reactCompanion(.typing) }
+        }
+        .onChange(of: personalStory) { _, value in
+            guard page == storyPageIndex else { return }
+            if value.count % 24 == 0, value.isEmpty == false { reactCompanion(.typing) }
+        }
+        .onChange(of: firstCheckInBody) { _, value in
+            guard page == firstCheckInPageIndex else { return }
+            if value.count % 18 == 0, value.isEmpty == false { reactCompanion(.typing) }
+        }
         .onChange(of: page) { oldPage, newPage in
             focusedField = nil
             enforcePageRules(from: oldPage, to: newPage)
@@ -160,18 +180,24 @@ struct OnboardingView: View {
         ZStack {
             LinearGradient(
                 colors: [
-                    Color(.systemBackground),
-                    Color(.systemGray6).opacity(0.75),
-                    Color(.systemBackground)
+                    Color.black,
+                    Color(red: 0.04, green: 0.08, blue: 0.14),
+                    Color.black
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
             RadialGradient(
-                colors: [Color.primary.opacity(0.05), Color.clear],
+                colors: [AppTheme.accent.opacity(0.24), Color.clear],
                 center: .topTrailing,
-                startRadius: 24,
+                startRadius: 18,
                 endRadius: 420
+            )
+            RadialGradient(
+                colors: [Color.white.opacity(0.08), Color.clear],
+                center: .bottomLeading,
+                startRadius: 24,
+                endRadius: 380
             )
         }
         .ignoresSafeArea()
@@ -208,22 +234,44 @@ struct OnboardingView: View {
             strokeWidth: 3.4,
             motionStyle: .continuous,
             tint: onboardingCompanionTint,
-            lensFocusActive: lensFocusActive
+            lensFocusActive: lensFocusActive,
+            personality: onboardingCompanionPersonality,
+            trigger: companionTrigger,
+            ringRotationDegrees: circleSpinDegrees
         )
-        .rotationEffect(.degrees(circleSpinDegrees))
+    }
+
+    private var onboardingCompanionPersonality: CompanionPersonality {
+        switch page {
+        case introPageIndex, completionPageIndex: .grounded
+        case goalsPageIndex, reasonPageIndex, firstCheckInPageIndex: .calm
+        case assessmentPageIndex: .analytic
+        case scoreSummaryPageIndex, scoreTrendPageIndex: .calm
+        case planPageIndex, firstReflectionPageIndex: .energetic
+        default: .grounded
+        }
     }
 
     private var onboardingCompanionTint: Color {
-        if page == firstCheckInPageIndex {
+        if page < firstCheckInPageIndex {
+            return .white
+        }
+        return selectedMood.companionColor
+    }
+
+    private var onboardingActionTint: Color {
+        if page == firstCheckInPageIndex || page == firstReflectionPageIndex {
             return selectedMood.companionColor
         }
-        return appModel.companionTint
+        return .white
     }
 
     private var circleSize: CGFloat {
-        if page == firstReflectionPageIndex { return 132 }
-        if page == storyPageIndex { return 124 }
-        return 104
+        if page == introPageIndex { return 188 }
+        if page == completionPageIndex { return 156 }
+        if page == firstReflectionPageIndex { return 162 }
+        if page == storyPageIndex { return 148 }
+        return 138
     }
 
     private var displayedCircleState: AICircleState {
@@ -233,9 +281,11 @@ struct OnboardingView: View {
     private func randomAmbientCircleState(for page: Int) -> AICircleState {
         let pool: [AICircleState]
         if page == scoreSummaryPageIndex || page == scoreTrendPageIndex || page == planPageIndex {
-            pool = [.checkIn, .thinking, .responding, .listening]
+            pool = [.checkIn, .attentive, .responding, .listening]
+        } else if page == assessmentPageIndex {
+            pool = [.attentive, .checkIn, .listening]
         } else {
-            pool = [.attentive, .listening, .thinking, .checkIn]
+            pool = [.attentive, .listening, .checkIn]
         }
         return pool.randomElement() ?? .attentive
     }
@@ -244,17 +294,18 @@ struct OnboardingView: View {
         if page == introPageIndex { return .idle }
         if page == goalsPageIndex || page == reasonPageIndex { return .listening }
         if page == therapyPageIndex || page == emotionPageIndex { return .attentive }
-        if page == assessmentPageIndex { return .thinking }
-        if page == scoreSummaryPageIndex || page == scoreTrendPageIndex { return .checkIn }
+        if page == assessmentPageIndex { return .attentive }
+        if page == scoreSummaryPageIndex || page == scoreTrendPageIndex { return .attentive }
         if page == planPageIndex { return .responding }
         if page == firstCheckInPageIndex { return .listening }
         if page == firstReflectionPageIndex { return .responding }
-        if page == completionPageIndex { return .settled }
+        if page == completionPageIndex { return .checkIn }
         return .idle
     }
 
     private func triggerCircleTransition(from oldPage: Int, to newPage: Int) {
         guard oldPage != newPage else { return }
+        companionTrigger += 1
         circleTransitionToken += 1
         let token = circleTransitionToken
         let start = circleSpinDegrees
@@ -285,6 +336,7 @@ struct OnboardingView: View {
     }
 
     private func triggerCircleMicroTransitionForAssessment() {
+        companionTrigger += 1
         circleTransitionToken += 1
         let token = circleTransitionToken
         let start = circleSpinDegrees
@@ -371,6 +423,7 @@ struct OnboardingView: View {
                     Image(systemName: "chevron.left")
                         .font(.headline.weight(.semibold))
                         .frame(width: 56, height: 56)
+                        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
                 .foregroundStyle(.primary)
                 .background(AppSurface.fill, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -378,20 +431,25 @@ struct OnboardingView: View {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .stroke(AppSurface.stroke, lineWidth: 0.5)
                 }
+                .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .buttonStyle(.plain)
             }
 
             Button {
                 focusedField = nil
+                reactCompanion(.responding, withLens: true)
                 Task { await continueTapped() }
             } label: {
                 Text(continueTitle)
                     .font(.headline.weight(.semibold))
                     .frame(maxWidth: .infinity)
                     .frame(height: 56)
+                    .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
             .foregroundStyle(Color(.systemBackground))
-            .background(Color.primary.opacity(canContinue ? 1 : 0.28), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .background(onboardingActionTint.opacity(canContinue ? 1 : 0.28), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .shadow(color: onboardingActionTint.opacity(0.32), radius: 14, y: 4)
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .buttonStyle(.plain)
             .disabled(!canContinue || isRequestingNotificationPermission)
         }
@@ -439,7 +497,8 @@ struct OnboardingView: View {
     private var introPage: some View {
         OnboardingQuestionPage(
             title: "Begin your journey",
-            subtitle: "Tell your companion who you are, then we will tailor your plan."
+            subtitle: "Tell your companion who you are, then we will tailor your plan.",
+            motionStyle: .hero
         ) {
             VStack(alignment: .leading, spacing: 12) {
                 TextField("Name (optional)", text: $preferredName)
@@ -447,10 +506,9 @@ struct OnboardingView: View {
                     .focused($focusedField, equals: .name)
                     .font(.subheadline.weight(.semibold))
                     .padding(14)
-                    .background(AppSurface.fill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(AppSurface.stroke, lineWidth: 0.5)
+                            .stroke(Color.white.opacity(0.2), lineWidth: 0.8)
                     }
                 Menu {
                     ForEach(OnboardingDemographics.ageRanges, id: \.self) { range in
@@ -467,10 +525,9 @@ struct OnboardingView: View {
                             .foregroundStyle(.secondary)
                     }
                     .padding(14)
-                    .background(AppSurface.fill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(AppSurface.stroke, lineWidth: 0.5)
+                            .stroke(Color.white.opacity(0.2), lineWidth: 0.8)
                         }
                 }
                 Text("Your age range helps tailor examples and pacing.")
@@ -483,7 +540,8 @@ struct OnboardingView: View {
     private var goalsPage: some View {
         OnboardingQuestionPage(
             title: "What brings you here?",
-            subtitle: "Pick all areas you want support with."
+            subtitle: "Pick all areas you want support with.",
+            motionStyle: .form
         ) {
             VStack(spacing: 10) {
                 focusRow("Relieve anxiety", "wind")
@@ -499,7 +557,8 @@ struct OnboardingView: View {
     private var reasonPage: some View {
         OnboardingQuestionPage(
             title: "What would feel like progress in 2 weeks?",
-            subtitle: "Choose one clear outcome to aim for first."
+            subtitle: "Choose one clear outcome to aim for first.",
+            motionStyle: .form
         ) {
             VStack(spacing: 10) {
                 singleChoiceRow("Feel calmer in stressful moments", "circle", selected: selectedGoal == "Feel calmer in stressful moments") {
@@ -529,7 +588,8 @@ struct OnboardingView: View {
     private var therapyPage: some View {
         OnboardingQuestionPage(
             title: "How familiar are you with therapy or counseling?",
-            subtitle: "This helps us choose the right level of guidance."
+            subtitle: "This helps us choose the right level of guidance.",
+            motionStyle: .form
         ) {
             VStack(spacing: 10) {
                 singleChoiceRow("Never tried", "circle", selected: therapyExperience == "Never tried") {
@@ -559,7 +619,8 @@ struct OnboardingView: View {
     private var emotionPage: some View {
         OnboardingQuestionPage(
             title: "How often is it hard to identify what you are feeling?",
-            subtitle: "We can tune prompt clarity and pacing to match this."
+            subtitle: "We can tune prompt clarity and pacing to match this.",
+            motionStyle: .form
         ) {
             VStack(spacing: 10) {
                 singleChoiceRow("Rarely", "circle", selected: emotionAwarenessLevel == "Rarely") {
@@ -592,7 +653,8 @@ struct OnboardingView: View {
                 OnboardingQuestionPage(
                     eyebrow: "Over the last 2 weeks",
                     title: item.prompt,
-                    subtitle: "Choose the option that best matches your experience."
+                    subtitle: "Choose the option that best matches your experience.",
+                    motionStyle: .assessment
                 ) {
                     VStack(spacing: 12) {
                         ForEach(Array(OnboardingAssessment.optionTitles.enumerated()), id: \.offset) { answerIndex, title in
@@ -613,13 +675,16 @@ struct OnboardingView: View {
                                 }
                                 .padding(.horizontal, 16)
                                 .frame(height: 56)
+                                .frame(maxWidth: .infinity)
+                                .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                             }
                             .foregroundStyle(.primary)
                             .background(AppSurface.fill, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(AppSurface.stroke, lineWidth: 0.5)
-                            }
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .stroke(AppSurface.stroke, lineWidth: 0.5)
+                                }
+                                .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                             .buttonStyle(.plain)
                             .disabled(isAnimatingAssessment)
                         }
@@ -636,7 +701,8 @@ struct OnboardingView: View {
     private var scoreLoadingPage: some View {
         OnboardingQuestionPage(
             title: "Reviewing your responses",
-            subtitle: "Preparing your score and your starting plan."
+            subtitle: "Preparing your score and your starting plan.",
+            motionStyle: .results
         ) {
             VStack(spacing: 16) {
                 ProgressView().tint(.primary)
@@ -653,45 +719,90 @@ struct OnboardingView: View {
         let breakdown = scoreBreakdown
         return OnboardingQuestionPage(
             title: "Your results",
-            subtitle: "This is your baseline snapshot."
+            subtitle: "",
+            motionStyle: .results
         ) {
-            VStack(spacing: 14) {
-                Text("\(totalScore)")
-                    .font(.system(size: 58, weight: .bold, design: .rounded))
-                Text("Total score")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+            VStack(spacing: 22) {
+                VStack(spacing: 8) {
+                    Text("\(Int(animatedTotalScore.rounded()))")
+                        .font(.system(size: 76, weight: .bold, design: .rounded))
+                        .contentTransition(.numericText())
+                    Text("out of 63")
+                        .font(.caption.weight(.semibold))
+                        .tracking(1.2)
+                        .foregroundStyle(.secondary)
+                        .textCase(.uppercase)
+                }
+                .scaleEffect(scoreLineProgress > 0.35 ? 1 : 0.94)
+                .opacity(scoreLineProgress > 0.08 ? 1 : 0)
+                .animation(.smooth(duration: 0.45, extraBounce: 0.12), value: scoreLineProgress)
+
+                animatedUnderline(progress: scoreLineProgress, tint: onboardingCompanionTint)
+                    .frame(height: 22)
+                    .padding(.horizontal, 34)
 
                 Text(scoreHeadline)
-                    .font(.headline.weight(.semibold))
+                    .font(.title3.weight(.semibold))
                     .foregroundStyle(.primary)
                     .multilineTextAlignment(.center)
+                    .lineSpacing(3)
                     .frame(maxWidth: .infinity, alignment: .center)
+                    .opacity(scoreLineProgress > 0.45 ? 1 : 0)
+                    .offset(y: scoreLineProgress > 0.45 ? 0 : 10)
 
-                Text("Lower load is better. The vertical marker is the midpoint reference, not a target you must hit.")
+                Text("The companion mirrors recent signal intensity. It looks more active when the baseline is noisier, then settles as your check-ins, reviews, and follow-through become steadier.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(2)
+                    .padding(.horizontal, 10)
+                    .opacity(scoreLineProgress > 0.62 ? 1 : 0)
+                    .offset(y: scoreLineProgress > 0.62 ? 0 : 8)
+
+                VStack(spacing: 14) {
+                    scoreSignalRow("Anxiety", value: animatedAnxietyScore, symbol: "waveform.path.ecg")
+                    scoreSignalRow("Mood", value: animatedMoodScore, symbol: "circle.lefthalf.filled")
+                    scoreSignalRow("Stress", value: animatedStressScore, symbol: "bolt")
+                    scoreSignalRow("Functioning", value: animatedFunctioningScore, symbol: "figure.walk.motion")
+                }
+                .padding(.top, 4)
+
+                Text("Lower scores mean fewer recent difficulties. This is a reflection baseline, not a diagnosis.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 8)
-
-                scoreBar("Anxiety load", value: animatedAnxietyScore, subtitle: scoreBarSubtitle(for: animatedAnxietyScore))
-                scoreBar("Mood load", value: animatedMoodScore, subtitle: scoreBarSubtitle(for: animatedMoodScore))
-                scoreBar("Stress load", value: animatedStressScore, subtitle: scoreBarSubtitle(for: animatedStressScore))
+                    .opacity(scoreLineProgress > 0.8 ? 1 : 0)
             }
         }
-        .onAppear {
+        .task(id: page) {
+            guard page == scoreSummaryPageIndex else { return }
+            animatedTotalScore = 0
             animatedAnxietyScore = 0
             animatedMoodScore = 0
             animatedStressScore = 0
+            animatedFunctioningScore = 0
+            scoreLineProgress = 0
 
-            withAnimation(.easeOut(duration: 0.55)) {
+            withAnimation(.smooth(duration: 0.7, extraBounce: 0.08)) {
+                animatedTotalScore = Double(totalScore)
+                scoreLineProgress = 1
+            }
+            try? await Task.sleep(nanoseconds: 260_000_000)
+            withAnimation(.easeOut(duration: 0.46)) {
                 animatedAnxietyScore = breakdown.anxiety
             }
-            withAnimation(.easeOut(duration: 0.65).delay(0.08)) {
+            try? await Task.sleep(nanoseconds: 170_000_000)
+            withAnimation(.easeOut(duration: 0.46)) {
                 animatedMoodScore = breakdown.mood
             }
-            withAnimation(.easeOut(duration: 0.75).delay(0.16)) {
+            try? await Task.sleep(nanoseconds: 170_000_000)
+            withAnimation(.easeOut(duration: 0.46)) {
                 animatedStressScore = breakdown.stress
+            }
+            try? await Task.sleep(nanoseconds: 170_000_000)
+            withAnimation(.easeOut(duration: 0.46)) {
+                animatedFunctioningScore = breakdown.functioning
             }
         }
     }
@@ -699,17 +810,44 @@ struct OnboardingView: View {
     private var scoreTrendPage: some View {
         OnboardingQuestionPage(
             title: "How to read your score",
-            subtitle: "Lower is better. Your score is mapped to a range below."
+            subtitle: "",
+            motionStyle: .results
         ) {
-            VStack(spacing: 16) {
+            VStack(spacing: 24) {
+                VStack(spacing: 8) {
+                    Text("Lower means fewer recent difficulties.")
+                        .font(.title3.weight(.semibold))
+                        .multilineTextAlignment(.center)
+                    Text("The number is a comparison point for future reviews, not a label.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .opacity(rangeLineProgress > 0.12 ? 1 : 0)
+                .offset(y: rangeLineProgress > 0.12 ? 0 : 8)
+
                 scoreRangeChart
-                Text("Your baseline: \(totalScore)/63")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                Text("Target 0-21, watch 22-42, higher load 43-63.")
-                    .font(.footnote)
+
+                HStack(spacing: 18) {
+                    rangeLegend("Lighter", "0-21", tint: .green)
+                    rangeLegend("Middle", "22-42", tint: .orange)
+                    rangeLegend("Heavier", "43-63", tint: .red)
+                }
+                .opacity(rangeLineProgress > 0.55 ? 1 : 0)
+                .offset(y: rangeLineProgress > 0.55 ? 0 : 10)
+
+                Text("Your baseline starts at \(totalScore). Future daily and weekly reviews compare against this, so progress can be specific instead of generic.")
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
+                    .lineSpacing(3)
+                    .opacity(rangeLineProgress > 0.82 ? 1 : 0)
+            }
+        }
+        .onAppear {
+            rangeLineProgress = 0
+            withAnimation(.smooth(duration: 0.85, extraBounce: 0)) {
+                rangeLineProgress = 1
             }
         }
     }
@@ -717,31 +855,30 @@ struct OnboardingView: View {
     private var planPage: some View {
         let items = planItems
         return OnboardingQuestionPage(
-            title: "Your plan is ready",
-            subtitle: planFocusTitle
+            title: "Your core loop is ready",
+            subtitle: "",
+            motionStyle: .results
         ) {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 10) {
                 Text(planName)
-                    .font(.headline.weight(.semibold))
+                    .font(.title3.weight(.bold))
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Text("Built from your baseline and goals.")
+                Text(planFocusTitle)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                animatedUnderline(progress: CGFloat(min(planRevealCount, 1)), tint: onboardingCompanionTint)
+                    .frame(height: 18)
             }
             .frame(maxWidth: .infinity)
-            .padding(.bottom, 4)
+            .padding(.bottom, 8)
 
-            VStack(spacing: 0) {
+            VStack(spacing: 14) {
                 ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                    planListRow(title: item.title, body: item.body, icon: planItemIcon(for: item.title))
+                    planTimelineRow(title: item.title, body: item.body, icon: planItemIcon(for: item.title), index: index, isLast: index == items.count - 1)
                         .opacity(planRevealCount > index ? 1 : 0)
-                        .offset(y: planRevealCount > index ? 0 : 8)
-                        .animation(.easeOut(duration: 0.28), value: planRevealCount)
-                    if index < items.count - 1 {
-                        Divider()
-                            .background(AppSurface.stroke.opacity(0.4))
-                    }
+                        .offset(x: planRevealCount > index ? 0 : -10)
+                        .animation(.smooth(duration: 0.34, extraBounce: 0), value: planRevealCount)
                 }
             }
             .task(id: page) {
@@ -758,7 +895,8 @@ struct OnboardingView: View {
     private var streakPage: some View {
         OnboardingQuestionPage(
             title: "Choose a streak goal",
-            subtitle: "Small consistency beats intensity."
+            subtitle: "Small consistency beats intensity.",
+            motionStyle: .form
         ) {
             VStack(spacing: 10) {
                 streakChoice(3)
@@ -772,7 +910,8 @@ struct OnboardingView: View {
     private var reminderPage: some View {
         OnboardingQuestionPage(
             title: "When is a good time to check in?",
-            subtitle: "We’ll set your reminder around this."
+            subtitle: "We’ll set your reminder around this.",
+            motionStyle: .form
         ) {
             VStack(spacing: 10) {
                 timeChoice("Morning", "sunrise")
@@ -786,7 +925,8 @@ struct OnboardingView: View {
     private var storyPage: some View {
         OnboardingQuestionPage(
             title: "AI personalization",
-            subtitle: "Optional. Share context so AI responses sound like they understand your life."
+            subtitle: "Optional. Share context so AI responses sound like they understand your life.",
+            motionStyle: .form
         ) {
             VStack(alignment: .leading, spacing: 8) {
                 TextEditor(text: $personalStory)
@@ -795,10 +935,9 @@ struct OnboardingView: View {
                     .font(.body)
                     .frame(minHeight: 210)
                     .padding(10)
-                    .background(AppSurface.fill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(AppSurface.stroke, lineWidth: 0.5)
+                            .stroke(Color.white.opacity(0.2), lineWidth: 0.8)
                     }
                 Text("Example: ‘10 years of panic disorder, especially when driving. I want practical support and less fear.’")
                     .font(.caption)
@@ -813,7 +952,8 @@ struct OnboardingView: View {
     private var healthPage: some View {
         OnboardingQuestionPage(
             title: "Connect Apple Health",
-            subtitle: "Optional. Sleep and step trends can add useful context to reflections."
+            subtitle: "Optional. Sleep and step trends can add useful context to reflections.",
+            motionStyle: .form
         ) {
             VStack(spacing: 10) {
                 singleRow("Sleep context for calmer planning", symbol: "moon")
@@ -826,6 +966,11 @@ struct OnboardingView: View {
                         await healthKitManager.requestPermissionsAndRefresh()
                         appModel.updateHealthSummary(healthKitManager.summary)
                         isConnectingHealth = false
+                        reactCompanion(.responding, withLens: true)
+                        let current = page
+                        withAnimation(pageAdvanceAnimation(from: current)) {
+                            page = min(page + 1, completionPageIndex)
+                        }
                     }
                 } label: {
                     HStack(spacing: 8) {
@@ -835,9 +980,11 @@ struct OnboardingView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 56)
+                    .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
                 .foregroundStyle(Color(.systemBackground))
-                .background(Color.primary, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .background(onboardingCompanionTint, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .buttonStyle(.plain)
                 .disabled(isConnectingHealth || !healthKitManager.isHealthAvailable)
             }
@@ -847,7 +994,8 @@ struct OnboardingView: View {
     private var firstCheckInPage: some View {
         OnboardingQuestionPage(
             title: "First check-in",
-            subtitle: "How was your day?"
+            subtitle: "How was your day?",
+            motionStyle: .assessment
         ) {
             VStack(alignment: .leading, spacing: 12) {
                 MoodSelectorView(selectedMood: $selectedMood, size: 42, labelFont: .caption, useMoodAccent: true)
@@ -855,7 +1003,7 @@ struct OnboardingView: View {
                 HStack(spacing: 8) {
                     entryTypeChip(.quickThought, "Quick")
                     entryTypeChip(.reflection, "Reflection")
-                    entryTypeChip(.rant, "Rant")
+                    entryTypeChip(.rant, "Unload")
                     entryTypeChip(.win, "Win")
                 }
 
@@ -874,10 +1022,9 @@ struct OnboardingView: View {
                             .padding(.vertical, 16)
                     }
                 }
-                .background(AppSurface.fill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(AppSurface.stroke, lineWidth: 0.5)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 0.8)
                 }
 
                 Button {
@@ -896,9 +1043,11 @@ struct OnboardingView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 56)
+                    .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
                 .foregroundStyle(Color(.systemBackground))
                 .background(Color.primary.opacity(firstCheckInCanGenerate ? 1 : 0.28), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .buttonStyle(.plain)
                 .disabled(!firstCheckInCanGenerate || isGeneratingFirstCheckIn)
 
@@ -914,52 +1063,39 @@ struct OnboardingView: View {
     private var firstReflectionPage: some View {
         OnboardingQuestionPage(
             title: "Your first reflection",
-            subtitle: ""
+            subtitle: "",
+            motionStyle: .results
         ) {
-            VStack(spacing: 18) {
-                if let message = onboardingStreakCelebrationMessage {
-                    VStack(spacing: 8) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "flame.fill")
-                                .font(.headline)
-                            Text("Streak update")
-                                .font(.headline.weight(.semibold))
-                        }
-                        .foregroundStyle(Color(.systemBackground))
-
-                        Text(message)
-                            .font(.subheadline.weight(.medium))
-                            .multilineTextAlignment(.center)
-                            .foregroundStyle(Color(.systemBackground).opacity(0.92))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .padding(.horizontal, 16)
-                    .background(
-                        LinearGradient(
-                            colors: [Color.primary.opacity(0.95), Color.primary.opacity(0.78)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    )
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
-                    }
-                    .transition(.opacity.combined(with: .scale))
-                }
-
+            VStack(spacing: 20) {
                 if let review = firstCheckInReview {
                     Text(reflectionLead(review))
-                        .font(.title3.weight(.semibold))
+                        .font(.title2.weight(.bold))
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
+                        .padding(.bottom, 4)
 
-                    Text(review.insight.action)
-                        .font(.title3)
-                        .multilineTextAlignment(.center)
+                    reflectionSection(
+                        title: "Noticed",
+                        body: review.insight.pattern,
+                        emphasized: false
+                    )
+
+                    reflectionSection(
+                        title: "Reframe",
+                        body: review.insight.reframe,
+                        emphasized: true
+                    )
+
+                    reflectionSection(
+                        title: "Try next",
+                        body: review.insight.action,
+                        emphasized: false
+                    )
+
+                    Text("Your companion mirrors recent signal intensity. It becomes more active when your entries suggest heavier strain, then settles as check-ins and follow-through get steadier.")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
                     Text("No reflection yet. Go back and generate one.")
@@ -973,20 +1109,57 @@ struct OnboardingView: View {
             guard onboardingStreakCelebrationPending else { return }
             onboardingStreakCelebrationPending = false
             onboardingConfettiTrigger += 1
+            Task {
+                try? await Task.sleep(nanoseconds: 2_200_000_000)
+                withAnimation(.easeOut(duration: 0.22)) {
+                    onboardingStreakCelebrationMessage = nil
+                }
+            }
         }
+        .overlay(alignment: .top) {
+            if let message = onboardingStreakCelebrationMessage {
+                HStack(spacing: 8) {
+                    Image(systemName: "flame.fill")
+                    Text(message)
+                        .font(.subheadline.weight(.semibold))
+                }
+                .foregroundStyle(.black)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(.white, in: Capsule())
+                .padding(.top, 4)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+    }
+
+    private func reflectionSection(title: String, body: String, emphasized: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title.uppercased())
+                .font(.caption.weight(.semibold))
+                .tracking(0.3)
+                .foregroundStyle(.secondary)
+            Text(body)
+                .font(emphasized ? .body.weight(.semibold) : .body)
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 2)
     }
 
     private var completionPage: some View {
         OnboardingQuestionPage(
             title: "You’re ready",
-            subtitle: "Your plan, preferences, and first check-in are saved."
+            subtitle: "Your plan, preferences, and first check-in are saved.",
+            motionStyle: .hero
         ) {
             VStack(spacing: 10) {
                 singleRow("Main goal: \(selectedGoal.isEmpty ? "Support mental wellness" : selectedGoal)", symbol: "target")
                 singleRow("Streak goal: \(streakGoal) days", symbol: "flame")
                 singleRow(onboardingStreakMessage, symbol: "calendar.badge.clock")
                 singleRow("Reminder: \(checkInTime)", symbol: "clock")
-                singleRow("AI memory and tone personalization enabled", symbol: "sparkles")
+                singleRow("Pattern memory and tone personalization enabled", symbol: "sparkles")
             }
         }
     }
@@ -1013,16 +1186,16 @@ struct OnboardingView: View {
     private var scoreHeadline: String {
         switch totalScore {
         case 40...63:
-            return "You reported frequent symptoms recently. We’ll keep your plan short and stabilizing."
+            return "You reported frequent strain recently. We’ll keep your first loop stabilizing, practical, and easy to repeat."
         case 24...39:
-            return "Your baseline shows mixed days. We’ll focus on consistency and clearer patterns."
+            return "Your baseline shows mixed days. We’ll focus on spotting patterns and turning them into small actions."
         default:
-            return "Your baseline is lighter overall. We’ll build momentum with practical routines."
+            return "Your baseline is lighter overall. We’ll build momentum with reflection, feedback, and steady routines."
         }
     }
 
     private var planFocusTitle: String {
-        "A focused starting plan based on your strongest domain."
+        "Your first loop: check in, get a useful read, try one action, review the pattern."
     }
 
     private var planName: String {
@@ -1031,6 +1204,8 @@ struct OnboardingView: View {
             return "Calm Response Plan"
         case "Mood":
             return "Mood Stability Plan"
+        case "Functioning":
+            return "Daily Function Plan"
         default:
             return "Stress Reset Plan"
         }
@@ -1050,11 +1225,13 @@ struct OnboardingView: View {
     private var dailyPlanLine: String {
         switch dominantDomain {
         case "Anxiety":
-            return "One short check-in daily focused on worry loops, body cues, and de-escalation."
+            return "A daily check-in that names worry loops, body cues, avoidance, and what helped you come down."
         case "Mood":
-            return "One daily check-in focused on energy, self-talk, and one doable action."
+            return "A daily check-in that tracks interest, energy, self-talk, and one doable activation step."
+        case "Functioning":
+            return "A daily check-in that connects symptoms to sleep, focus, relationships, and getting through the day."
         default:
-            return "One short check-in daily with calming prompts and low pressure."
+            return "A daily check-in that tracks load, irritability, body tension, and one recovery or boundary move."
         }
     }
 
@@ -1064,8 +1241,10 @@ struct OnboardingView: View {
             return "Grounding track with shorter exercises and worry-unhook prompts."
         case "Mood":
             return "Mood reset track with activation prompts and self-criticism interrupts."
+        case "Functioning":
+            return "Function track with sleep, focus, avoidance, and support prompts."
         default:
-            return "Stress load track with boundary, pacing, and recovery prompts."
+            return "Stress support track with boundary, pacing, and recovery prompts."
         }
     }
 
@@ -1073,7 +1252,8 @@ struct OnboardingView: View {
         [
             (name: "Anxiety", value: scoreBreakdown.anxiety),
             (name: "Mood", value: scoreBreakdown.mood),
-            (name: "Stress", value: scoreBreakdown.stress)
+            (name: "Stress", value: scoreBreakdown.stress),
+            (name: "Functioning", value: scoreBreakdown.functioning)
         ]
         .sorted { lhs, rhs in
             if lhs.value == rhs.value {
@@ -1087,7 +1267,7 @@ struct OnboardingView: View {
         rankedDomains.first?.name ?? "Stress"
     }
 
-    private var scoreBreakdown: (anxiety: Double, mood: Double, stress: Double) {
+    private var scoreBreakdown: (anxiety: Double, mood: Double, stress: Double, functioning: Double) {
         func average(_ indices: [Int]) -> Double {
             let values = indices.compactMap { idx -> Int? in
                 guard idx < assessmentAnswers.count else { return nil }
@@ -1101,7 +1281,8 @@ struct OnboardingView: View {
         return (
             average([0, 1, 2, 3, 4, 6]),
             average([7, 8, 9, 10, 11, 12, 13]),
-            average([5, 14, 15, 16, 17, 18, 19, 20])
+            average([5, 14, 15, 16, 17]),
+            average([9, 13, 18, 19, 20])
         )
     }
 
@@ -1113,20 +1294,19 @@ struct OnboardingView: View {
             let baselineRatio = min(max(Double(totalScore) / 63.0, 0), 1)
             let x = max(10, min(w - 10, w * baselineRatio))
             ZStack {
-                RoundedRectangle(cornerRadius: 7)
-                    .fill(Color.green.opacity(0.35))
-                    .frame(width: w * (21.0 / 63.0), height: 14)
-                    .position(x: (w * (21.0 / 63.0)) / 2, y: y)
+                Capsule()
+                    .fill(Color.white.opacity(0.08))
+                    .frame(height: 16)
+                    .position(x: w / 2, y: y)
 
-                RoundedRectangle(cornerRadius: 7)
-                    .fill(Color.orange.opacity(0.3))
-                    .frame(width: w * (21.0 / 63.0), height: 14)
-                    .position(x: w * (21.0 / 63.0) + (w * (21.0 / 63.0)) / 2, y: y)
-
-                RoundedRectangle(cornerRadius: 7)
-                    .fill(Color.red.opacity(0.3))
-                    .frame(width: w * (21.0 / 63.0), height: 14)
-                    .position(x: w * (42.0 / 63.0) + (w * (21.0 / 63.0)) / 2, y: y)
+                HStack(spacing: 3) {
+                    Capsule().fill(Color.green.opacity(0.48))
+                    Capsule().fill(Color.orange.opacity(0.42))
+                    Capsule().fill(Color.red.opacity(0.4))
+                }
+                .frame(width: w * rangeLineProgress, height: 16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .position(x: (w * rangeLineProgress) / 2, y: y)
 
                 Path { path in
                     path.move(to: CGPoint(x: w * (21.0 / 63.0), y: y - 13))
@@ -1142,21 +1322,20 @@ struct OnboardingView: View {
 
                 Circle()
                     .fill(Color.white)
-                    .frame(width: 12, height: 12)
+                    .frame(width: 14, height: 14)
+                    .shadow(color: .white.opacity(0.3), radius: 8)
                     .position(x: x, y: y)
+                    .scaleEffect(rangeLineProgress > 0.72 ? 1 : 0.4)
+                    .opacity(rangeLineProgress > 0.72 ? 1 : 0)
 
                 Text("You: \(totalScore)")
                     .font(.caption2.weight(.semibold))
                     .position(x: max(48, min(w - 48, x)), y: y - 24)
+                    .opacity(rangeLineProgress > 0.78 ? 1 : 0)
             }
         }
-        .frame(height: 96)
-        .padding(12)
-        .background(AppSurface.fill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(AppSurface.stroke, lineWidth: 0.5)
-        }
+        .frame(height: 112)
+        .padding(.vertical, 8)
     }
 
     private func startScoreReveal() {
@@ -1190,6 +1369,12 @@ struct OnboardingView: View {
         guard !isAnimatingAssessment else { return }
         guard questionIndex == assessmentIndex else { return }
         assessmentAnswers[questionIndex] = answerIndex
+        switch answerIndex {
+        case 0: reactCompanion(.settled)
+        case 1: reactCompanion(.attentive)
+        case 2: reactCompanion(.attentive, withLens: true)
+        default: reactCompanion(.checkIn, withLens: true)
+        }
 
         if questionIndex >= OnboardingAssessment.items.count - 1 {
             withAnimation(pageAdvanceAnimation(from: assessmentPageIndex)) {
@@ -1209,6 +1394,7 @@ struct OnboardingView: View {
 
     private func advanceAfterSingleChoice() {
         focusedField = nil
+        reactCompanion(.checkIn)
         guard page < completionPageIndex else { return }
         let current = page
         withAnimation(pageAdvanceAnimation(from: current)) {
@@ -1260,7 +1446,7 @@ struct OnboardingView: View {
 
         let assessment = OnboardingProfile.AssessmentProfile(
             instrument: "Anchor Intake 21",
-            version: "1",
+            version: "2",
             totalScore: answers.reduce(0, +),
             maxScore: answers.count * 3,
             answers: answers,
@@ -1268,7 +1454,8 @@ struct OnboardingView: View {
             domains: [
                 domainSummary(name: "Anxiety", indices: [0, 1, 2, 3, 4, 6]),
                 domainSummary(name: "Mood", indices: [7, 8, 9, 10, 11, 12, 13]),
-                domainSummary(name: "Stress", indices: [5, 14, 15, 16, 17, 18, 19, 20])
+                domainSummary(name: "Stress", indices: [5, 14, 15, 16, 17]),
+                domainSummary(name: "Functioning", indices: [9, 13, 18, 19, 20])
             ],
             completedAt: Date()
         )
@@ -1297,7 +1484,38 @@ struct OnboardingView: View {
             assessment: assessment
         )
 
-        hasCompletedOnboarding = true
+        completeOnboardingWithCompanionHandoff()
+    }
+
+    private func completeOnboardingWithCompanionHandoff() {
+        guard !isCompletingOnboarding else { return }
+        isCompletingOnboarding = true
+        router.selectedTab = .journal
+        router.companionPresentation = .journal
+        router.companionTabTransitioning = true
+        router.onboardingCompanionHandoffSettled = false
+        router.onboardingCompanionHandoffActive = true
+
+        Task {
+            try? await Task.sleep(for: .milliseconds(90))
+            await MainActor.run {
+                withAnimation(.spring(response: 0.72, dampingFraction: 0.86, blendDuration: 0.12)) {
+                    router.onboardingCompanionHandoffSettled = true
+                }
+            }
+
+            try? await Task.sleep(for: .milliseconds(190))
+            await MainActor.run {
+                hasCompletedOnboarding = true
+            }
+
+            try? await Task.sleep(for: .milliseconds(440))
+            await MainActor.run {
+                router.onboardingCompanionHandoffActive = false
+                router.onboardingCompanionHandoffSettled = false
+                router.companionTabTransitioning = false
+            }
+        }
     }
 
     private func generateFirstCheckIn() async {
@@ -1338,12 +1556,24 @@ struct OnboardingView: View {
         }
         onboardingStreakCelebrationMessage = message
         onboardingStreakCelebrationPending = true
+        reactCompanion(.responding, withLens: true)
+    }
+
+    private func reactCompanion(_ state: AICircleState, withLens: Bool = false) {
+        companionTrigger += 1
+        transientCircleState = state
+        if withLens { lensFocusActive = true }
+        Task {
+            try? await Task.sleep(nanoseconds: 520_000_000)
+            if transientCircleState == state { transientCircleState = nil }
+            if withLens { lensFocusActive = false }
+        }
     }
 
     private func reflectionLead(_ review: DailyReview) -> String {
         let name = appModel.onboardingProfile.preferredName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let greetingName = name.isEmpty ? "" : ", \(name)"
-        return "I hear you\(greetingName). \(review.insight.emotionalRead)"
+        let prefix = name.isEmpty ? "" : "\(name), "
+        return "\(prefix)\(review.insight.emotionalRead)"
     }
 
     private func singleRow(_ text: String, symbol: String) -> some View {
@@ -1356,17 +1586,14 @@ struct OnboardingView: View {
             Spacer()
         }
         .padding(14)
-        .background(AppSurface.fill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(AppSurface.stroke, lineWidth: 0.5)
-        }
+        .overlay(alignment: .bottom) { Divider().overlay(Color.white.opacity(0.12)).padding(.horizontal, 4) }
     }
 
     private func focusRow(_ title: String, _ symbol: String) -> some View {
         let selected = focusAreas.contains(title)
         return Button {
             if selected { focusAreas.remove(title) } else { focusAreas.insert(title) }
+            reactCompanion(selected ? .attentive : .checkIn)
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: symbol)
@@ -1379,11 +1606,12 @@ struct OnboardingView: View {
             }
             .padding(14)
             .foregroundStyle(selected ? Color(.systemBackground) : .primary)
-            .background(selected ? Color.primary : AppSurface.fill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background(selected ? onboardingCompanionTint : Color.clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(selected ? Color.primary : AppSurface.stroke, lineWidth: 0.5)
+                    .stroke(selected ? onboardingCompanionTint : Color.white.opacity(0.2), lineWidth: 0.8)
             }
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -1402,11 +1630,12 @@ struct OnboardingView: View {
             .padding(.horizontal, 14)
             .frame(height: 58)
             .foregroundStyle(selected ? Color(.systemBackground) : .primary)
-            .background(selected ? Color.primary : AppSurface.fill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .background(selected ? onboardingCompanionTint : Color.clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(selected ? Color.primary : AppSurface.stroke, lineWidth: 0.5)
+                    .stroke(selected ? onboardingCompanionTint : Color.white.opacity(0.2), lineWidth: 0.8)
             }
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -1415,17 +1644,19 @@ struct OnboardingView: View {
         let selected = streakGoal == days
         return Button {
             streakGoal = days
+            reactCompanion(.checkIn)
         } label: {
             Text("\(days) day streak")
                 .font(.headline.weight(.semibold))
                 .frame(maxWidth: .infinity)
                 .frame(height: 56)
                 .foregroundStyle(selected ? Color(.systemBackground) : .primary)
-                .background(selected ? Color.primary : AppSurface.fill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .background(selected ? onboardingCompanionTint : Color.clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(selected ? Color.primary : AppSurface.stroke, lineWidth: 0.5)
+                        .stroke(selected ? onboardingCompanionTint : Color.white.opacity(0.2), lineWidth: 0.8)
                 }
+                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -1434,6 +1665,7 @@ struct OnboardingView: View {
         let selected = checkInTime == title
         return Button {
             checkInTime = title
+            reactCompanion(.checkIn, withLens: true)
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: symbol)
@@ -1446,11 +1678,12 @@ struct OnboardingView: View {
             .padding(.horizontal, 16)
             .frame(height: 56)
             .foregroundStyle(selected ? Color(.systemBackground) : .primary)
-            .background(selected ? Color.primary : AppSurface.fill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .background(selected ? onboardingCompanionTint : Color.clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(selected ? Color.primary : AppSurface.stroke, lineWidth: 0.5)
+                    .stroke(selected ? onboardingCompanionTint : Color.white.opacity(0.2), lineWidth: 0.8)
             }
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -1459,19 +1692,104 @@ struct OnboardingView: View {
         let selected = firstCheckInType == type
         return Button {
             firstCheckInType = type
+            reactCompanion(.attentive)
         } label: {
             Text(label)
                 .font(.headline.weight(.semibold))
                 .frame(maxWidth: .infinity)
                 .frame(height: 48)
                 .foregroundStyle(selected ? Color(.systemBackground) : .primary)
-                .background(selected ? selectedMood.companionColor : AppSurface.fill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .background(selected ? selectedMood.companionColor : Color.clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(selected ? selectedMood.companionColor : AppSurface.stroke, lineWidth: 0.5)
+                        .stroke(selected ? selectedMood.companionColor : Color.white.opacity(0.2), lineWidth: 0.8)
                 }
+                .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
+    }
+
+    private func animatedUnderline(progress: CGFloat, tint: Color) -> some View {
+        GeometryReader { proxy in
+            let width = proxy.size.width
+            let y = proxy.size.height * 0.5
+            ZStack(alignment: .leading) {
+                Path { path in
+                    path.move(to: CGPoint(x: 0, y: y))
+                    path.addCurve(
+                        to: CGPoint(x: width, y: y - 2),
+                        control1: CGPoint(x: width * 0.28, y: y + 10),
+                        control2: CGPoint(x: width * 0.68, y: y - 12)
+                    )
+                }
+                .trim(from: 0, to: progress)
+                .stroke(tint.opacity(0.75), style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
+
+                Path { path in
+                    path.move(to: CGPoint(x: width * 0.08, y: y + 7))
+                    path.addCurve(
+                        to: CGPoint(x: width * 0.86, y: y + 4),
+                        control1: CGPoint(x: width * 0.32, y: y - 3),
+                        control2: CGPoint(x: width * 0.62, y: y + 12)
+                    )
+                }
+                .trim(from: 0, to: max(0, progress - 0.22) / 0.78)
+                .stroke(tint.opacity(0.26), style: StrokeStyle(lineWidth: 1.1, lineCap: .round))
+            }
+        }
+    }
+
+    private func scoreSignalRow(_ title: String, value: Double, symbol: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Image(systemName: symbol)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 18)
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Text("\(Int((value * 100).rounded()))%")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .contentTransition(.numericText())
+            }
+
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.08))
+                    Capsule()
+                        .fill(onboardingCompanionTint.opacity(0.92))
+                        .frame(width: value > 0 ? max(4, proxy.size.width * value) : 0)
+                    Rectangle()
+                        .fill(Color.white.opacity(0.35))
+                        .frame(width: 1, height: 12)
+                        .offset(x: proxy.size.width * 0.5)
+                }
+            }
+            .frame(height: 5)
+
+            Text(scoreBarSubtitle(for: value))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .opacity(value > 0 ? 1 : 0)
+        .offset(y: value > 0 ? 0 : 8)
+    }
+
+    private func rangeLegend(_ title: String, _ range: String, tint: Color) -> some View {
+        VStack(spacing: 5) {
+            Capsule()
+                .fill(tint.opacity(0.5))
+                .frame(width: 38, height: 5)
+            Text(title)
+                .font(.caption.weight(.semibold))
+            Text(range)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private func scoreBar(_ title: String, value: Double, subtitle: String) -> some View {
@@ -1503,20 +1821,16 @@ struct OnboardingView: View {
                 .foregroundStyle(.secondary)
         }
         .padding(14)
-        .background(AppSurface.fill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(AppSurface.stroke, lineWidth: 0.5)
-        }
+        .background(Color.white.opacity(0.02), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private func scoreBarSubtitle(for value: Double) -> String {
         let percent = Int((value * 100).rounded())
         if value < 0.5 {
-            return "\(percent)% • Below midpoint (lighter load)"
+            return "\(percent)% • Below midpoint (lighter)"
         }
         if value > 0.5 {
-            return "\(percent)% • Above midpoint (heavier load)"
+            return "\(percent)% • Above midpoint (heavier)"
         }
         return "\(percent)% • At midpoint"
     }
@@ -1545,15 +1859,53 @@ struct OnboardingView: View {
         .padding(.vertical, 10)
     }
 
+    private func planTimelineRow(title: String, body: String, icon: String, index: Int, isLast: Bool) -> some View {
+        HStack(alignment: .top, spacing: 13) {
+            VStack(spacing: 0) {
+                ZStack {
+                    Circle()
+                        .fill(onboardingCompanionTint.opacity(0.12))
+                        .frame(width: 32, height: 32)
+                    Image(systemName: icon)
+                        .font(.caption.weight(.semibold))
+                }
+
+                if isLast == false {
+                    Rectangle()
+                        .fill(onboardingCompanionTint.opacity(0.26))
+                        .frame(width: 1.2, height: 44)
+                        .scaleEffect(y: planRevealCount > index + 1 ? 1 : 0.2, anchor: .top)
+                        .animation(.easeOut(duration: 0.28), value: planRevealCount)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.headline.weight(.semibold))
+                    .contentTransition(.opacity)
+                Text(body)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 4)
+        }
+    }
+
     private func planItemIcon(for title: String) -> String {
         switch title {
         case "Why this plan":
             return "scope"
         case "Daily check-in":
             return "sun.max"
+        case "Daily review":
+            return "sparkles"
+        case "One tiny experiment":
+            return "checkmark.seal"
         case "Guided journal track":
             return "book"
-        case "Weekly AI review":
+        case "Weekly pattern report":
             return "chart.line.uptrend.xyaxis"
         case "Companion memory":
             return "brain.head.profile"
@@ -1566,9 +1918,10 @@ struct OnboardingView: View {
         [
             ("Why this plan", planWhyLine),
             ("Daily check-in", dailyPlanLine),
-            ("Guided journal track", guidedTrackLine),
-            ("Weekly AI review", "Compares this week against recent entries and your onboarding baseline."),
-            ("Companion memory", "Keeps your preferences and context so guidance stays consistent.")
+            ("Daily review", "Turns the entry into one pattern, one reframe, one action, and evidence strength."),
+            ("One tiny experiment", guidedTrackLine),
+            ("Weekly pattern report", "Compares your week against this baseline, then updates the next focus."),
+            ("Companion memory", "Keeps your goals, context, and strongest domains so guidance compounds over time.")
         ]
     }
 }
@@ -1589,25 +1942,25 @@ private enum OnboardingAssessment {
     static let items: [Item] = [
         .init(prompt: "How often have you felt nervous, anxious, or on edge?"),
         .init(prompt: "How often have you been unable to stop or control worrying?"),
-        .init(prompt: "How often have you worried excessively about different things?"),
-        .init(prompt: "How often have you had trouble relaxing once stress starts?"),
-        .init(prompt: "How often have you been so restless that sitting still felt difficult?"),
-        .init(prompt: "How often have you become easily annoyed or irritable?"),
-        .init(prompt: "How often have you felt afraid as if something bad might happen?"),
-        .init(prompt: "How often have you had little interest or pleasure in doing things?"),
-        .init(prompt: "How often have you felt down, depressed, or hopeless?"),
-        .init(prompt: "How often have you had trouble falling asleep, staying asleep, or slept too much?"),
-        .init(prompt: "How often have you felt tired or low in energy?"),
-        .init(prompt: "How often have appetite changes (too little or too much) affected you?"),
-        .init(prompt: "How often have you felt bad about yourself, or like you have let yourself or others down?"),
-        .init(prompt: "How often have you had trouble concentrating (for example while reading, working, or watching something)?"),
-        .init(prompt: "How often have routine demands felt overwhelming?"),
-        .init(prompt: "How often have you reacted more intensely than you wanted to?"),
-        .init(prompt: "How often have interruptions or delays triggered a strong stress response?"),
-        .init(prompt: "How often have you noticed stress tension in your body (jaw, neck, chest, stomach)?"),
+        .init(prompt: "How often have worries jumped between different parts of your life?"),
+        .init(prompt: "How often have you avoided something because anxiety or dread showed up?"),
+        .init(prompt: "How often has your body felt keyed up, tense, restless, or hard to settle?"),
+        .init(prompt: "How often have you felt irritable or quicker to snap than usual?"),
+        .init(prompt: "How often have you felt afraid that something bad might happen?"),
+        .init(prompt: "How often have you had little interest or pleasure in things you normally do?"),
+        .init(prompt: "How often have you felt down, flat, hopeless, or emotionally heavy?"),
+        .init(prompt: "How often has sleep been a problem, including too little, too much, or poor-quality sleep?"),
+        .init(prompt: "How often have you felt tired, slowed down, or low in energy?"),
+        .init(prompt: "How often have appetite changes or comfort eating affected your day?"),
+        .init(prompt: "How often have you been harsh with yourself or felt like you were failing?"),
+        .init(prompt: "How often has it been hard to concentrate, make decisions, or finish ordinary tasks?"),
+        .init(prompt: "How often have daily demands felt like more than you could comfortably handle?"),
+        .init(prompt: "How often have emotions felt bigger than the situation called for?"),
         .init(prompt: "How often have racing thoughts made it hard to switch off?"),
-        .init(prompt: "How often has stress spilled over into your relationships?"),
-        .init(prompt: "How often have anxiety or low mood made daily tasks harder to complete?")
+        .init(prompt: "How often has stress shown up physically, like jaw, neck, chest, stomach, or headaches?"),
+        .init(prompt: "How often have anxiety, low mood, or stress made work, school, home, or self-care harder?"),
+        .init(prompt: "How often have you pulled away from people or felt unsupported when you needed support?"),
+        .init(prompt: "How often have you used scrolling, substances, food, or other numbing habits to get through feelings?")
     ]
 }
 
@@ -1625,9 +1978,17 @@ private enum OnboardingDemographics {
 }
 
 private struct OnboardingQuestionPage<Content: View>: View {
+    enum MotionStyle {
+        case hero
+        case form
+        case assessment
+        case results
+    }
+
     var eyebrow: String? = nil
     let title: String
     let subtitle: String
+    var motionStyle: MotionStyle = .form
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -1640,30 +2001,103 @@ private struct OnboardingQuestionPage<Content: View>: View {
                             .tracking(0.4)
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .center)
+                            .opacity(headerVisible ? 1 : 0)
+                            .offset(y: headerVisible ? 0 : 6)
                     }
                     Text(title)
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .center)
-                    Text(subtitle)
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .center)
+                        .opacity(headerVisible ? 1 : 0)
+                        .offset(y: headerVisible ? 0 : 10)
+                        .scaleEffect(headerVisible ? 1 : 0.985)
+                    if subtitle.isEmpty == false {
+                        Text(subtitle)
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .opacity(subheaderVisible ? 1 : 0)
+                            .offset(y: subheaderVisible ? 0 : 10)
+                    }
                 }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
                 content
             }
             .padding(AppSpacing.page)
             .padding(.top, 8)
             .opacity(isVisible ? 1 : 0.0)
-            .offset(y: isVisible ? 0 : 14)
-            .animation(.easeOut(duration: 0.24), value: isVisible)
+            .offset(y: isVisible ? 0 : bodyStartOffset)
+            .scaleEffect(isVisible ? 1 : bodyStartScale)
+            .animation(bodyAnimation, value: isVisible)
         }
-        .onAppear { isVisible = true }
-        .onDisappear { isVisible = false }
+        .onAppear {
+            isVisible = true
+            headerVisible = false
+            subheaderVisible = false
+            withAnimation(headerAnimation) {
+                headerVisible = true
+            }
+            withAnimation(subheaderAnimation) {
+                subheaderVisible = true
+            }
+        }
+        .onDisappear {
+            isVisible = false
+            headerVisible = false
+            subheaderVisible = false
+        }
     }
 
     @State private var isVisible = false
+    @State private var headerVisible = false
+    @State private var subheaderVisible = false
+
+    private var bodyStartOffset: CGFloat {
+        switch motionStyle {
+        case .hero: 22
+        case .form: 14
+        case .assessment: 10
+        case .results: 30
+        }
+    }
+
+    private var bodyStartScale: CGFloat {
+        switch motionStyle {
+        case .hero: 0.97
+        case .form: 0.99
+        case .assessment: 0.995
+        case .results: 0.965
+        }
+    }
+
+    private var bodyAnimation: Animation {
+        switch motionStyle {
+        case .hero: .interactiveSpring(response: 0.52, dampingFraction: 0.82, blendDuration: 0.2)
+        case .form: .easeOut(duration: 0.24)
+        case .assessment: .easeOut(duration: 0.2)
+        case .results: .interactiveSpring(response: 0.58, dampingFraction: 0.8, blendDuration: 0.24)
+        }
+    }
+
+    private var headerAnimation: Animation {
+        switch motionStyle {
+        case .hero: .interactiveSpring(response: 0.46, dampingFraction: 0.78, blendDuration: 0.18)
+        case .form: .easeOut(duration: 0.28)
+        case .assessment: .easeOut(duration: 0.22)
+        case .results: .interactiveSpring(response: 0.5, dampingFraction: 0.78, blendDuration: 0.2)
+        }
+    }
+
+    private var subheaderAnimation: Animation {
+        switch motionStyle {
+        case .hero: .interactiveSpring(response: 0.52, dampingFraction: 0.8, blendDuration: 0.2).delay(0.1)
+        case .form: .easeOut(duration: 0.32).delay(0.08)
+        case .assessment: .easeOut(duration: 0.22).delay(0.05)
+        case .results: .interactiveSpring(response: 0.54, dampingFraction: 0.82, blendDuration: 0.22).delay(0.12)
+        }
+    }
 }

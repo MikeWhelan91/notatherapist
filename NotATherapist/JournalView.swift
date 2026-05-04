@@ -13,6 +13,7 @@ struct JournalView: View {
     @State private var companionState: AICircleState = .attentive
     @State private var companionLensFocusActive = false
     @State private var companionBusy = false
+    @State private var companionTrigger = 0
 
     private var todayDate: Date { Date() }
 
@@ -35,31 +36,38 @@ struct JournalView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: AppSpacing.section) {
-                    HStack(alignment: .firstTextBaseline, spacing: 12) {
-                        Text(todayTitle)
-                            .font(.largeTitle.weight(.semibold))
-                        Spacer()
-                        Button {
-                            showingSettings = true
-                        } label: {
-                            Image(systemName: "gearshape")
-                                .font(.headline)
-                                .foregroundStyle(.primary)
-                                .frame(width: 46, height: 46)
-                                .background(Color.white.opacity(0.08), in: Circle())
-                                .overlay(
-                                    Circle()
-                                        .stroke(Color.white.opacity(0.14), lineWidth: 1)
-                                )
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: AppSpacing.section) {
+                        Color.clear
+                            .frame(height: 1)
+                            .id("journal-top")
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(alignment: .firstTextBaseline, spacing: 12) {
+                            Text(todayTitle)
+                                .font(.title2.weight(.semibold))
+                            Spacer()
+                            Button {
+                                showingSettings = true
+                            } label: {
+                                Image(systemName: "gearshape")
+                                    .font(.headline)
+                                    .foregroundStyle(.white)
+                                    .frame(width: 44, height: 44)
+                                    .background(Color.white.opacity(0.08), in: Circle())
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                                    )
+                                    .contentShape(Circle())
+                            }
+                            .accessibilityLabel("Settings")
                         }
-                        .accessibilityLabel("Settings")
                     }
 
                     VStack(spacing: 8) {
                         Text(greetingTitle)
-                            .font(.title.weight(.semibold))
+                            .font(.largeTitle.weight(.bold))
                             .multilineTextAlignment(.center)
                         Text("Log today, then review when you're done.")
                             .font(.subheadline)
@@ -72,38 +80,42 @@ struct JournalView: View {
                         Spacer()
                         AICircleView(
                             state: companionState,
-                            size: 116,
-                            strokeWidth: 3,
-                            tint: appModel.companionTint,
-                            lensFocusActive: companionLensFocusActive
+                            size: 132,
+                            strokeWidth: 3.2,
+                            tint: appModel.journalCompanionTint,
+                            lensFocusActive: companionLensFocusActive,
+                            personality: appModel.companionPersonality,
+                            trigger: companionTrigger
                         )
+                        .opacity(0)
                         Spacer()
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, 2)
 
-                    HStack {
-                        Text("This week")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Button("History") {
-                            showingHistory = true
+                    ReferenceCard {
+                        VStack(spacing: 12) {
+                            HStack {
+                                Text("This week")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Button("History") {
+                                    showingHistory = true
+                                }
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            }
+
+                            WeekCalendarStripView(
+                                selectedDate: $appModel.selectedJournalDate,
+                                dates: appModel.centeredTodayDates,
+                                hasEntry: { date in
+                                    appModel.entries(on: date).isEmpty == false
+                                }
+                            )
+                            .padding(.horizontal, -AppSpacing.page)
                         }
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.secondary)
                     }
-
-                    WeekCalendarStripView(
-                        selectedDate: $appModel.selectedJournalDate,
-                        dates: appModel.centeredTodayDates,
-                        hasEntry: { date in
-                            appModel.entries(on: date).isEmpty == false
-                        },
-                        dayMoodColor: { date in
-                            dayMoodColor(for: date)
-                        }
-                    )
-                        .padding(.horizontal, -AppSpacing.page)
 
                     if appModel.reflectionGoals.isEmpty == false {
                         VStack(alignment: .leading, spacing: 8) {
@@ -129,12 +141,14 @@ struct JournalView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         SectionLabel(title: "Entries")
                         if todayEntries.isEmpty {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("Start with one note today.")
-                                    .font(.headline)
-                                Text("A short check-in is enough. The review appears after you write.")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
+                            ReferenceCard {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    Text("Start with one note today.")
+                                        .font(.headline)
+                                    Text("A short check-in is enough. The review appears after you write.")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         } else {
                             VStack(spacing: 10) {
@@ -154,13 +168,34 @@ struct JournalView: View {
 
                     dayReviewSection
                 }
-                .padding(AppSpacing.page)
-                .padding(.bottom, 86)
+                    .padding(AppSpacing.page)
+                    .padding(.bottom, 110)
+                }
+                .onChange(of: router.selectedTab) { _, tab in
+                    guard tab == .journal else { return }
+                    proxy.scrollTo("journal-top", anchor: .top)
+                }
+            }
+            .background {
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.06),
+                        Color.clear
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea()
             }
             .navigationBarTitleDisplayMode(.inline)
-            .overlay(alignment: .bottomTrailing) {
+            .safeAreaInset(edge: .bottom, alignment: .trailing) {
                 Button {
-                    showingNewEntry = true
+                    companionTrigger += 1
+                    router.companionPresentation = .transitioningToComposer
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(220))
+                        showingNewEntry = true
+                    }
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 24, weight: .semibold))
@@ -169,7 +204,7 @@ struct JournalView: View {
                         .background(Color.primary, in: Circle())
                 }
                 .padding(.trailing, 20)
-                .padding(.bottom, 20)
+                .padding(.bottom, 10)
                 .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
                 .accessibilityLabel("New entry")
             }
@@ -242,30 +277,39 @@ struct JournalView: View {
                     companionBusy = false
                 }
             }
+            .onChange(of: todayEntries.count) { _, _ in
+                guard companionBusy == false else { return }
+                companionBusy = true
+                companionTrigger += 1
+                companionState = .responding
+                Task {
+                    try? await Task.sleep(for: .milliseconds(500))
+                    companionState = .attentive
+                    companionBusy = false
+                }
+            }
             .onChange(of: router.pendingNewEntry) { _, _ in
                 handlePendingRouterActions()
             }
             .onChange(of: router.pendingRunDailyReview) { _, _ in
                 handlePendingRouterActions()
             }
+            .onChange(of: showingNewEntry) { _, presented in
+                if presented == false {
+                    router.companionPresentation = .journal
+                }
+            }
+            .onChange(of: router.selectedTab) { _, tab in
+                guard tab == .journal else { return }
+            }
         }
     }
 
     private var dayReviewSection: some View {
         let isSelectedDayToday = Calendar.current.isDate(appModel.selectedJournalDate, inSameDayAs: Date())
+        let selectedDayReview = appModel.dailyReview(on: appModel.selectedJournalDate)
         return Group {
-            if isSelectedDayToday == false {
-                ReferenceCard {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Daily review is available for today only.")
-                            .font(.subheadline.weight(.semibold))
-                        Text("Past entries still improve weekly AI insights and trend quality.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            } else if todayEntries.isEmpty == false {
-                if let review = appModel.dailyReview(on: appModel.selectedJournalDate) {
+            if let review = selectedDayReview {
                     let hasChangesSinceReview = hasEntryChangesSinceReview(review, for: appModel.selectedJournalDate)
                     ReferenceCard {
                         VStack(alignment: .leading, spacing: 12) {
@@ -288,9 +332,11 @@ struct JournalView: View {
                                 } label: {
                                     Label("Open review", systemImage: "doc.text.magnifyingglass")
                                 }
-                                .buttonStyle(PrimaryCapsuleButtonStyle())
+                                .buttonStyle(.borderedProminent)
+                                .tint(.primary)
+                                .foregroundStyle(Color(.systemBackground))
 
-                                if hasChangesSinceReview {
+                                if isSelectedDayToday && hasChangesSinceReview {
                                     Button {
                                         pendingReReviewDate = appModel.selectedJournalDate
                                         showingReReviewConfirm = true
@@ -305,33 +351,42 @@ struct JournalView: View {
                         .padding(.vertical, 2)
                         .overlay(alignment: .topLeading) {
                             RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                                .fill(appModel.companionTint.opacity(0.95))
+                                .fill(appModel.journalCompanionTint.opacity(0.95))
                                 .frame(width: 72, height: 3)
                                 .offset(y: -8)
                         }
                     }
-                } else {
-                    ReferenceCard {
-                        HStack(spacing: 12) {
-                            AICircleView(state: isReviewingDay ? .thinking : .attentive, size: 44, strokeWidth: 2, tint: appModel.companionTint)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("Save the day")
-                                    .font(.subheadline.weight(.semibold))
-                                Text("When you are done writing, review this date once.")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Button {
-                                runReview(for: appModel.selectedJournalDate)
-                            } label: {
-                                Text(isReviewingDay ? "Saving" : "Review")
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .tint(.primary)
-                            .foregroundStyle(Color(.systemBackground))
-                            .disabled(isReviewingDay)
+            } else if isSelectedDayToday == false {
+                ReferenceCard {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("No review saved for this day.")
+                            .font(.subheadline.weight(.semibold))
+                        Text("Daily review can only be created on the current day. Past entries still improve weekly insights.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } else if todayEntries.isEmpty == false {
+                ReferenceCard {
+                    HStack(spacing: 12) {
+                        AICircleView(state: isReviewingDay ? .thinking : .attentive, size: 44, strokeWidth: 2, tint: appModel.journalCompanionTint)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Save the day")
+                                .font(.subheadline.weight(.semibold))
+                            Text("When you are done writing, review this date once.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
+                        Spacer()
+                        Button {
+                            runReview(for: appModel.selectedJournalDate)
+                        } label: {
+                            Text(isReviewingDay ? "Saving" : "Review")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.primary)
+                        .foregroundStyle(Color(.systemBackground))
+                        .disabled(isReviewingDay)
                     }
                 }
             }
@@ -344,6 +399,7 @@ struct JournalView: View {
         companionBusy = true
         companionState = .thinking
         Task {
+            companionTrigger += 1
             if let review = await appModel.reviewDay(date) {
                 activeDailyReview = review
             }
@@ -373,9 +429,6 @@ struct JournalView: View {
         return currentIDs != reviewedIDs
     }
 
-    private func dayMoodColor(for date: Date) -> Color? {
-        appModel.latestEntry(on: date)?.mood.companionColor
-    }
 }
 
 private struct JournalGoalRow: View {
@@ -410,6 +463,7 @@ private struct JournalGoalRow: View {
 
 struct NewEntryView: View {
     @EnvironmentObject private var appModel: AppViewModel
+    @EnvironmentObject private var router: AppRouter
     @Environment(\.dismiss) private var dismiss
 
     @State private var text = ""
@@ -418,6 +472,9 @@ struct NewEntryView: View {
     @State private var circleState: AICircleState = .idle
     @State private var isSaving = false
     @State private var streakFeedbackMessage = ""
+    @State private var composeContentVisible = false
+    @State private var companionDocked = false
+    @State private var selectedTemplateID: JournalTemplate.ID?
     @FocusState private var editorFocused: Bool
 
     private let date: Date
@@ -434,59 +491,80 @@ struct NewEntryView: View {
                     HStack {
                         Spacer()
                         AICircleView(state: circleState, size: 92, strokeWidth: 3, tint: mood.companionColor)
+                            .scaleEffect(companionDocked ? 1 : 1.2)
+                            .opacity(companionDocked ? 1 : 0.35)
+                            .offset(x: 0, y: companionDocked ? 0 : -210)
                         Spacer()
                     }
                     .padding(.top, 6)
+                    .animation(.spring(response: 0.52, dampingFraction: 0.86, blendDuration: 0.18), value: companionDocked)
 
-                    MoodSelectorView(selectedMood: $mood, size: 44, labelFont: .caption2, useMoodAccent: true)
+                    VStack(spacing: 16) {
+                        MoodSelectorView(selectedMood: $mood, size: 44, labelFont: .caption2, useMoodAccent: true)
 
-                    EntryTypeSelectorView(selection: $entryType, accentColor: mood.companionColor)
+                        EntryTypeSelectorView(
+                            selection: $entryType,
+                            accentColor: mood.interfaceAccentColor,
+                            selectedForegroundColor: mood == .okay ? Color.black.opacity(0.78) : .white
+                        )
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        Label(entryType.label, systemImage: entryType.icon)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(mood.companionColor)
-                        Text(entryTypePrompt)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    TextEditor(text: $text)
-                        .focused($editorFocused)
-                        .font(.body)
-                        .scrollContentBackground(.hidden)
-                        .padding(12)
-                        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke(AppSurface.stroke, lineWidth: 0.5)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Label(entryType.label, systemImage: entryType.icon)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(mood.interfaceAccentColor)
+                            Text(entryTypePrompt)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
-                        .frame(minHeight: 260)
-                        .onChange(of: text) { _, newValue in
-                            guard isSaving == false else { return }
-                            circleState = newValue.isEmpty ? (editorFocused ? .listening : .attentive) : .typing
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                        JournalTemplateStrip(
+                            templates: suggestedTemplates,
+                            selectedTemplateID: selectedTemplateID,
+                            accentColor: mood.interfaceAccentColor
+                        ) { template in
+                            applyTemplate(template)
                         }
-                        .onChange(of: editorFocused) { _, focused in
-                            guard isSaving == false else { return }
-                            if focused, text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                circleState = .listening
-                            } else if focused {
-                                circleState = .typing
-                            } else if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                circleState = .attentive
+
+                        TextEditor(text: $text)
+                            .focused($editorFocused)
+                            .font(.body)
+                            .scrollContentBackground(.hidden)
+                            .padding(12)
+                            .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .stroke(AppSurface.stroke, lineWidth: 0.5)
                             }
-                        }
+                            .frame(minHeight: 260)
+                            .onChange(of: text) { _, newValue in
+                                guard isSaving == false else { return }
+                                circleState = newValue.isEmpty ? (editorFocused ? .listening : .attentive) : .typing
+                            }
+                            .onChange(of: editorFocused) { _, focused in
+                                guard isSaving == false else { return }
+                                if focused, text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    circleState = .listening
+                                } else if focused {
+                                    circleState = .typing
+                                } else if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    circleState = .attentive
+                                }
+                            }
 
-                    if streakFeedbackMessage.isEmpty == false {
-                        Text(streakFeedbackMessage)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
-                            .transition(.opacity)
+                        if streakFeedbackMessage.isEmpty == false {
+                            Text(streakFeedbackMessage)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                                .transition(.opacity)
+                        }
                     }
+                    .opacity(composeContentVisible ? 1 : 0)
+                    .offset(y: composeContentVisible ? 0 : 14)
+                    .animation(.easeOut(duration: 0.28), value: composeContentVisible)
                 }
                 .padding(AppSpacing.page)
                 .padding(.bottom, 24)
@@ -501,6 +579,20 @@ struct NewEntryView: View {
             )
             .navigationTitle("What's on your mind?")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                router.companionPresentation = .composer
+                companionDocked = false
+                composeContentVisible = false
+                withAnimation(.spring(response: 0.52, dampingFraction: 0.86, blendDuration: 0.18)) {
+                    companionDocked = true
+                }
+                withAnimation(.easeOut(duration: 0.28).delay(0.2)) {
+                    composeContentVisible = true
+                }
+            }
+            .onDisappear {
+                router.companionPresentation = .journal
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Close") { dismiss() }
@@ -522,6 +614,31 @@ struct NewEntryView: View {
                 circleState = .attentive
             }
         }
+    }
+
+    private var suggestedTemplates: [JournalTemplate] {
+        let rankedDomains = appModel.onboardingProfile.assessment?.domains
+            .sorted { lhs, rhs in
+                if lhs.score == rhs.score {
+                    return lhs.domain < rhs.domain
+                }
+                return lhs.score > rhs.score
+            }
+            .map(\.domain) ?? []
+
+        var ordered: [JournalTemplate] = []
+        for domain in rankedDomains {
+            let matches = JournalTemplate.all.filter { $0.domain.caseInsensitiveCompare(domain) == .orderedSame }
+            for template in matches where ordered.contains(where: { $0.id == template.id }) == false {
+                ordered.append(template)
+            }
+        }
+
+        for template in JournalTemplate.defaultOrder where ordered.contains(where: { $0.id == template.id }) == false {
+            ordered.append(template)
+        }
+
+        return Array(ordered.prefix(8))
     }
 
     private var entryTypePrompt: String {
@@ -547,6 +664,19 @@ struct NewEntryView: View {
             try? await Task.sleep(for: .milliseconds(900))
             dismiss()
         }
+    }
+
+    private func applyTemplate(_ template: JournalTemplate) {
+        selectedTemplateID = template.id
+        entryType = template.entryType
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            text = template.body
+        } else {
+            text = "\(trimmed)\n\n\(template.body)"
+        }
+        circleState = .typing
+        editorFocused = true
     }
 
     private func normalizedEntryDate(from selectedDate: Date) -> Date {
@@ -579,9 +709,286 @@ struct NewEntryView: View {
     }
 }
 
+private struct JournalTemplate: Identifiable, Hashable {
+    let id: String
+    let title: String
+    let domain: String
+    let symbol: String
+    let entryType: EntryType
+    let body: String
+
+    static let all: [JournalTemplate] = [
+        .init(
+            id: "anxiety-worry-loop",
+            title: "Worry loop",
+            domain: "Anxiety",
+            symbol: "wind",
+            entryType: .reflection,
+            body: """
+            Trigger:
+            What my mind predicted:
+            What my body did:
+            What I avoided or wanted to avoid:
+            What actually happened:
+            One small calming or facing step:
+            """
+        ),
+        .init(
+            id: "anxiety-body-alarm",
+            title: "Body alarm",
+            domain: "Anxiety",
+            symbol: "waveform.path.ecg",
+            entryType: .quickThought,
+            body: """
+            Body cue:
+            What I thought it meant:
+            What else could explain it:
+            What helped it drop even slightly:
+            One thing I can do in the next 10 minutes:
+            """
+        ),
+        .init(
+            id: "mood-low-energy",
+            title: "Low energy",
+            domain: "Mood",
+            symbol: "battery.25",
+            entryType: .reflection,
+            body: """
+            Energy today:
+            What I put off:
+            What I said to myself:
+            What gave even a small lift:
+            One 5-minute action that would count:
+            """
+        ),
+        .init(
+            id: "mood-self-talk",
+            title: "Self-talk",
+            domain: "Mood",
+            symbol: "quote.bubble",
+            entryType: .reflection,
+            body: """
+            The harsh thought:
+            What triggered it:
+            What evidence supports it:
+            What evidence softens it:
+            A fairer sentence I can try:
+            """
+        ),
+        .init(
+            id: "stress-overload",
+            title: "Overload",
+            domain: "Stress",
+            symbol: "exclamationmark.triangle",
+            entryType: .reflection,
+            body: """
+            What felt like too much:
+            What was actually urgent:
+            What was just loud:
+            Where stress showed up in my body:
+            One thing to remove, delay, or ask help with:
+            """
+        ),
+        .init(
+            id: "stress-boundary",
+            title: "Boundary",
+            domain: "Stress",
+            symbol: "hand.raised",
+            entryType: .quickThought,
+            body: """
+            The pressure:
+            What I need to protect:
+            What I can say no to or make smaller:
+            The shortest clear sentence:
+            What I will do after:
+            """
+        ),
+        .init(
+            id: "functioning-day-harder",
+            title: "Harder today",
+            domain: "Functioning",
+            symbol: "list.bullet.clipboard",
+            entryType: .reflection,
+            body: """
+            What was harder than usual:
+            Biggest blocker: sleep, focus, energy, people, or load:
+            What still got done:
+            What made the day 5% easier:
+            One practical support to set up tomorrow:
+            """
+        ),
+        .init(
+            id: "functioning-support",
+            title: "Support",
+            domain: "Functioning",
+            symbol: "person.2",
+            entryType: .quickThought,
+            body: """
+            Where I got stuck:
+            What I need:
+            Who or what could help:
+            The smallest ask:
+            When I will ask:
+            """
+        ),
+        .init(
+            id: "relationship-rejection",
+            title: "Interaction",
+            domain: "Relationships",
+            symbol: "bubble.left.and.text.bubble.right",
+            entryType: .reflection,
+            body: """
+            The interaction:
+            The story I told myself:
+            Evidence for that story:
+            Evidence that softens it:
+            A calm repair or clarification:
+            """
+        ),
+        .init(
+            id: "avoidance-facing",
+            title: "Avoidance",
+            domain: "Anxiety",
+            symbol: "arrow.uturn.backward",
+            entryType: .reflection,
+            body: """
+            What I avoided:
+            The feeling I was trying not to feel:
+            What avoidance protected short-term:
+            What it cost:
+            The smallest safe version of facing it:
+            """
+        ),
+        .init(
+            id: "numbing-coping",
+            title: "Numbing",
+            domain: "Functioning",
+            symbol: "moon.zzz",
+            entryType: .reflection,
+            body: """
+            What I used to switch off:
+            What feeling came before it:
+            Did it help after 10 minutes:
+            Did it help after 2 hours:
+            What need was underneath:
+            A lower-cost replacement:
+            """
+        ),
+        .init(
+            id: "sleep-wind-down",
+            title: "Sleep",
+            domain: "Functioning",
+            symbol: "bed.double",
+            entryType: .quickThought,
+            body: """
+            Sleep last night:
+            The hour before bed:
+            Thoughts that kept looping:
+            What helped even slightly:
+            One wind-down cue to repeat:
+            """
+        )
+    ]
+
+    static var defaultOrder: [JournalTemplate] {
+        [
+            template("anxiety-worry-loop"),
+            template("mood-low-energy"),
+            template("stress-overload"),
+            template("functioning-day-harder"),
+            template("relationship-rejection"),
+            template("avoidance-facing"),
+            template("numbing-coping"),
+            template("sleep-wind-down")
+        ]
+        .compactMap { $0 }
+    }
+
+    private static func template(_ id: String) -> JournalTemplate? {
+        all.first { $0.id == id }
+    }
+}
+
+private struct JournalTemplateStrip: View {
+    let templates: [JournalTemplate]
+    let selectedTemplateID: JournalTemplate.ID?
+    let accentColor: Color
+    let onSelect: (JournalTemplate) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Templates")
+                    .font(.subheadline.weight(.semibold))
+                ExplainerButton(
+                    title: "Guided templates",
+                    body: "Templates help you give the review engine better evidence without making you write a perfect journal entry.",
+                    bullets: [
+                        "They are ranked from your strongest onboarding domains.",
+                        "Tapping one inserts editable prompts into the composer.",
+                        "You can ignore the structure and write naturally anytime."
+                    ],
+                    symbol: "questionmark.circle"
+                )
+                Spacer()
+                Text("Guided")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(templates) { template in
+                        JournalTemplateChip(
+                            template: template,
+                            selected: selectedTemplateID == template.id,
+                            accentColor: accentColor
+                        ) {
+                            onSelect(template)
+                        }
+                    }
+                }
+                .padding(.vertical, 1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct JournalTemplateChip: View {
+    let template: JournalTemplate
+    let selected: Bool
+    let accentColor: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 7) {
+                Image(systemName: template.symbol)
+                    .font(.caption.weight(.semibold))
+                Text(template.title)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 36)
+            .foregroundStyle(selected ? Color(.systemBackground) : .primary)
+            .background(selected ? accentColor : AppSurface.fill, in: Capsule())
+            .overlay {
+                Capsule()
+                    .stroke(selected ? accentColor : AppSurface.stroke, lineWidth: 0.5)
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(template.title) template")
+    }
+}
+
 struct EntryTypeSelectorView: View {
     @Binding var selection: EntryType
     var accentColor: Color = .primary
+    var selectedForegroundColor: Color = .white
 
     var body: some View {
         HStack(spacing: 8) {
@@ -599,12 +1006,13 @@ struct EntryTypeSelectorView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 62)
-                    .foregroundStyle(selection == type ? Color.white : .primary)
+                    .foregroundStyle(selection == type ? selectedForegroundColor : .primary)
                     .background(selection == type ? accentColor : AppSurface.fill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
                             .stroke(selection == type ? accentColor : AppSurface.stroke, lineWidth: 0.5)
                     }
+                    .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(type.label)
@@ -709,6 +1117,9 @@ struct EntryDetailView: View {
                                     .foregroundStyle(.tertiary)
                             }
                             .foregroundStyle(.primary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 4)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }

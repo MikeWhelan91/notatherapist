@@ -65,6 +65,7 @@ struct HealthConnectView: View {
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
                             .stroke(AppSurface.stroke, lineWidth: 0.5)
                     }
+                    .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     .buttonStyle(.plain)
                     .disabled(isConnecting)
                 }

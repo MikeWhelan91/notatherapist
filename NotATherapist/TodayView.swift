@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TodayView: View {
     @EnvironmentObject private var appModel: AppViewModel
+    @EnvironmentObject private var router: AppRouter
     @State private var circleState: AICircleState = .idle
     @State private var companionLensFocusActive = false
     @State private var companionBusy = false
@@ -16,6 +17,14 @@ struct TodayView: View {
     @State private var confettiTrigger = 0
     @State private var lastMissionDoneCount = 0
     @State private var lastStreakValue = 0
+    @State private var companionTrigger = 0
+    @State private var selectedCompanionDriver: AppViewModel.CompanionDriver?
+
+    private enum DriverAction {
+        case openCheckIn
+        case openCalm
+        case openGoals
+    }
 
     private var todayEntries: [JournalEntry] {
         appModel.entries(on: Date())
@@ -42,16 +51,16 @@ struct TodayView: View {
     private var todayReviewHint: String {
         if appModel.planTier == .premium {
             if todayReview?.source == "openai" {
-                return "AI review already used today. You can still run unlimited local refresh reviews."
+                return "Deep review already used today. You can still refresh locally as often as you want."
             }
-            return "Run today’s review. First run uses AI; extra runs today are local refreshes."
+            return "Run today's review. The first pass is deeper; later refreshes are local."
         }
         if todayReview == nil {
-            return "Run a short local review when you are finished writing."
+            return "Run a short review when you are finished writing."
         }
         return hasNewEntriesSinceTodayReview
-            ? "You added a new entry. Run review again to refresh today’s guidance."
-            : "Add another entry to refresh today’s local review."
+            ? "You added a new entry. Run review again to refresh today's guidance."
+            : "Add another entry to refresh today's review."
     }
 
     private enum NextActionKind {
@@ -94,11 +103,86 @@ struct TodayView: View {
                             size: 104,
                             strokeWidth: 3.2,
                             tint: appModel.companionTint,
-                            lensFocusActive: companionLensFocusActive
+                            lensFocusActive: companionLensFocusActive,
+                            personality: appModel.companionPersonality,
+                            trigger: companionTrigger
                         )
                         Spacer()
                     }
                     .padding(.top, 2)
+
+                    ReferenceCard {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text("Companion state")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Text("\(Int((appModel.companionConfidence * 100).rounded()))% confidence")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(.tertiary)
+                            }
+                            Text(appModel.companionState.title)
+                                .font(.title3.weight(.bold))
+                            Text(appModel.companionStateHeroText)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    ReferenceCard {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                Text("Signal clarity")
+                                    .font(.subheadline.weight(.semibold))
+                                ExplainerButton(
+                                    title: "Signal clarity",
+                                    body: "Signal clarity is how much useful recent evidence the app has. It is not a score of you.",
+                                    bullets: [
+                                        "Check-ins, reviews, calm sessions, and action feedback make it clearer.",
+                                        "Higher clarity means suggestions can be more specific.",
+                                        "Lower clarity means the app will keep advice simpler and less certain."
+                                    ]
+                                )
+                                Spacer()
+                                Text("\(appModel.signalClarityPercent)%")
+                                    .font(.subheadline.weight(.bold))
+                            }
+                            ProgressView(value: Double(appModel.signalClarityPercent), total: 100)
+                                .tint(appModel.companionTint)
+                            Text("Higher clarity means the app has enough recent evidence to make sharper suggestions.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    ReferenceCard {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Why it changed today")
+                                .font(.subheadline.weight(.semibold))
+                            ForEach(appModel.companionDriversToday.prefix(4)) { driver in
+                                Button {
+                                    selectedCompanionDriver = driver
+                                } label: {
+                                    HStack {
+                                        Text(driver.name)
+                                            .font(.caption)
+                                        Spacer()
+                                        Text("\(Int((driver.contribution * 100).rounded()))%")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(driver.direction == "up" ? Color.green : Color.orange)
+                                        Image(systemName: "info.circle")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 8)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
 
                     VStack(alignment: .leading, spacing: 14) {
                         Text("How are you feeling?")
@@ -121,6 +205,7 @@ struct TodayView: View {
                                 .font(.subheadline.weight(.semibold))
 
                             Button {
+                                companionTrigger += 1
                                 runNextAction()
                             } label: {
                                 Label(nextAction.cta, systemImage: nextActionSymbol)
@@ -293,11 +378,56 @@ struct TodayView: View {
                                 Label("Adaptive follow-up", systemImage: "waveform.path.ecg")
                                     .font(.caption.weight(.semibold))
                                     .foregroundStyle(.secondary)
-                                Text(followUp)
-                                    .font(.subheadline.weight(.semibold))
+                                HStack {
+                                    Text(followUp)
+                                        .font(.subheadline.weight(.semibold))
+                                    Spacer()
+                                    ExplainerButton(
+                                        title: "Adaptive follow-up",
+                                        body: "This question is chosen from your baseline, recent mood, and repeated patterns. Answering it gives the next review better evidence.",
+                                        bullets: [
+                                            "It changes as your entries change.",
+                                            "It is designed to improve the next entry, not diagnose anything.",
+                                            "Short answers still help."
+                                        ]
+                                    )
+                                }
                                 Text("Answer this in your next entry. It helps tune your baseline over time.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+
+                    if appModel.isBaselineReassessmentDue {
+                        ReferenceCard {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Label("Baseline refresh", systemImage: "calendar.badge.clock")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                HStack {
+                                    Text("Retake your 2-week baseline")
+                                        .font(.subheadline.weight(.semibold))
+                                    Spacer()
+                                    ExplainerButton(
+                                        title: "Baseline refresh",
+                                        body: "The intake asks about the last 2 weeks, so refreshing every 14 days gives a cleaner before-and-after comparison.",
+                                        bullets: [
+                                            "It updates your strongest domains.",
+                                            "Weekly reports compare against the refreshed baseline.",
+                                            "It is a reflection baseline, not a diagnosis."
+                                        ]
+                                    )
+                                }
+                                Text(appModel.baselineReassessmentStatusText)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Button {
+                                    showingSettings = true
+                                } label: {
+                                    Label("Open profile", systemImage: "arrow.right.circle")
+                                }
+                                .buttonStyle(CompactIconButtonStyle())
                             }
                         }
                     }
@@ -314,10 +444,17 @@ struct TodayView: View {
                                         .foregroundStyle(.secondary)
                                 }
                                 Spacer()
-                                Button("Review") {
+                                Button {
                                     showingWeekly = true
+                                } label: {
+                                    Text("Review")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.black)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 8)
+                                        .background(appModel.selectedMood.companionColor, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 }
-                                .buttonStyle(CompactIconButtonStyle())
                                 .disabled(appModel.isWeeklyCheckInAvailableNow == false)
                             }
                         }
@@ -352,6 +489,7 @@ struct TodayView: View {
                         showingSettings = true
                     } label: {
                         Image(systemName: "gearshape")
+                            .foregroundStyle(.white)
                     }
                     .accessibilityLabel("Settings")
                 }
@@ -383,12 +521,37 @@ struct TodayView: View {
                     .presentationDetents([.medium])
                     .presentationCornerRadius(28)
             }
+            .sheet(item: $selectedCompanionDriver) { driver in
+                NavigationStack {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text(driver.name)
+                            .font(.title3.weight(.bold))
+                        Text("Current contribution: \(Int((driver.contribution * 100).rounded()))%")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(driver.direction == "up" ? .green : .orange)
+                        Text(driver.tip)
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                        Button {
+                            performDriverAction(for: driver)
+                        } label: {
+                            Label(driverActionTitle(for: driver), systemImage: "arrow.right.circle.fill")
+                        }
+                        .buttonStyle(PrimaryCapsuleButtonStyle())
+                        Spacer()
+                    }
+                    .padding(AppSpacing.page)
+                    .navigationTitle("Improve this")
+                    .navigationBarTitleDisplayMode(.inline)
+                }
+                .presentationCornerRadius(28)
+            }
             .confirmationDialog(
                 "Choose review type",
                 isPresented: $showingReviewModeChoice,
                 titleVisibility: .visible
             ) {
-                Button("AI review (uses today’s AI pass)") {
+                Button("Deep review") {
                     runTodayReview(preferLocal: false)
                 }
                 Button("Local review") {
@@ -396,7 +559,7 @@ struct TodayView: View {
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("AI gives a deeper pass but is limited to once per day. Local review is instant and unlimited.")
+                Text("Deep review is limited to once per day. Local review is instant and unlimited.")
             }
             .onAppear { circleState = .idle }
             .onAppear {
@@ -418,7 +581,19 @@ struct TodayView: View {
                         companionLensFocusActive = false
                     }
 
-                    let ambient: [AICircleState] = [.attentive, .listening, .checkIn]
+                    let ambient: [AICircleState]
+                    switch appModel.companionState {
+                    case .overwhelmed:
+                        ambient = [.thinking, .responding, .checkIn, .listening]
+                    case .activated:
+                        ambient = [.responding, .checkIn, .listening, .attentive]
+                    case .steadying:
+                        ambient = [.checkIn, .listening, .attentive]
+                    case .balanced:
+                        ambient = [.attentive, .listening, .checkIn]
+                    case .thriving:
+                        ambient = [.settled, .attentive, .listening]
+                    }
                     circleState = ambient.randomElement() ?? .attentive
                     try? await Task.sleep(nanoseconds: 1_500_000_000)
                     if companionBusy == false {
@@ -512,6 +687,41 @@ struct TodayView: View {
             try? await Task.sleep(for: .milliseconds(450))
             circleState = .attentive
             companionBusy = false
+        }
+    }
+
+    private func driverAction(for driver: AppViewModel.CompanionDriver) -> DriverAction {
+        switch driver.name {
+        case "Calm sessions":
+            return .openCalm
+        case "Follow-through":
+            return .openGoals
+        default:
+            return .openCheckIn
+        }
+    }
+
+    private func driverActionTitle(for driver: AppViewModel.CompanionDriver) -> String {
+        switch driverAction(for: driver) {
+        case .openCheckIn:
+            return "Start check-in now"
+        case .openCalm:
+            return "Open Calm now"
+        case .openGoals:
+            return "Open next steps"
+        }
+    }
+
+    private func performDriverAction(for driver: AppViewModel.CompanionDriver) {
+        selectedCompanionDriver = nil
+        switch driverAction(for: driver) {
+        case .openCheckIn:
+            showingNewEntry = true
+        case .openCalm:
+            router.selectedTab = .calm
+        case .openGoals:
+            router.selectedTab = .journal
+            showingHistory = true
         }
     }
 }
@@ -669,7 +879,7 @@ struct SettingsView: View {
                 } header: {
                     Text("About")
                 } footer: {
-                    Text("Anchor is local-first. AI is used only when a review needs it.")
+                    Text("Your entries stay on your phone. AI is used only when you ask for a review.")
                 }
 
                 Section {
@@ -689,14 +899,14 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    Button("Review onboarding answers") {
+                    Button(appModel.isBaselineReassessmentDue ? "Retake 2-week baseline" : "Review onboarding answers") {
                         hasCompletedOnboarding = false
                         dismiss()
                     }
                 } header: {
                     Text("Profile")
                 } footer: {
-                    Text("This context helps reviews sound less generic. It can be skipped.")
+                    Text(appModel.baselineReassessmentStatusText)
                 }
 
                 Section {
@@ -716,7 +926,7 @@ struct SettingsView: View {
                     }
 
                     HStack(alignment: .firstTextBaseline) {
-                        Text("Daily reviews")
+                        Text("Daily review")
                         Spacer()
                         Text(appModel.planTier.dailyReviewLabel)
                             .multilineTextAlignment(.trailing)
@@ -724,7 +934,7 @@ struct SettingsView: View {
                     }
 
                     HStack(alignment: .firstTextBaseline) {
-                        Text("Daily memory")
+                        Text("Daily context")
                         Spacer()
                         Text(appModel.planTier.dailyContextLabel)
                             .multilineTextAlignment(.trailing)
@@ -749,7 +959,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Plan")
                 } footer: {
-                    Text("Free gives clear daily reflection, one practical next step, and core weekly insights. Premium adds deeper AI daily reasoning, evidence strength, pattern-shift tracking, and goal follow-through synthesis.")
+                    Text("Free includes local daily reflection and weekly summaries. Premium adds deeper analysis, baseline comparison, and richer week-to-week reports.")
                 }
 
                 Section {
@@ -798,7 +1008,7 @@ struct SettingsView: View {
                     if let summary = healthKitManager.summary {
                         LabeledContent("Context", value: "\(summary.lastNightSleep.cleanHours) sleep · \(summary.averageSteps.formatted()) avg steps")
                             .font(.subheadline)
-                        Text("Used only to add quiet context to insights and weekly reviews.")
+                        Text("Used only to add extra context to your summaries.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -933,7 +1143,7 @@ struct SettingsView: View {
                 }
 
                 Section("Privacy") {
-                    Text("Journal data is stored locally on this device. Reviews are sent to the API only when you request them.")
+                    Text("Your journal is stored on this device. Reviews are sent only when you ask for one.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
@@ -952,6 +1162,7 @@ struct SettingsView: View {
                     }
                 }
             }
+            .tint(AppTheme.accent)
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .task {
@@ -963,7 +1174,7 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Delete journal data?")
                         .font(.headline)
-                    Text("This removes entries, reviews, goals, conversations, insights, and saved Health context from this device.")
+                    Text("This removes entries, reviews, goals, conversations, summaries, and saved Health context from this device.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
@@ -974,11 +1185,16 @@ struct SettingsView: View {
                     }
                     .buttonStyle(PrimaryCapsuleButtonStyle())
 
-                    Button("Cancel") {
+                    Button {
                         showingDeleteConfirmation = false
+                    } label: {
+                        Text("Cancel")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .frame(maxWidth: .infinity)
                 }
                 .padding(AppSpacing.page)
                 .presentationDetents([.height(260)])

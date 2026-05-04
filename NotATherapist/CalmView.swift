@@ -2,65 +2,68 @@ import SwiftUI
 
 struct CalmView: View {
     @EnvironmentObject private var appModel: AppViewModel
+    @EnvironmentObject private var router: AppRouter
     @State private var playingSoundID: UUID?
     private let soundColumns = [GridItem(.adaptive(minimum: 76), spacing: 10)]
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: AppSpacing.section) {
-                    HStack {
-                        AICircleView(state: .settled, size: 62, strokeWidth: 2.5)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("Anchor calm")
-                                .font(.headline)
-                            Text("Slow down with one simple practice.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                    }
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: 0) {
+                        Color.clear
+                            .frame(height: 1)
+                            .id("calm-top")
+                        CompanionTabHeader(title: "Calm", state: .settled, tint: appModel.journalCompanionTint)
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        SectionLabel(title: "Sounds", action: "See all")
-                        LazyVGrid(columns: soundColumns, spacing: 10) {
-                            ForEach(appModel.sounds.prefix(4)) { sound in
-                                Button {
-                                    playingSoundID = playingSoundID == sound.id ? nil : sound.id
-                                } label: {
-                                    VStack(spacing: 10) {
-                                        Image(systemName: sound.icon)
-                                            .font(.title3)
-                                        Text(sound.title)
-                                            .font(.caption.weight(.medium))
-                                            .lineLimit(1)
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 88)
-                                    .background(AppSurface.fill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                                    .overlay {
-                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                            .stroke(playingSoundID == sound.id ? Color.primary : AppSurface.stroke, lineWidth: playingSoundID == sound.id ? 1.2 : 0.5)
+                        VStack(alignment: .leading, spacing: AppSpacing.section) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                SectionLabel(title: "Sounds", action: "See all")
+                                LazyVGrid(columns: soundColumns, spacing: 10) {
+                                    ForEach(appModel.sounds.prefix(4)) { sound in
+                                        Button {
+                                            playingSoundID = playingSoundID == sound.id ? nil : sound.id
+                                        } label: {
+                                            VStack(spacing: 10) {
+                                                Image(systemName: sound.icon)
+                                                    .font(.title3)
+                                                Text(sound.title)
+                                                    .font(.caption.weight(.medium))
+                                                    .lineLimit(1)
+                                            }
+                                            .frame(maxWidth: .infinity)
+                                            .frame(height: 88)
+                                            .background(AppSurface.fill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                            .overlay {
+                                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                                    .stroke(playingSoundID == sound.id ? Color.primary : AppSurface.stroke, lineWidth: playingSoundID == sound.id ? 1.2 : 0.5)
+                                            }
+                                            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                        }
+                                        .buttonStyle(.plain)
                                     }
                                 }
-                                .buttonStyle(.plain)
+                            }
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                SectionLabel(title: "Breathing")
+                                VStack(spacing: 10) {
+                                    breathingLink("Box Breathing", subtitle: "4 min", symbol: "square", mode: .box)
+                                    breathingLink("4-7-8 Breathing", subtitle: "4 min", symbol: "timer", mode: .fourSevenEight)
+                                    breathingLink("Reset Breath", subtitle: "2 min", symbol: "arrow.counterclockwise", mode: .reset)
+                                }
                             }
                         }
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        SectionLabel(title: "Breathing")
-                        VStack(spacing: 10) {
-                            breathingLink("Box Breathing", subtitle: "4 min", symbol: "square", mode: .box)
-                            breathingLink("4-7-8 Breathing", subtitle: "4 min", symbol: "timer", mode: .fourSevenEight)
-                            breathingLink("Reset Breath", subtitle: "2 min", symbol: "arrow.counterclockwise", mode: .reset)
-                        }
+                        .padding(AppSpacing.page)
                     }
                 }
-                .padding(AppSpacing.page)
+                .onChange(of: router.selectedTab) { _, tab in
+                    guard tab == .calm else { return }
+                    proxy.scrollTo("calm-top", anchor: .top)
+                }
             }
             .scrollIndicators(.hidden)
-            .navigationTitle("Calm")
+            .toolbar(.hidden, for: .navigationBar)
             .animation(.snappy(duration: 0.2), value: playingSoundID)
         }
     }
@@ -108,11 +111,13 @@ enum BreathingMode: String {
 }
 
 struct BreathingView: View {
+    @EnvironmentObject private var appModel: AppViewModel
     let mode: BreathingMode
     @State private var isRunning = false
     @State private var phaseIndex = 0
     @State private var circleScale: CGFloat = 0.9
     @State private var task: Task<Void, Never>?
+    @State private var sessionStartedAt: Date?
 
     var currentPhase: (label: String, seconds: Int, scale: CGFloat) {
         mode.phases[phaseIndex]
@@ -157,6 +162,7 @@ struct BreathingView: View {
 
     private func start() {
         isRunning = true
+        sessionStartedAt = Date()
         task?.cancel()
         task = Task {
             while Task.isCancelled == false {
@@ -175,6 +181,11 @@ struct BreathingView: View {
     private func stop() {
         task?.cancel()
         task = nil
+        if let started = sessionStartedAt {
+            let duration = Date().timeIntervalSince(started)
+            appModel.completeCalmSession(mode: mode, duration: duration)
+        }
+        sessionStartedAt = nil
         isRunning = false
         phaseIndex = 0
         circleScale = 0.9
