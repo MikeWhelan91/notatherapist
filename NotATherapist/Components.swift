@@ -1411,7 +1411,8 @@ struct EntryRowView: View {
     let entry: JournalEntry
 
     var body: some View {
-        let accent = entry.mood.companionColor
+        let accent = entry.mood.interfaceAccentColor
+        let moodForeground: Color = entry.mood == .okay ? .black.opacity(0.78) : .white
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 8) {
                 Text(entry.date.compactTime)
@@ -1442,8 +1443,11 @@ struct EntryRowView: View {
                 Image(systemName: entry.mood.symbol)
                     .font(.system(size: 14, weight: .semibold))
                     .frame(width: 34, height: 34)
-                    .foregroundStyle(Color.white)
+                    .foregroundStyle(moodForeground)
                     .background(accent, in: Circle())
+                    .overlay {
+                        Circle().stroke(Color.white.opacity(entry.mood == .okay ? 0.26 : 0), lineWidth: 0.7)
+                    }
             }
 
             Text(entry.text)

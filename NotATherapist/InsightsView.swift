@@ -50,6 +50,7 @@ struct InsightsView: View {
 
 private struct ProfessionalInsightsDashboard: View {
     @EnvironmentObject private var appModel: AppViewModel
+    @State private var displayedMonthDate: Date?
     @State private var selectedCalendarDate: Date?
 
     private var entries: [JournalEntry] {
@@ -97,6 +98,7 @@ private struct ProfessionalInsightsDashboard: View {
                 reviewSignals
             }
             .onAppear {
+                displayedMonthDate = displayedMonthDate ?? latestMonthDate
                 selectedCalendarDate = selectedCalendarDate ?? latestMonthDate
             }
         }
@@ -122,19 +124,20 @@ private struct ProfessionalInsightsDashboard: View {
     }
 
     private func insightMetric(_ title: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .center, spacing: 4) {
             Text(value)
                 .font(.title3.weight(.bold))
-                .frame(height: 28, alignment: .bottom)
+                .frame(height: 26, alignment: .bottom)
             Text(title)
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: 66, alignment: .topLeading)
-        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .center)
+        .frame(height: 52, alignment: .top)
+        .padding(.top, 8)
+        .padding(.bottom, 5)
         .overlay(alignment: .bottom) {
             Rectangle().fill(AppSurface.stroke).frame(height: 1)
         }
@@ -145,30 +148,115 @@ private struct ProfessionalInsightsDashboard: View {
             HStack(alignment: .firstTextBaseline) {
                 sectionTitle("Mood calendar")
                 Spacer()
-                Text(latestMonthDate.formatted(.dateTime.month(.wide).year()))
-                    .font(.caption.weight(.semibold))
+                HStack(spacing: 6) {
+                    Button {
+                        moveCalendarMonth(by: -1)
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.caption.weight(.bold))
+                            .frame(width: 28, height: 28)
+                    }
+                    .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
-            }
-            HStack {
-                ForEach(Calendar.current.shortWeekdaySymbols, id: \.self) { day in
-                    Text(day.prefix(1))
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                        .frame(maxWidth: .infinity)
+
+                    Text(calendarMonthDate.formatted(.dateTime.month(.wide).year()))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(minWidth: 92)
+
+                    Button {
+                        moveCalendarMonth(by: 1)
+                    } label: {
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.bold))
+                            .frame(width: 28, height: 28)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(canMoveCalendarForward ? .secondary : .tertiary)
+                    .disabled(canMoveCalendarForward == false)
                 }
             }
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 7), count: 7), spacing: 7) {
-                ForEach(monthCells, id: \.id) { cell in
-                    MoodCalendarDayCell(
-                        cell: cell,
-                        selectedDate: selectedCalendarDate,
-                        onSelect: selectCalendarCell
-                    )
+            VStack(spacing: 7) {
+                HStack {
+                    ForEach(Calendar.current.shortWeekdaySymbols, id: \.self) { day in
+                        Text(day.prefix(1))
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                            .frame(maxWidth: .infinity)
+                    }
                 }
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 7), count: 7), spacing: 7) {
+                    ForEach(monthCells, id: \.id) { cell in
+                        MoodCalendarDayCell(
+                            cell: cell,
+                            selectedDate: selectedCalendarDate,
+                            onSelect: selectCalendarCell
+                        )
+                    }
+                }
+            }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 24)
+                    .onEnded { value in
+                        if value.translation.width < -44 {
+                            moveCalendarMonth(by: 1)
+                        } else if value.translation.width > 44 {
+                            moveCalendarMonth(by: -1)
+                        }
+                    }
+            )
+            .animation(.easeInOut(duration: 0.18), value: calendarMonthDate)
+            if monthEntryCount == 0 {
+                Text("No entries in this month yet.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("\(monthEntryCount) \(monthEntryCount == 1 ? "entry" : "entries") this month")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             selectedDaySummary
             moodLegend
         }
+    }
+
+    private var calendarMonthDate: Date {
+        displayedMonthDate ?? latestMonthDate
+    }
+
+    private var canMoveCalendarForward: Bool {
+        let calendar = Calendar.current
+        guard let next = calendar.date(byAdding: .month, value: 1, to: calendarMonthDate) else { return false }
+        return calendar.startOfMonth(for: next) <= calendar.startOfMonth(for: Date())
+    }
+
+    private func moveCalendarMonth(by offset: Int) {
+        guard offset != 0 else { return }
+        let calendar = Calendar.current
+        guard let target = calendar.date(byAdding: .month, value: offset, to: calendarMonthDate) else { return }
+        if offset > 0, calendar.startOfMonth(for: target) > calendar.startOfMonth(for: Date()) {
+            return
+        }
+        withAnimation(.easeInOut(duration: 0.18)) {
+            displayedMonthDate = target
+            selectedCalendarDate = preferredSelectionDate(in: target)
+        }
+    }
+
+    private func preferredSelectionDate(in month: Date) -> Date {
+        let calendar = Calendar.current
+        let monthStart = calendar.startOfMonth(for: month)
+        let monthEntries = entries.filter { calendar.isDate($0.date, equalTo: monthStart, toGranularity: .month) }
+        if let latest = monthEntries.max(by: { $0.date < $1.date }) {
+            return latest.date
+        }
+        return monthStart
+    }
+
+    private var monthEntryCount: Int {
+        let calendar = Calendar.current
+        return entries.filter { calendar.isDate($0.date, equalTo: calendarMonthDate, toGranularity: .month) }.count
     }
 
     private var moodTrend: some View {
@@ -230,27 +318,56 @@ private struct ProfessionalInsightsDashboard: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
-                Chart(weekdayAveragesWithEntries, id: \.weekday) { item in
-                BarMark(x: .value("Day", item.shortName), y: .value("Average mood", item.average))
-                    .foregroundStyle(item.average >= averageMood ? MoodLevel.great.companionColor : MoodLevel.low.companionColor)
-                    .clipShape(RoundedRectangle(cornerRadius: 3))
-                }
-                .chartYScale(domain: 1...5)
-                .chartXAxis {
-                    AxisMarks { AxisValueLabel() }
-                }
-                .chartYAxis {
-                    AxisMarks(values: [1, 3, 5]) { AxisGridLine(); AxisValueLabel() }
-                }
-                .frame(height: 132)
+                weekdayBars
                 if let strongest = weekdayAveragesWithEntries.max(by: { $0.average < $1.average }),
                    let weakest = weekdayAveragesWithEntries.min(by: { $0.average < $1.average }) {
-                    Text("\(strongest.name) is currently your strongest day on average; \(weakest.name) is the lowest.")
+                    if strongest.weekday == weakest.weekday {
+                        Text("\(strongest.name) is your only logged weekday so far. More entries will make this pattern meaningful.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("\(strongest.name) is currently your strongest day on average; \(weakest.name) is the lowest.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    }
                 }
             }
         }
+    }
+
+    private var weekdayBars: some View {
+        VStack(spacing: 7) {
+            HStack(alignment: .bottom, spacing: 10) {
+                ForEach(weekdayAverages, id: \.weekday) { item in
+                    VStack(spacing: 6) {
+                        ZStack(alignment: .bottom) {
+                            Capsule()
+                                .fill(AppSurface.fill.opacity(0.55))
+                                .frame(width: 12, height: 84)
+                            if item.count > 0 {
+                                Capsule()
+                                    .fill(item.average >= averageMood ? MoodLevel.great.companionColor : MoodLevel.low.companionColor)
+                                    .frame(width: 12, height: max(12, CGFloat(item.average / 5) * 84))
+                            }
+                        }
+                        Text(item.shortName.prefix(1))
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(item.count > 0 ? .secondary : .tertiary)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            HStack {
+                Text("1")
+                Spacer()
+                Text("Average mood")
+                Spacer()
+                Text("5")
+            }
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.tertiary)
+        }
+        .frame(height: 122)
     }
 
     private var themeImpact: some View {
@@ -337,14 +454,15 @@ private struct ProfessionalInsightsDashboard: View {
 
     private var monthCells: [MoodCalendarCell] {
         let calendar = Calendar.current
-        let monthInterval = calendar.dateInterval(of: .month, for: latestMonthDate)
+        let monthInterval = calendar.dateInterval(of: .month, for: calendarMonthDate)
         guard let start = monthInterval?.start,
               let daysRange = calendar.range(of: .day, in: .month, for: start) else {
             return []
         }
 
         let grouped = Dictionary(grouping: entries) { calendar.startOfDay(for: $0.date) }
-        let leading = max(0, calendar.component(.weekday, from: start) - calendar.firstWeekday)
+        let weekdayOffset = calendar.component(.weekday, from: start) - calendar.firstWeekday
+        let leading = (weekdayOffset + 7) % 7
         var cells: [MoodCalendarCell] = (0..<leading).map { _ in .empty(UUID()) }
 
         for offset in 0..<daysRange.count {
@@ -1702,6 +1820,12 @@ private struct AnalyticsView: View {
             x: min(max(preferred.x, minX), maxX),
             y: min(max(preferred.y, minY), maxY)
         )
+    }
+}
+
+private extension Calendar {
+    func startOfMonth(for date: Date) -> Date {
+        dateInterval(of: .month, for: date)?.start ?? startOfDay(for: date)
     }
 }
 
