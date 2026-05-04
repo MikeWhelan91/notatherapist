@@ -17,6 +17,19 @@ struct InsightsView: View {
                             .font(.title2.weight(.semibold))
                             .padding(.horizontal, AppSpacing.page)
                             .padding(.top, 8)
+                        HStack {
+                            Spacer()
+                            AICircleView(
+                                state: .checkIn,
+                                size: 110,
+                                strokeWidth: 3,
+                                tint: appModel.journalCompanionTint,
+                                personality: appModel.companionPersonality
+                            )
+                            Spacer()
+                        }
+                        .padding(.top, -2)
+                        .padding(.bottom, 4)
                         ProfessionalInsightsDashboard()
                             .padding(.horizontal, AppSpacing.page)
                             .padding(.bottom, 92)
@@ -37,6 +50,7 @@ struct InsightsView: View {
 
 private struct ProfessionalInsightsDashboard: View {
     @EnvironmentObject private var appModel: AppViewModel
+    @State private var selectedCalendarDate: Date?
 
     private var entries: [JournalEntry] {
         appModel.journalEntries.sorted { $0.date < $1.date }
@@ -82,6 +96,9 @@ private struct ProfessionalInsightsDashboard: View {
                 themeImpact
                 reviewSignals
             }
+            .onAppear {
+                selectedCalendarDate = selectedCalendarDate ?? latestMonthDate
+            }
         }
     }
 
@@ -97,29 +114,26 @@ private struct ProfessionalInsightsDashboard: View {
 
     private var metricStrip: some View {
         HStack(spacing: 10) {
-            insightMetric("Entries", "\(last30.count)", "Last 30 days")
-            insightMetric("Logged days", "\(activeDays)", "With at least one entry")
+            insightMetric("Entries", "\(last30.count)")
+            insightMetric("Logged days", "\(activeDays)")
             insightMetric("Avg mood", averageMood == 0 ? "-" : String(format: "%.1f", averageMood))
-            insightMetric("Reviews", "\(appModel.dailyReviews.count)", "Daily reviews")
+            insightMetric("Reviews", "\(appModel.dailyReviews.count)")
         }
     }
 
-    private func insightMetric(_ title: String, _ value: String, _ caption: String? = nil) -> some View {
+    private func insightMetric(_ title: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(value)
                 .font(.title3.weight(.bold))
+                .frame(height: 28, alignment: .bottom)
             Text(title)
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.secondary)
-            if let caption {
-                Text(caption)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: 66, alignment: .topLeading)
         .padding(.vertical, 12)
         .overlay(alignment: .bottom) {
             Rectangle().fill(AppSurface.stroke).frame(height: 1)
@@ -145,9 +159,14 @@ private struct ProfessionalInsightsDashboard: View {
             }
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 7), count: 7), spacing: 7) {
                 ForEach(monthCells, id: \.id) { cell in
-                    MoodCalendarDayCell(cell: cell)
+                    MoodCalendarDayCell(
+                        cell: cell,
+                        selectedDate: selectedCalendarDate,
+                        onSelect: selectCalendarCell
+                    )
                 }
             }
+            selectedDaySummary
             moodLegend
         }
     }
@@ -206,20 +225,30 @@ private struct ProfessionalInsightsDashboard: View {
     private var weekdayPattern: some View {
         VStack(alignment: .leading, spacing: 10) {
             sectionTitle("Day-of-week pattern")
-            Chart(weekdayAverages, id: \.weekday) { item in
+            if weekdayAveragesWithEntries.isEmpty {
+                Text("Log on a few different days and Anchor will compare which weekdays tend to feel steadier or heavier.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Chart(weekdayAveragesWithEntries, id: \.weekday) { item in
                 BarMark(x: .value("Day", item.shortName), y: .value("Average mood", item.average))
                     .foregroundStyle(item.average >= averageMood ? MoodLevel.great.companionColor : MoodLevel.low.companionColor)
                     .clipShape(RoundedRectangle(cornerRadius: 3))
-            }
-            .chartYScale(domain: 1...5)
-            .frame(height: 150)
-            if let strongest = weekdayAverages.max(by: { $0.average < $1.average }),
-               let weakest = weekdayAverages.min(by: { $0.average < $1.average }),
-               strongest.count > 0,
-               weakest.count > 0 {
-                Text("\(strongest.name) is currently your strongest day on average; \(weakest.name) is the lowest.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                }
+                .chartYScale(domain: 1...5)
+                .chartXAxis {
+                    AxisMarks { AxisValueLabel() }
+                }
+                .chartYAxis {
+                    AxisMarks(values: [1, 3, 5]) { AxisGridLine(); AxisValueLabel() }
+                }
+                .frame(height: 132)
+                if let strongest = weekdayAveragesWithEntries.max(by: { $0.average < $1.average }),
+                   let weakest = weekdayAveragesWithEntries.min(by: { $0.average < $1.average }) {
+                    Text("\(strongest.name) is currently your strongest day on average; \(weakest.name) is the lowest.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
     }
@@ -332,7 +361,7 @@ private struct ProfessionalInsightsDashboard: View {
     }
 
     private var moodLegend: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 9) {
             ForEach(MoodLevel.allCases) { mood in
                 HStack(spacing: 4) {
                     Circle()
@@ -347,6 +376,31 @@ private struct ProfessionalInsightsDashboard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private var selectedDaySummary: some View {
+        let summary = selectedCalendarSummary
+        return HStack(spacing: 10) {
+            Circle()
+                .fill(summary.mood?.companionColor ?? AppSurface.stroke)
+                .frame(width: 10, height: 10)
+            Text(summary.title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.primary)
+            Spacer()
+            Text(summary.detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 42)
+        .background(AppSurface.fill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(AppSurface.stroke.opacity(0.65), lineWidth: 1)
+        }
+    }
+
     private var weekdayAverages: [WeekdayMoodAverage] {
         let calendar = Calendar.current
         return calendar.weekdaySymbols.enumerated().map { index, name in
@@ -354,6 +408,36 @@ private struct ProfessionalInsightsDashboard: View {
             let matching = last30.filter { calendar.component(.weekday, from: $0.date) == weekday }
             let average = matching.isEmpty ? 0 : Double(matching.reduce(0) { $0 + $1.mood.score }) / Double(matching.count)
             return WeekdayMoodAverage(weekday: weekday, name: name, shortName: String(name.prefix(3)), average: average, count: matching.count)
+        }
+    }
+
+    private var weekdayAveragesWithEntries: [WeekdayMoodAverage] {
+        weekdayAverages.filter { $0.count > 0 }
+    }
+
+    private var selectedCalendarSummary: CalendarSelectionSummary {
+        let calendar = Calendar.current
+        let selectedDate = selectedCalendarDate ?? latestMonthDate
+        let day = calendar.startOfDay(for: selectedDate)
+        let dayEntries = entries
+            .filter { calendar.isDate($0.date, inSameDayAs: day) }
+            .sorted { $0.date < $1.date }
+        let latest = dayEntries.last
+        let title = day.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
+        if let latest {
+            return CalendarSelectionSummary(
+                title: title,
+                detail: "\(latest.mood.label) mood, \(dayEntries.count) \(dayEntries.count == 1 ? "entry" : "entries")",
+                mood: latest.mood
+            )
+        }
+        return CalendarSelectionSummary(title: title, detail: "No entry logged", mood: nil)
+    }
+
+    private func selectCalendarCell(_ cell: MoodCalendarCell) {
+        guard case .day(let date, _, _) = cell else { return }
+        withAnimation(.easeOut(duration: 0.16)) {
+            selectedCalendarDate = date
         }
     }
 
@@ -389,6 +473,8 @@ private enum MoodCalendarCell {
 
 private struct MoodCalendarDayCell: View {
     let cell: MoodCalendarCell
+    let selectedDate: Date?
+    let onSelect: (MoodCalendarCell) -> Void
 
     var body: some View {
         switch cell {
@@ -396,24 +482,36 @@ private struct MoodCalendarDayCell: View {
             Color.clear
                 .aspectRatio(1, contentMode: .fit)
         case .day(let date, let mood, let count):
-            dayView(date: date, mood: mood, count: count)
+            Button {
+                onSelect(cell)
+            } label: {
+                dayView(date: date, mood: mood, count: count)
+            }
+            .buttonStyle(.plain)
         }
     }
 
     private func dayView(date: Date, mood: MoodLevel?, count: Int) -> some View {
-        let fill = mood?.companionColor ?? AppSurface.stroke.opacity(0.5)
-        let background = mood?.companionColor.opacity(0.16) ?? Color.clear
+        let fill = mood?.companionColor ?? AppSurface.stroke.opacity(0.75)
+        let selected = isSelected(date)
+        let background = selected
+            ? (mood?.companionColor.opacity(0.28) ?? Color.white.opacity(0.12))
+            : (mood?.companionColor.opacity(0.12) ?? Color.white.opacity(0.035))
         let dayNumber = Calendar.current.component(.day, from: date)
 
         return VStack(spacing: 3) {
             Text("\(dayNumber)")
                 .font(.caption2.weight(.semibold))
-                .foregroundStyle(mood == nil ? Color.secondary.opacity(0.45) : Color.white)
+                .foregroundStyle(mood == nil ? Color.secondary.opacity(0.52) : Color.white)
             moodDot(fill: fill, count: count)
         }
         .frame(maxWidth: .infinity)
         .aspectRatio(1, contentMode: .fit)
         .background(background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(selected ? (mood?.companionColor ?? Color.white).opacity(0.9) : Color.clear, lineWidth: 1.2)
+        }
         .accessibilityLabel(accessibilityLabel(date: date, mood: mood, count: count))
     }
 
@@ -426,6 +524,11 @@ private struct MoodCalendarDayCell: View {
                     Circle().stroke(Color.white.opacity(0.65), lineWidth: 1)
                 }
             }
+    }
+
+    private func isSelected(_ date: Date) -> Bool {
+        guard let selectedDate else { return false }
+        return Calendar.current.isDate(date, inSameDayAs: selectedDate)
     }
 
     private func accessibilityLabel(date: Date, mood: MoodLevel?, count: Int) -> String {
@@ -448,6 +551,12 @@ private struct ThemeMoodStat {
     let theme: String
     let count: Int
     let average: Double
+}
+
+private struct CalendarSelectionSummary {
+    let title: String
+    let detail: String
+    let mood: MoodLevel?
 }
 
 private enum InsightTab: String, CaseIterable, Identifiable {
