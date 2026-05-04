@@ -145,7 +145,7 @@ struct MainTabView: View {
         case .journal:
             router.companionPresentation = .journal
         case .insights:
-            router.companionPresentation = .insights
+            router.companionPresentation = .hidden
         case .messages:
             router.companionPresentation = .messages
         case .calm:
@@ -192,7 +192,7 @@ struct MainTabView: View {
     private func presentation(for tab: MainTab) -> CompanionPresentation {
         switch tab {
         case .journal: .journal
-        case .insights: .insights
+        case .insights: .hidden
         case .messages: .messages
         case .calm: .calm
         }
