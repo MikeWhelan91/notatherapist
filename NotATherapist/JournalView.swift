@@ -87,10 +87,10 @@ struct JournalView: View {
                             personality: appModel.companionPersonality,
                             trigger: companionTrigger
                         )
-                        .opacity(0)
                         Spacer()
                     }
-                    .padding(.vertical, 2)
+                    .padding(.top, 12)
+                    .padding(.bottom, 8)
 
                     ReferenceCard {
                         VStack(spacing: 12) {
@@ -116,6 +116,7 @@ struct JournalView: View {
                             .padding(.horizontal, -AppSpacing.page)
                         }
                     }
+                    .padding(.top, 18)
 
                     if appModel.reflectionGoals.isEmpty == false {
                         VStack(alignment: .leading, spacing: 8) {
@@ -139,19 +140,7 @@ struct JournalView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            SectionLabel(title: "Entries")
-                            Button {
-                                openComposer()
-                            } label: {
-                                Label("New", systemImage: "plus")
-                                    .font(.caption.weight(.semibold))
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .tint(.primary)
-                            .foregroundStyle(Color(.systemBackground))
-                            .controlSize(.small)
-                        }
+                        SectionLabel(title: "Entries")
                         if todayEntries.isEmpty {
                             ReferenceCard {
                                 VStack(alignment: .leading, spacing: 12) {
@@ -200,6 +189,21 @@ struct JournalView: View {
                 .ignoresSafeArea()
             }
             .navigationBarTitleDisplayMode(.inline)
+            .safeAreaInset(edge: .bottom, alignment: .trailing) {
+                Button {
+                    openComposer()
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(Color(.systemBackground))
+                        .frame(width: 58, height: 58)
+                        .background(Color.primary, in: Circle())
+                }
+                .padding(.trailing, 20)
+                .padding(.bottom, 10)
+                .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+                .accessibilityLabel("New entry")
+            }
             .alert("Update this day’s review?", isPresented: $showingReReviewConfirm) {
                 Button("Cancel", role: .cancel) {
                     pendingReReviewDate = nil
