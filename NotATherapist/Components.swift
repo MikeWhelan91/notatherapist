@@ -43,7 +43,7 @@ struct AICircleView: View {
             let time = timeline.date.timeIntervalSinceReferenceDate
             let elapsed = timeline.date.timeIntervalSince(animationStart)
             let basePulse = (sin((time / (profile.breatheDuration * personality.breatheSpeed)) * .pi * 2) + 1) / 2
-            let pulse = min(1, basePulse * personality.pulseMultiplier)
+            let pulse = min(1, basePulse * personality.pulseMultiplier * 0.58)
             let introProgress = min(max(elapsed / 18, 0), 1)
             let easedIntroProgress = introProgress * introProgress * (3 - 2 * introProgress)
             let drift = motionStyle == .intro ? easedIntroProgress * 88 : (elapsed / profile.motionDuration) * profile.motionOffset
@@ -66,7 +66,7 @@ struct AICircleView: View {
                         )
                     )
                     .blur(radius: profile.mistBlur)
-                    .scaleEffect(profile.mistScale + (CGFloat(pulse) * 0.03))
+                    .scaleEffect(profile.mistScale + (CGFloat(pulse) * 0.016))
 
                 Circle()
                     .stroke(tint.opacity(profile.glowOpacity), style: StrokeStyle(lineWidth: brushWidth * 1.15, lineCap: .round, lineJoin: .round))
@@ -180,11 +180,11 @@ struct AICircleView: View {
                 if burstPulse {
                     Circle()
                         .stroke(tint.opacity(0.5), style: StrokeStyle(lineWidth: hairlineWidth * 2))
-                        .scaleEffect(1.2 + CGFloat(pulse) * 0.22)
+                        .scaleEffect(1.14 + CGFloat(pulse) * 0.12)
                         .blur(radius: 0.6)
                     Circle()
                         .stroke(tint.opacity(0.24), style: StrokeStyle(lineWidth: hairlineWidth * 1.4))
-                        .scaleEffect(1.38 + CGFloat(pulse) * 0.18)
+                        .scaleEffect(1.26 + CGFloat(pulse) * 0.1)
                 }
 
                 if lensFocusActive {
@@ -243,7 +243,7 @@ struct AICircleView: View {
             }
             .frame(width: size, height: size)
             .rotationEffect(.degrees(ringRotation))
-            .scaleEffect((responseKick ? 1.045 : 1.0) * (1 + (maxScale - 1) * CGFloat(pulse)))
+            .scaleEffect((responseKick ? 1.024 : 1.0) * (1 + (maxScale - 1) * CGFloat(pulse)))
             .opacity(profile.totalOpacity)
         }
         .animation(.easeOut(duration: 0.26), value: responseKick)
@@ -438,28 +438,28 @@ private struct CompanionPersonalityProfile {
 
     var swaySpeed: Double {
         switch kind {
-        case .grounded: 0.58
-        case .energetic: 1.55
-        case .calm: 0.36
-        case .analytic: 0.88
+        case .grounded: 0.34
+        case .energetic: 0.9
+        case .calm: 0.24
+        case .analytic: 0.52
         }
     }
 
     var swayAmount: Double {
         switch kind {
-        case .grounded: 1.1
-        case .energetic: 4.2
-        case .calm: 0.7
-        case .analytic: 1.4
+        case .grounded: 0.55
+        case .energetic: 2.0
+        case .calm: 0.36
+        case .analytic: 0.72
         }
     }
 
     var pulseMultiplier: Double {
         switch kind {
-        case .grounded: 1.0
-        case .energetic: 1.28
-        case .calm: 0.82
-        case .analytic: 1.08
+        case .grounded: 0.86
+        case .energetic: 1.05
+        case .calm: 0.72
+        case .analytic: 0.92
         }
     }
 
@@ -475,9 +475,9 @@ private struct CompanionPersonalityProfile {
     var extraScale: CGFloat {
         switch kind {
         case .grounded: 0
-        case .energetic: 0.01
-        case .calm: -0.003
-        case .analytic: 0.004
+        case .energetic: 0.004
+        case .calm: -0.005
+        case .analytic: 0.002
         }
     }
 
@@ -641,9 +641,9 @@ private struct CompanionGlyphProfile {
 
     var pulseAmount: CGFloat {
         switch state {
-        case .settled: 0.015
-        case .typing, .responding, .checkIn: 0.045
-        default: 0.028
+        case .settled: 0.008
+        case .typing, .responding, .checkIn: 0.024
+        default: 0.014
         }
     }
 
@@ -657,10 +657,10 @@ private struct CompanionGlyphProfile {
 
     var sway: Double {
         switch personality {
-        case .energetic: 3.2
-        case .analytic: 1.6
-        case .calm: 0.7
-        case .grounded: 1.2
+        case .energetic: 1.8
+        case .analytic: 0.9
+        case .calm: 0.4
+        case .grounded: 0.7
         }
     }
 
@@ -1305,7 +1305,7 @@ struct WeekCalendarStripView: View {
     var body: some View {
         let today = Calendar.current.startOfDay(for: Date())
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 ForEach(dates, id: \.self) { date in
                     let isSelected = Calendar.current.isDate(date, inSameDayAs: selectedDate)
                     let hasSavedEntry = hasEntry(date)
@@ -1343,15 +1343,15 @@ struct WeekCalendarStripView: View {
                             ZStack {
                                 Circle()
                                     .fill(fillColor)
-                                    .frame(width: 40, height: 40)
+                                    .frame(width: 36, height: 36)
                                 Circle()
                                     .stroke(ringColor, lineWidth: isToday ? 1.35 : 1.15)
-                                    .frame(width: 40, height: 40)
+                                    .frame(width: 36, height: 36)
 
                                 if isSelected {
                                     Circle()
                                         .stroke(Color.white.opacity(0.92), lineWidth: 2.4)
-                                        .frame(width: 46, height: 46)
+                                        .frame(width: 42, height: 42)
                                 }
 
                                 Text(date.dayNumber)
@@ -1366,8 +1366,8 @@ struct WeekCalendarStripView: View {
                                 }
                             }
                         }
-                        .frame(height: 68)
-                        .frame(width: 50)
+                        .frame(height: 64)
+                        .frame(width: 44)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)

@@ -1168,7 +1168,7 @@ struct OnboardingView: View {
     private var voicePage: some View {
         OnboardingQuestionPage(
             title: "Voice journaling",
-            subtitle: "Voice is optional. If you want it, Anchor downloads a private on-device Whisper model now.",
+            subtitle: "Voice is optional. If you want it, Anchor downloads an on-device Whisper model now.",
             motionStyle: .form
         ) {
             VStack(spacing: 14) {

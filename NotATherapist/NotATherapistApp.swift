@@ -283,7 +283,7 @@ private struct GlobalCompanionOverlay: View {
 
     private var overlayTopPadding: CGFloat {
         switch router.companionPresentation {
-        case .journal: 246
+        case .journal: 274
         case .insights, .messages, .calm: 84
         case .composer: 104
         case .transitioningToComposer: 104
@@ -306,7 +306,7 @@ private struct GlobalCompanionOverlay: View {
     private var companionMotion: Animation {
         reduceMotion
             ? .linear(duration: 0.01)
-            : .smooth(duration: 0.62, extraBounce: 0)
+            : .smooth(duration: 0.86, extraBounce: 0)
     }
 
     private func overlayCenterY(in geo: GeometryProxy) -> CGFloat {

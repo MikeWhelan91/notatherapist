@@ -139,7 +139,19 @@ struct JournalView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
-                        SectionLabel(title: "Entries")
+                        HStack {
+                            SectionLabel(title: "Entries")
+                            Button {
+                                openComposer()
+                            } label: {
+                                Label("New", systemImage: "plus")
+                                    .font(.caption.weight(.semibold))
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(.primary)
+                            .foregroundStyle(Color(.systemBackground))
+                            .controlSize(.small)
+                        }
                         if todayEntries.isEmpty {
                             ReferenceCard {
                                 VStack(alignment: .leading, spacing: 12) {
@@ -188,26 +200,6 @@ struct JournalView: View {
                 .ignoresSafeArea()
             }
             .navigationBarTitleDisplayMode(.inline)
-            .safeAreaInset(edge: .bottom, alignment: .trailing) {
-                Button {
-                    companionTrigger += 1
-                    router.companionPresentation = .transitioningToComposer
-                    Task {
-                        try? await Task.sleep(for: .milliseconds(220))
-                        showingNewEntry = true
-                    }
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(Color(.systemBackground))
-                        .frame(width: 58, height: 58)
-                        .background(Color.primary, in: Circle())
-                }
-                .padding(.trailing, 20)
-                .padding(.bottom, 10)
-                .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
-                .accessibilityLabel("New entry")
-            }
             .alert("Update this day’s review?", isPresented: $showingReReviewConfirm) {
                 Button("Cancel", role: .cancel) {
                     pendingReReviewDate = nil
@@ -411,6 +403,15 @@ struct JournalView: View {
         }
     }
 
+    private func openComposer() {
+        companionTrigger += 1
+        router.companionPresentation = .transitioningToComposer
+        Task {
+            try? await Task.sleep(for: .milliseconds(220))
+            showingNewEntry = true
+        }
+    }
+
     private func handlePendingRouterActions() {
         if router.pendingNewEntry {
             showingNewEntry = true
@@ -476,6 +477,7 @@ struct NewEntryView: View {
     @State private var companionDocked = false
     @State private var selectedTemplateID: JournalTemplate.ID?
     @StateObject private var voiceRecorder = VoiceJournalRecorder()
+    @StateObject private var voiceModelManager = VoiceModelManager.shared
     @FocusState private var editorFocused: Bool
 
     private let date: Date
@@ -527,7 +529,9 @@ struct NewEntryView: View {
                             applyTemplate(template)
                         }
 
-                        voiceControls
+                        if voiceModelManager.isVoiceEnabled {
+                            voiceControls
+                        }
 
                         TextEditor(text: $text)
                             .focused($editorFocused)
