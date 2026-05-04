@@ -1697,6 +1697,10 @@ final class AppViewModel: ObservableObject {
             stylePreset: widgetStylePreset,
             enabledCategories: Array(widgetAffirmationCategories),
             issueContext: widgetIssueContext(),
+            entryCount: journalEntries.count,
+            currentStreak: currentStreakDays,
+            averageMood: widgetAverageMoodScore(),
+            latestMood: latestJournalEntry?.mood.rawValue ?? "okay",
             updatedAt: Date()
         )
         widgetPayloadStore.save(payload)
@@ -1747,6 +1751,13 @@ final class AppViewModel: ObservableObject {
         }
 
         return "Your journal history builds clearer weekly patterns over time."
+    }
+
+    private func widgetAverageMoodScore() -> Double {
+        let recent = Array(journalEntries.prefix(14))
+        guard recent.isEmpty == false else { return 0 }
+        let total = recent.reduce(0) { $0 + $1.mood.score }
+        return Double(total) / Double(recent.count)
     }
 
     private func widgetAffirmationOptions() -> [String] {

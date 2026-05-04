@@ -14,6 +14,7 @@ struct JournalView: View {
     @State private var companionLensFocusActive = false
     @State private var companionBusy = false
     @State private var companionTrigger = 0
+    @State private var companionHiddenForComposer = false
 
     private var todayDate: Date { Date() }
 
@@ -87,6 +88,7 @@ struct JournalView: View {
                             personality: appModel.companionPersonality,
                             trigger: companionTrigger
                         )
+                        .opacity(companionHiddenForComposer ? 0 : 1)
                         Spacer()
                     }
                     .padding(.top, 12)
@@ -293,6 +295,9 @@ struct JournalView: View {
             .onChange(of: showingNewEntry) { _, presented in
                 if presented == false {
                     router.companionPresentation = .journal
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        companionHiddenForComposer = false
+                    }
                 }
             }
             .onChange(of: router.selectedTab) { _, tab in
@@ -409,9 +414,11 @@ struct JournalView: View {
 
     private func openComposer() {
         companionTrigger += 1
-        router.companionPresentation = .transitioningToComposer
+        withAnimation(.easeOut(duration: 0.16)) {
+            companionHiddenForComposer = true
+        }
         Task {
-            try? await Task.sleep(for: .milliseconds(220))
+            try? await Task.sleep(for: .milliseconds(120))
             showingNewEntry = true
         }
     }

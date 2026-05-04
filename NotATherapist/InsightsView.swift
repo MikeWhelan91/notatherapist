@@ -4,34 +4,19 @@ import SwiftUI
 struct InsightsView: View {
     @EnvironmentObject private var appModel: AppViewModel
     @EnvironmentObject private var router: AppRouter
-    @State private var selection: InsightTab = .feed
 
     var body: some View {
         NavigationStack {
             ScrollViewReader { proxy in
-                VStack(spacing: 0) {
-                    Color.clear
-                        .frame(height: 1)
-                        .id("insights-top")
-                    CompanionTabHeader(title: "Insights", state: .checkIn, tint: appModel.journalCompanionTint)
-
-                    Picker("Insights view", selection: $selection) {
-                        ForEach(InsightTab.allCases) { tab in
-                            Text(tab.title).tag(tab)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal, AppSpacing.page)
-                    .padding(.top, 8)
-                    .padding(.bottom, 12)
-
-                    switch selection {
-                    case .feed:
-                        InsightFeedView()
-                    case .weekly:
-                        WeeklyReviewContainerView()
-                    case .analytics:
-                        AnalyticsView()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 22) {
+                        Color.clear
+                            .frame(height: 1)
+                            .id("insights-top")
+                        CompanionTabHeader(title: "Insights", state: .checkIn, tint: appModel.journalCompanionTint)
+                        ProfessionalInsightsDashboard()
+                            .padding(.horizontal, AppSpacing.page)
+                            .padding(.bottom, 92)
                     }
                 }
                 .onChange(of: router.selectedTab) { _, tab in
@@ -44,6 +29,215 @@ struct InsightsView: View {
                 guard tab == .insights else { return }
             }
         }
+    }
+}
+
+private struct ProfessionalInsightsDashboard: View {
+    @EnvironmentObject private var appModel: AppViewModel
+
+    private var entries: [JournalEntry] {
+        appModel.journalEntries.sorted { $0.date < $1.date }
+    }
+
+    private var last30: [JournalEntry] {
+        guard let latest = entries.last?.date,
+              let lower = Calendar.current.date(byAdding: .day, value: -29, to: latest) else {
+            return entries
+        }
+        return entries.filter { $0.date >= lower }
+    }
+
+    private var averageMood: Double {
+        guard last30.isEmpty == false else { return 0 }
+        return Double(last30.reduce(0) { $0 + $1.mood.score }) / Double(last30.count)
+    }
+
+    private var activeDays: Int {
+        Set(last30.map { Calendar.current.startOfDay(for: $0.date) }).count
+    }
+
+    var body: some View {
+        if entries.isEmpty {
+            ContentUnavailableView(
+                "No data yet",
+                systemImage: "chart.line.uptrend.xyaxis",
+                description: Text("Write a few entries and Anchor will show mood trends, consistency, and review signals here.")
+            )
+            .padding(.top, 80)
+        } else {
+            VStack(alignment: .leading, spacing: 22) {
+                header
+                metricStrip
+                moodTrend
+                yearPixels
+                moodBreakdown
+                consistency
+                reviewSignals
+            }
+        }
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text("Mood and journal stats")
+                .font(.title2.weight(.bold))
+            Text("Real patterns from your entries, reviews, and follow-through.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var metricStrip: some View {
+        HStack(spacing: 10) {
+            insightMetric("Entries", "\(last30.count)")
+            insightMetric("Active days", "\(activeDays)")
+            insightMetric("Avg mood", averageMood == 0 ? "-" : String(format: "%.1f", averageMood))
+            insightMetric("Reviews", "\(appModel.dailyReviews.count)")
+        }
+    }
+
+    private func insightMetric(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(value)
+                .font(.title3.weight(.bold))
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 12)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(AppSurface.stroke).frame(height: 1)
+        }
+    }
+
+    private var moodTrend: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionTitle("Mood trend")
+            Chart(last30) { entry in
+                LineMark(
+                    x: .value("Date", entry.date),
+                    y: .value("Mood", entry.mood.score)
+                )
+                .interpolationMethod(.catmullRom)
+                .foregroundStyle(appModel.journalCompanionTint)
+                AreaMark(
+                    x: .value("Date", entry.date),
+                    y: .value("Mood", entry.mood.score)
+                )
+                .interpolationMethod(.catmullRom)
+                .foregroundStyle(appModel.journalCompanionTint.opacity(0.16))
+                PointMark(x: .value("Date", entry.date), y: .value("Mood", entry.mood.score))
+                    .foregroundStyle(entry.mood.companionColor)
+            }
+            .chartYScale(domain: 1...5)
+            .chartYAxis {
+                AxisMarks(values: [1, 2, 3, 4, 5]) { AxisGridLine(); AxisValueLabel() }
+            }
+            .chartXAxis {
+                AxisMarks(values: .stride(by: .day, count: 7)) { AxisValueLabel(format: .dateTime.day().month(.abbreviated)) }
+            }
+            .frame(height: 210)
+        }
+    }
+
+    private var yearPixels: some View {
+        let days = Array(entries.suffix(84))
+        return VStack(alignment: .leading, spacing: 10) {
+            sectionTitle("Mood pixels")
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 5), count: 14), spacing: 5) {
+                ForEach(days) { entry in
+                    Circle()
+                        .fill(entry.mood.companionColor)
+                        .frame(width: 14, height: 14)
+                        .accessibilityLabel("\(entry.date.compactDate), \(entry.mood.label)")
+                }
+            }
+        }
+    }
+
+    private var moodBreakdown: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionTitle("Mood distribution")
+            Chart(moodCounts, id: \.mood) { item in
+                SectorMark(angle: .value("Count", item.count), innerRadius: .ratio(0.58), angularInset: 2)
+                    .foregroundStyle(item.mood.companionColor)
+            }
+            .frame(height: 190)
+            VStack(spacing: 7) {
+                ForEach(moodCounts, id: \.mood) { item in
+                    HStack {
+                        Circle().fill(item.mood.companionColor).frame(width: 9, height: 9)
+                        Text(item.mood.label).font(.caption)
+                        Spacer()
+                        Text("\(item.count)").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    private var consistency: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionTitle("Check-in consistency")
+            Chart(entriesByDay, id: \.day) { item in
+                BarMark(x: .value("Day", item.day, unit: .day), y: .value("Entries", item.count))
+                    .foregroundStyle(appModel.journalCompanionTint)
+                    .clipShape(RoundedRectangle(cornerRadius: 3))
+            }
+            .frame(height: 150)
+        }
+    }
+
+    private var reviewSignals: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionTitle("Latest review")
+            if let review = appModel.latestDailyReview {
+                VStack(alignment: .leading, spacing: 10) {
+                    insightLine("Summary", review.summary)
+                    insightLine("Pattern", review.insight.pattern)
+                    insightLine("Next step", review.insight.action)
+                }
+            } else {
+                Text("Run a daily review after writing to add pattern and next-step analysis.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func sectionTitle(_ title: String) -> some View {
+        Text(title)
+            .font(.headline.weight(.semibold))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 2)
+    }
+
+    private func insightLine(_ label: String, _ body: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label.uppercased())
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.tertiary)
+            Text(body.isEmpty ? "No signal yet." : body)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 8)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(AppSurface.stroke.opacity(0.6)).frame(height: 1)
+        }
+    }
+
+    private var moodCounts: [(mood: MoodLevel, count: Int)] {
+        MoodLevel.allCases.map { mood in
+            (mood, last30.filter { $0.mood == mood }.count)
+        }
+    }
+
+    private var entriesByDay: [(day: Date, count: Int)] {
+        let grouped = Dictionary(grouping: last30) { Calendar.current.startOfDay(for: $0.date) }
+        return grouped.map { ($0.key, $0.value.count) }.sorted { $0.day < $1.day }
     }
 }
 

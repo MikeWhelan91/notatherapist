@@ -54,18 +54,21 @@ struct AnchorWidgetSmallView: View {
                         .font(entry.payload.stylePreset.headerFont)
                         .foregroundStyle(.white.opacity(0.78))
                     Spacer()
-                    companionChip
+                    Text(entry.payload.latestMood.capitalized)
+                        .font(.caption2.weight(.bold))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 4)
+                        .background(moodColor.opacity(0.28), in: Capsule())
                 }
-                Text(primaryAffirmation)
-                    .font(.headline.weight(.bold))
+                Text(entry.payload.averageMood > 0 ? String(format: "%.1f", entry.payload.averageMood) : "-")
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
-                    .lineLimit(3)
-                Text(entry.payload.preferredName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Tap to write a quick check-in." : "\(entry.payload.preferredName), log one line today.")
+                Text("Average mood")
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(.white.opacity(0.72))
-                    .lineLimit(2)
+                miniBars
                 Spacer(minLength: 0)
-                Label("Open journal", systemImage: "square.and.pencil")
+                Label("\(entry.payload.currentStreak)d streak", systemImage: "flame")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.88))
             }
@@ -79,15 +82,19 @@ struct AnchorWidgetSmallView: View {
         return text.isEmpty ? entry.payload.primaryText : text
     }
 
-    private var companionChip: some View {
-        ZStack {
-            Circle()
-                .fill(.white.opacity(0.12))
-                .frame(width: 22, height: 22)
-            Image(systemName: "sparkles")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.95))
+    private var moodColor: Color {
+        widgetMoodColor(entry.payload.latestMood)
+    }
+
+    private var miniBars: some View {
+        HStack(alignment: .bottom, spacing: 4) {
+            ForEach(0..<7, id: \.self) { index in
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(index == 6 ? moodColor : .white.opacity(0.28))
+                    .frame(width: 8, height: CGFloat(12 + (index % 4) * 6))
+            }
         }
+        .frame(height: 36, alignment: .bottom)
     }
 }
 
@@ -125,19 +132,29 @@ struct AnchorWidgetMediumView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Daily affirmation")
+                    Text("Last 30 days")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.62))
-                    Text(primaryAffirmation)
+                    Text(entry.payload.averageMood > 0 ? String(format: "%.1f avg mood", entry.payload.averageMood) : "No mood data yet")
                         .font(.headline.weight(.bold))
                         .foregroundStyle(.white)
                         .lineLimit(2)
                 }
 
-                Text(entry.payload.secondaryText)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.72))
-                    .lineLimit(2)
+                HStack(spacing: 14) {
+                    metric("Entries", "\(entry.payload.entryCount)")
+                    metric("Streak", "\(entry.payload.currentStreak)")
+                    metric("Mood", entry.payload.latestMood.capitalized)
+                }
+
+                HStack(alignment: .bottom, spacing: 5) {
+                    ForEach(0..<14, id: \.self) { index in
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(index > 10 ? moodColor : .white.opacity(0.24))
+                            .frame(width: 8, height: CGFloat(10 + ((index * 7) % 28)))
+                    }
+                }
+                .frame(height: 42, alignment: .bottom)
 
                 HStack(spacing: 8) {
                     Button(intent: OpenJournalIntent()) {
@@ -165,6 +182,32 @@ struct AnchorWidgetMediumView: View {
     private var primaryAffirmation: String {
         let text = entry.payload.affirmationText ?? entry.payload.primaryText
         return text.isEmpty ? entry.payload.primaryText : text
+    }
+
+    private var moodColor: Color {
+        widgetMoodColor(entry.payload.latestMood)
+    }
+
+    private func metric(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.white)
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.62))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private func widgetMoodColor(_ raw: String) -> Color {
+    switch raw {
+    case "terrible": Color(red: 0.82, green: 0.40, blue: 0.39)
+    case "low": Color(red: 0.86, green: 0.60, blue: 0.34)
+    case "good": Color(red: 0.30, green: 0.61, blue: 0.95)
+    case "great": Color(red: 0.36, green: 0.76, blue: 0.56)
+    default: .white
     }
 }
 

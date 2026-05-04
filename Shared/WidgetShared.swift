@@ -50,6 +50,10 @@ struct WidgetAffirmationPayload: Codable {
     var stylePreset: WidgetStylePreset
     var enabledCategories: [WidgetAffirmationCategory]
     var issueContext: String
+    var entryCount: Int
+    var currentStreak: Int
+    var averageMood: Double
+    var latestMood: String
     var updatedAt: Date
 
     init(
@@ -63,6 +67,10 @@ struct WidgetAffirmationPayload: Codable {
         stylePreset: WidgetStylePreset,
         enabledCategories: [WidgetAffirmationCategory],
         issueContext: String,
+        entryCount: Int = 0,
+        currentStreak: Int = 0,
+        averageMood: Double = 0,
+        latestMood: String = "okay",
         updatedAt: Date
     ) {
         self.preferredName = preferredName
@@ -75,6 +83,10 @@ struct WidgetAffirmationPayload: Codable {
         self.stylePreset = stylePreset
         self.enabledCategories = enabledCategories
         self.issueContext = issueContext
+        self.entryCount = entryCount
+        self.currentStreak = currentStreak
+        self.averageMood = averageMood
+        self.latestMood = latestMood
         self.updatedAt = updatedAt
     }
 
@@ -89,6 +101,10 @@ struct WidgetAffirmationPayload: Codable {
         case stylePreset
         case enabledCategories
         case issueContext
+        case entryCount
+        case currentStreak
+        case averageMood
+        case latestMood
         case updatedAt
     }
 
@@ -104,6 +120,10 @@ struct WidgetAffirmationPayload: Codable {
         stylePreset = try container.decodeIfPresent(WidgetStylePreset.self, forKey: .stylePreset) ?? .minimal
         enabledCategories = try container.decodeIfPresent([WidgetAffirmationCategory].self, forKey: .enabledCategories) ?? WidgetAffirmationCategory.allCases
         issueContext = try container.decode(String.self, forKey: .issueContext)
+        entryCount = try container.decodeIfPresent(Int.self, forKey: .entryCount) ?? 0
+        currentStreak = try container.decodeIfPresent(Int.self, forKey: .currentStreak) ?? 0
+        averageMood = try container.decodeIfPresent(Double.self, forKey: .averageMood) ?? 0
+        latestMood = try container.decodeIfPresent(String.self, forKey: .latestMood) ?? "okay"
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
     }
 }
