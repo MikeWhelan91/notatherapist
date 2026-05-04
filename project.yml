@@ -11,10 +11,17 @@ targets:
     type: application
     platform: iOS
     sources:
-      - NotATherapist
+      - path: NotATherapist
+        excludes:
+          - WhisperModels/**
       - Shared
+      - path: NotATherapist/WhisperModels
+        type: folder
+        buildPhase: resources
     dependencies:
       - package: Lottie
+      - package: ArgmaxOSS
+        product: WhisperKit
       - target: AnchorWidgets
         embed: true
     settings:
@@ -27,6 +34,7 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Anchor
         INFOPLIST_KEY_NSHealthShareUsageDescription: Optional Apple Health access helps spot simple patterns between sleep, steps, mood, and journal entries.
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: Voice journaling uses the microphone only while you record an entry.
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
@@ -59,3 +67,6 @@ packages:
   Lottie:
     url: https://github.com/airbnb/lottie-ios
     from: 4.5.0
+  ArgmaxOSS:
+    url: https://github.com/argmaxinc/argmax-oss-swift.git
+    from: 0.9.0

@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 63;
+	objectVersion = 77;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -20,6 +20,8 @@
 		46F08413653AF2DED74578DD /* MockServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = C75BC9CA126A05BF22517BEC /* MockServices.swift */; };
 		490A0CA5BBB8AA1E75CD71FB /* AppViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 468F4E2B1C96DE08C27E8932 /* AppViewModel.swift */; };
 		4A88039FEB9C25179005E169 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECEEDCC536C1CF382A1A0BC1 /* OnboardingView.swift */; };
+		4AD903C2B8BA5C9BD432D316 /* VoiceJournalRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7951D921ECA3D863378BA5FB /* VoiceJournalRecorder.swift */; };
+		577C5EF9E360F9B6264117D2 /* WhisperModels in Resources */ = {isa = PBXBuildFile; fileRef = 4DEF63875B57846D282A388B /* WhisperModels */; };
 		5BBBC8A86BDEDDCD82B938BB /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 972FA017E24658E48B6793EB /* Lottie */; };
 		5CB4E1E98B52800A1060DCCC /* AppAttestService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B0B142BADCE1059B06422DD /* AppAttestService.swift */; };
 		652C2C72A60CF787391116AE /* LocalAppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82855229C977B660683AA568 /* LocalAppStore.swift */; };
@@ -35,6 +37,7 @@
 		ACE515FE6CBF1109C9C30ED4 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97B9AA6C3315067AAD058A50 /* Models.swift */; };
 		C15B7D62FC2F6B3EC607C6DB /* InsightsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B2A86DD82E5AEA38D2581EF /* InsightsView.swift */; };
 		C815FC984034D94CA3802209 /* Design.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3494D6D6C7904FF91E44735E /* Design.swift */; };
+		D41313FCDA191E6EC60DB406 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 0BD54767EF7D982052E949FB /* WhisperKit */; };
 		E42919934258310CDD158F2F /* AnchorIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4C6510E00CEEBB62202EF75 /* AnchorIntents.swift */; };
 		E65FA178DA7CB5CA7E642D70 /* ConfettiView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 076262E4224D8B53EAB7F190 /* ConfettiView.swift */; };
 		EDD1A77B06A5BB2AF70237B9 /* WidgetShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EC1FCDA511960C4285A6A2C /* WidgetShared.swift */; };
@@ -77,12 +80,14 @@
 		3494D6D6C7904FF91E44735E /* Design.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Design.swift; sourceTree = "<group>"; };
 		4526177357FDDD334C4B7A82 /* ICloudSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ICloudSyncService.swift; sourceTree = "<group>"; };
 		468F4E2B1C96DE08C27E8932 /* AppViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppViewModel.swift; sourceTree = "<group>"; };
-		47AFDDF38EB4DD7FDB8A2441 /* AnchorWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AnchorWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		47AFDDF38EB4DD7FDB8A2441 /* AnchorWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = AnchorWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		4B2A86DD82E5AEA38D2581EF /* InsightsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsightsView.swift; sourceTree = "<group>"; };
+		4DEF63875B57846D282A388B /* WhisperModels */ = {isa = PBXFileReference; lastKnownFileType = folder; name = WhisperModels; path = NotATherapist/WhisperModels; sourceTree = SOURCE_ROOT; };
 		4EC1FCDA511960C4285A6A2C /* WidgetShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetShared.swift; sourceTree = "<group>"; };
-		59389A36ADA0EEE4C28117C9 /* Anchor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Anchor.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		59389A36ADA0EEE4C28117C9 /* NotATherapist.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = NotATherapist.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5A4B528419784EBC6ADC1296 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		688255F7CDA2BEFF17229452 /* MockData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockData.swift; sourceTree = "<group>"; };
+		7951D921ECA3D863378BA5FB /* VoiceJournalRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceJournalRecorder.swift; sourceTree = "<group>"; };
 		79D6D423A903CEE62D528BA1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		7AA44B6C9A3D9AE9B2ECEE80 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		806DEB02C67230523F0AA151 /* MessagesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagesView.swift; sourceTree = "<group>"; };
@@ -108,6 +113,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				5BBBC8A86BDEDDCD82B938BB /* Lottie in Frameworks */,
+				D41313FCDA191E6EC60DB406 /* WhisperKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -117,6 +123,7 @@
 		40260BFEFE657DBA75570F1C = {
 			isa = PBXGroup;
 			children = (
+				4DEF63875B57846D282A388B /* WhisperModels */,
 				B00956FD37C52376A7D018CC /* AnchorWidgets */,
 				E71753DD28C86F1F2D786E8E /* NotATherapist */,
 				775E40D6FA333D4B84F483C4 /* Shared */,
@@ -128,7 +135,7 @@
 			isa = PBXGroup;
 			children = (
 				47AFDDF38EB4DD7FDB8A2441 /* AnchorWidgets.appex */,
-				59389A36ADA0EEE4C28117C9 /* Anchor.app */,
+				59389A36ADA0EEE4C28117C9 /* NotATherapist.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -182,6 +189,7 @@
 				1DE6E81A3EC973E2AC9DF78C /* NotificationService.swift */,
 				ECEEDCC536C1CF382A1A0BC1 /* OnboardingView.swift */,
 				F8A850C4E98B449C9F2599F1 /* TodayView.swift */,
+				7951D921ECA3D863378BA5FB /* VoiceJournalRecorder.swift */,
 			);
 			path = NotATherapist;
 			sourceTree = "<group>";
@@ -206,9 +214,10 @@
 			name = NotATherapist;
 			packageProductDependencies = (
 				972FA017E24658E48B6793EB /* Lottie */,
+				0BD54767EF7D982052E949FB /* WhisperKit */,
 			);
 			productName = NotATherapist;
-			productReference = 59389A36ADA0EEE4C28117C9 /* Anchor.app */;
+			productReference = 59389A36ADA0EEE4C28117C9 /* NotATherapist.app */;
 			productType = "com.apple.product-type.application";
 		};
 		F56FFDA4BD80FCE34C0EF511 /* AnchorWidgets */ = {
@@ -248,8 +257,10 @@
 			mainGroup = 40260BFEFE657DBA75570F1C;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				EF4DE0BE787974F1CC4B369A /* XCRemoteSwiftPackageReference "argmax-oss-swift" */,
 				BB9889830FA3B3E931CEFBB5 /* XCRemoteSwiftPackageReference "lottie-ios" */,
 			);
+			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -266,6 +277,7 @@
 			files = (
 				15D4B0EC2CAF818C19BA5636 /* Assets.xcassets in Resources */,
 				317C03C49922F0EE8510B3E8 /* Confetti.json in Resources */,
+				577C5EF9E360F9B6264117D2 /* WhisperModels in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -301,6 +313,7 @@
 				77BE28E7E63CF8229DAE7C95 /* NotificationService.swift in Sources */,
 				4A88039FEB9C25179005E169 /* OnboardingView.swift in Sources */,
 				1EE768C413114529764E4D84 /* TodayView.swift in Sources */,
+				4AD903C2B8BA5C9BD432D316 /* VoiceJournalRecorder.swift in Sources */,
 				EDD1A77B06A5BB2AF70237B9 /* WidgetShared.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -396,10 +409,10 @@
 				CODE_SIGN_ENTITLEMENTS = NotATherapist/NotATherapist.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 5976U4WSJN;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Anchor;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Optional Apple Health access helps spot simple patterns between sleep, steps, mood, and journal entries.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Voice journaling uses the microphone only while you record an entry.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -422,7 +435,6 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = AnchorWidgets/AnchorWidgets.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 5976U4WSJN;
 				INFOPLIST_FILE = AnchorWidgets/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -445,7 +457,6 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = AnchorWidgets/AnchorWidgets.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 5976U4WSJN;
 				INFOPLIST_FILE = AnchorWidgets/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -470,10 +481,10 @@
 				CODE_SIGN_ENTITLEMENTS = NotATherapist/NotATherapist.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 5976U4WSJN;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Anchor;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Optional Apple Health access helps spot simple patterns between sleep, steps, mood, and journal entries.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Voice journaling uses the microphone only while you record an entry.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -587,9 +598,22 @@
 				minimumVersion = 4.5.0;
 			};
 		};
+		EF4DE0BE787974F1CC4B369A /* XCRemoteSwiftPackageReference "argmax-oss-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/argmaxinc/argmax-oss-swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.9.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		0BD54767EF7D982052E949FB /* WhisperKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = EF4DE0BE787974F1CC4B369A /* XCRemoteSwiftPackageReference "argmax-oss-swift" */;
+			productName = WhisperKit;
+		};
 		972FA017E24658E48B6793EB /* Lottie */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = BB9889830FA3B3E931CEFBB5 /* XCRemoteSwiftPackageReference "lottie-ios" */;

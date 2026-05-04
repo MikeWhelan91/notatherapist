@@ -130,6 +130,14 @@ final class AppViewModel: ObservableObject {
         )
     }
 
+    var memorySignals: [MemorySignal] {
+        buildMemorySignals(from: journalEntries)
+    }
+
+    var currentMonthlyReview: MonthlyReview? {
+        monthlyReview(containing: Date())
+    }
+
     var hasInsightContent: Bool {
         insights.isEmpty == false ||
         localSignals.isEmpty == false ||
@@ -448,6 +456,64 @@ final class AppViewModel: ObservableObject {
         journalEntries
             .filter { Calendar.current.isDate($0.date, inSameDayAs: date) }
             .sorted { $0.date > $1.date }
+    }
+
+    func searchEntries(query: String, mood: MoodLevel?, entryType: EntryType?) -> [JournalEntry] {
+        let cleanQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return journalEntries
+            .filter { entry in
+                let matchesQuery = cleanQuery.isEmpty ||
+                    entry.text.lowercased().contains(cleanQuery) ||
+                    entry.themes.contains { $0.lowercased().contains(cleanQuery) } ||
+                    entry.entryType.label.lowercased().contains(cleanQuery)
+                let matchesMood = mood == nil || entry.mood == mood
+                let matchesType = entryType == nil || entry.entryType == entryType
+                return matchesQuery && matchesMood && matchesType
+            }
+            .sorted { $0.date > $1.date }
+    }
+
+    func monthlyReview(containing date: Date) -> MonthlyReview? {
+        let calendar = Calendar.current
+        guard let interval = calendar.dateInterval(of: .month, for: date) else { return nil }
+        let entries = journalEntries.filter { $0.date >= interval.start && $0.date < interval.end }
+        guard entries.isEmpty == false else { return nil }
+
+        let activeDays = Set(entries.map { calendar.startOfDay(for: $0.date) }).count
+        let averageMood = Double(entries.map(\.mood.score).reduce(0, +)) / Double(entries.count)
+        let themeCounts = Dictionary(grouping: entries.flatMap(\.themes), by: { $0 })
+            .mapValues(\.count)
+            .sorted { lhs, rhs in
+                lhs.value == rhs.value ? lhs.key < rhs.key : lhs.value > rhs.value
+            }
+        let topThemes = themeCounts.prefix(4).map(\.key)
+        let bestTheme = themeCounts.first
+        let completedGoals = reflectionGoals.filter { goal in
+            guard let feedbackAt = goal.feedbackAt else { return false }
+            return feedbackAt >= interval.start && feedbackAt < interval.end && goal.status == .completed
+        }
+
+        let pattern = bestTheme.map { "\($0.key) appeared \($0.value) time\($0.value == 1 ? "" : "s") this month." } ?? "This month is still forming a clear pattern."
+        let progress = completedGoals.isEmpty
+            ? "Progress data is still thin; completed next steps will make this clearer."
+            : "You completed \(completedGoals.count) next step\(completedGoals.count == 1 ? "" : "s") this month."
+        let experiment = bestTheme?.key == "Sleep"
+            ? "Protect one consistent wind-down cue for the next 7 days."
+            : bestTheme?.key == "Work"
+                ? "Close or park one work loop before ending each day for a week."
+                : "Repeat one condition from your steadiest day this month."
+
+        return MonthlyReview(
+            id: UUID(),
+            monthTitle: interval.start.formatted(.dateTime.month(.wide).year()),
+            entryCount: entries.count,
+            activeDays: activeDays,
+            averageMood: averageMood,
+            topThemes: topThemes,
+            strongestPattern: pattern,
+            progress: progress,
+            nextExperiment: experiment
+        )
     }
 
     func latestEntry(on date: Date) -> JournalEntry? {
@@ -1337,6 +1403,14 @@ final class AppViewModel: ObservableObject {
         try? localStore.export(snapshot)
     }
 
+    func exportTherapistReport() -> URL? {
+        try? localStore.exportTherapistReport(
+            snapshot: snapshot,
+            memorySignals: memorySignals,
+            monthlyReview: currentMonthlyReview
+        )
+    }
+
     func deleteLocalData() {
         journalEntries = []
         insights = []
@@ -1420,6 +1494,43 @@ final class AppViewModel: ObservableObject {
             ),
             at: 0
         )
+    }
+
+    private func buildMemorySignals(from entries: [JournalEntry]) -> [MemorySignal] {
+        let groupedThemes = Dictionary(grouping: entries.flatMap { entry in
+            entry.themes.map { theme in (theme: theme, date: entry.date) }
+        }, by: { $0.theme })
+
+        let themeSignals = groupedThemes.compactMap { theme, values -> MemorySignal? in
+            guard values.count >= 2 else { return nil }
+            return MemorySignal(
+                id: UUID(),
+                title: "\(theme) keeps appearing",
+                detail: "\(theme) appears across \(values.count) entries. Watch what makes it heavier or lighter.",
+                count: values.count,
+                lastSeen: values.map(\.date).max() ?? Date(),
+                category: "Theme"
+            )
+        }
+
+        let goalSignals = reflectionGoals.compactMap { goal -> MemorySignal? in
+            guard let feedback = goal.feedback else { return nil }
+            return MemorySignal(
+                id: goal.id,
+                title: goal.title,
+                detail: "Feedback: \(feedback.replacingOccurrences(of: "_", with: " ")).",
+                count: 1,
+                lastSeen: goal.feedbackAt ?? goal.createdAt,
+                category: "Goal"
+            )
+        }
+
+        return (themeSignals + goalSignals)
+            .sorted { lhs, rhs in
+                lhs.count == rhs.count ? lhs.lastSeen > rhs.lastSeen : lhs.count > rhs.count
+            }
+            .prefix(12)
+            .map { $0 }
     }
 
     private var streakSummary: (current: Int, longest: Int) {

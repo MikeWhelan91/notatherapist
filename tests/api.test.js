@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const { createConversation, replyToConversation } = require("../lib/api/conversationEngine");
 const { createDailyReview, createGoalFromReview, createWeeklyReview } = require("../lib/api/reviewEngine");
+const { crisisDailyReview, detectSafety, validateGeneratedText } = require("../lib/api/safety");
 const { normalizeEntries } = require("../lib/api/validation");
 
 const entries = normalizeEntries([
@@ -122,5 +123,18 @@ assert.equal(deeper.remainingTurns, 11);
 assert.equal(deeper.deepeningUsed, true);
 assert.equal(deeper.phase, "deeper");
 assert.equal(typeof deeper.replyContext, "string");
+
+const safety = detectSafety(["I might kill myself tonight"]);
+assert.equal(safety.level, "crisis");
+
+const crisisReview = crisisDailyReview({
+  date: "2026-05-04T00:00:00.000Z",
+  entries: entries.slice(0, 1)
+});
+assert.equal(crisisReview.source, "safety");
+assert.equal(crisisReview.review.suggestedGoalTitle, "");
+
+assert.throws(() => validateGeneratedText({ reply: "You have depression." }), /diagnostic/i);
+assert.doesNotThrow(() => validateGeneratedText({ reply: "This could resemble a worry loop." }));
 
 console.log("API tests passed");

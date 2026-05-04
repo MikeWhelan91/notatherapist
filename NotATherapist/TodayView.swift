@@ -1151,6 +1151,10 @@ struct SettingsView: View {
                         exportURL = appModel.exportLocalData()
                     }
 
+                    Button("Export therapy report") {
+                        exportURL = appModel.exportTherapistReport()
+                    }
+
                     if let exportURL {
                         ShareLink(item: exportURL) {
                             Label("Share export", systemImage: "square.and.arrow.up")

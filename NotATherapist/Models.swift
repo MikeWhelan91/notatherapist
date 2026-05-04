@@ -313,6 +313,27 @@ struct WeeklyReview: Identifiable, Codable, Hashable {
     var researchPrompt: String?
 }
 
+struct MonthlyReview: Identifiable, Codable, Hashable {
+    let id: UUID
+    var monthTitle: String
+    var entryCount: Int
+    var activeDays: Int
+    var averageMood: Double
+    var topThemes: [String]
+    var strongestPattern: String
+    var progress: String
+    var nextExperiment: String
+}
+
+struct MemorySignal: Identifiable, Codable, Hashable {
+    let id: UUID
+    var title: String
+    var detail: String
+    var count: Int
+    var lastSeen: Date
+    var category: String
+}
+
 enum HealthTrend: String, Codable, Hashable {
     case up
     case down

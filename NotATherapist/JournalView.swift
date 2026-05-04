@@ -475,6 +475,7 @@ struct NewEntryView: View {
     @State private var composeContentVisible = false
     @State private var companionDocked = false
     @State private var selectedTemplateID: JournalTemplate.ID?
+    @StateObject private var voiceRecorder = VoiceJournalRecorder()
     @FocusState private var editorFocused: Bool
 
     private let date: Date
@@ -525,6 +526,8 @@ struct NewEntryView: View {
                         ) { template in
                             applyTemplate(template)
                         }
+
+                        voiceControls
 
                         TextEditor(text: $text)
                             .focused($editorFocused)
@@ -613,7 +616,64 @@ struct NewEntryView: View {
             .onAppear {
                 circleState = .attentive
             }
+            .onChange(of: voiceRecorder.transcript) { _, transcript in
+                guard transcript.isEmpty == false else { return }
+                text = transcript
+                circleState = .typing
+            }
         }
+    }
+
+    private var voiceControls: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Button {
+                    voiceRecorder.toggleRecording()
+                    editorFocused = false
+                    circleState = voiceRecorder.isRecording ? .attentive : .listening
+                } label: {
+                    Label(voiceRecorder.isRecording ? "Stop voice" : "Voice entry", systemImage: voiceRecorder.isRecording ? "stop.circle.fill" : "mic.circle.fill")
+                }
+                .buttonStyle(CompactIconButtonStyle())
+
+                if voiceRecorder.transcript.isEmpty == false {
+                    Button {
+                        voiceRecorder.resetTranscript()
+                        text = ""
+                    } label: {
+                        Label("Clear", systemImage: "xmark.circle")
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption.weight(.semibold))
+                }
+            }
+
+            switch voiceRecorder.state {
+            case .requestingPermission:
+                Text("Requesting microphone permission...")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            case .recording:
+                Text("Listening. Speak naturally, then stop when you are done.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            case .preparingModel:
+                Text("Preparing the bundled on-device voice model.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            case .transcribing:
+                Text("Transcribing on device with WhisperKit...")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            case .unavailable(let message):
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            case .idle:
+                EmptyView()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var suggestedTemplates: [JournalTemplate] {

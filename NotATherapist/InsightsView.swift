@@ -430,6 +430,8 @@ private struct AnalyticsView: View {
             } else {
                 VStack(alignment: .leading, spacing: AppSpacing.section) {
                     analyticsSummary
+                    monthlyReviewSection
+                    memorySignalsSection
                     signalClarityDeltaSummary
                     signalClarityChart
                     signalClarityHistorySection
@@ -464,6 +466,71 @@ private struct AnalyticsView: View {
                 metric("Mood", value: averageMoodLabel)
                 Divider()
                 metric("Reviews", value: "\(appModel.dailyReviews.count)")
+            }
+        }
+    }
+
+    private var monthlyReviewSection: some View {
+        Group {
+            if let review = appModel.currentMonthlyReview {
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionLabel(title: "Month in review")
+                    ReferenceCard {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                Text(review.monthTitle)
+                                    .font(.headline)
+                                Spacer()
+                                Text("\(review.activeDays) days")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+                            Text(review.strongestPattern)
+                                .font(.subheadline)
+                            Text(review.progress)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("Try next: \(review.nextExperiment)")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(AppTheme.accent)
+                            if review.topThemes.isEmpty == false {
+                                Text(review.topThemes.joined(separator: " · "))
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var memorySignalsSection: some View {
+        let signals = appModel.memorySignals
+        return Group {
+            if signals.isEmpty == false {
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionLabel(title: "Long-term memory")
+                    ReferenceCard {
+                        VStack(alignment: .leading, spacing: 10) {
+                            ForEach(signals.prefix(4)) { signal in
+                                HStack(alignment: .top, spacing: 10) {
+                                    Image(systemName: signal.category == "Goal" ? "flag.checkered" : "point.3.connected.trianglepath.dotted")
+                                        .font(.caption)
+                                        .foregroundStyle(AppTheme.accent)
+                                        .frame(width: 18)
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(signal.title)
+                                            .font(.caption.weight(.semibold))
+                                        Text(signal.detail)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
