@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct OnboardingView: View {
     @EnvironmentObject private var appModel: AppViewModel
@@ -25,6 +26,7 @@ struct OnboardingView: View {
     @State private var selectedMood: MoodLevel = .okay
     @State private var firstCheckInType: EntryType = .reflection
     @State private var firstCheckInBody = ""
+    @State private var firstCheckInTypingReactionTask: Task<Void, Never>?
 
     @State private var isGeneratingFirstCheckIn = false
     @State private var firstCheckInReview: DailyReview?
@@ -86,7 +88,7 @@ struct OnboardingView: View {
 
             circleHeader
                 .padding(.top, 30)
-                .padding(.bottom, 18)
+                .padding(.bottom, page == firstReflectionPageIndex ? 34 : 18)
                 .opacity(isCompletingOnboarding ? 0 : 1)
 
             TabView(selection: $page) {
@@ -122,7 +124,6 @@ struct OnboardingView: View {
         }
         .background(onboardingBackground)
         .fontDesign(.rounded)
-        .onTapGesture { focusedField = nil }
         .onChange(of: preferredName) { _, value in
             guard page == introPageIndex else { return }
             if value.count % 3 == 0, value.isEmpty == false { reactCompanion(.typing) }
@@ -133,7 +134,7 @@ struct OnboardingView: View {
         }
         .onChange(of: firstCheckInBody) { _, value in
             guard page == firstCheckInPageIndex else { return }
-            if value.count % 18 == 0, value.isEmpty == false { reactCompanion(.typing) }
+            scheduleFirstCheckInTypingReaction(for: value)
         }
         .onChange(of: page) { oldPage, newPage in
             focusedField = nil
@@ -150,6 +151,10 @@ struct OnboardingView: View {
                 Spacer()
                 Button("Done") { focusedField = nil }
             }
+        }
+        .overlay {
+            KeyboardDismissTapCatcher()
+                .ignoresSafeArea()
         }
         .overlay {
             ConfettiOverlayView(trigger: onboardingConfettiTrigger)
@@ -1011,9 +1016,12 @@ struct OnboardingView: View {
                     TextEditor(text: $firstCheckInBody)
                         .focused($focusedField, equals: .firstEntry)
                         .font(.body)
+                        .foregroundStyle(.primary)
                         .scrollContentBackground(.hidden)
+                        .background(Color.clear)
                         .padding(8)
                         .frame(minHeight: 230)
+                        .id("first-check-in-editor")
                     if firstCheckInBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Text("Write what happened, what you felt, and why it mattered.")
                             .font(.subheadline)
@@ -1570,6 +1578,19 @@ struct OnboardingView: View {
         }
     }
 
+    private func scheduleFirstCheckInTypingReaction(for value: String) {
+        firstCheckInTypingReactionTask?.cancel()
+        guard value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else { return }
+        firstCheckInTypingReactionTask = Task {
+            try? await Task.sleep(nanoseconds: 420_000_000)
+            guard Task.isCancelled == false else { return }
+            await MainActor.run {
+                guard page == firstCheckInPageIndex, focusedField == .firstEntry else { return }
+                reactCompanion(.typing)
+            }
+        }
+    }
+
     private func reflectionLead(_ review: DailyReview) -> String {
         let name = appModel.onboardingProfile.preferredName.trimmingCharacters(in: .whitespacesAndNewlines)
         let prefix = name.isEmpty ? "" : "\(name), "
@@ -2098,6 +2119,47 @@ private struct OnboardingQuestionPage<Content: View>: View {
         case .form: .easeOut(duration: 0.32).delay(0.08)
         case .assessment: .easeOut(duration: 0.22).delay(0.05)
         case .results: .interactiveSpring(response: 0.54, dampingFraction: 0.82, blendDuration: 0.22).delay(0.12)
+        }
+    }
+}
+
+private struct KeyboardDismissTapCatcher: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIView {
+        let view = PassthroughView()
+        view.backgroundColor = .clear
+        let recognizer = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
+        recognizer.cancelsTouchesInView = false
+        recognizer.delegate = context.coordinator
+        view.addGestureRecognizer(recognizer)
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        @objc func handleTap(_ recognizer: UITapGestureRecognizer) {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            var view = touch.view
+            while let current = view {
+                if current is UITextView || current is UITextField {
+                    return false
+                }
+                view = current.superview
+            }
+            return true
+        }
+    }
+
+    private final class PassthroughView: UIView {
+        override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+            true
         }
     }
 }

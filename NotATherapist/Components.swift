@@ -42,7 +42,8 @@ struct AICircleView: View {
         TimelineView(.animation) { timeline in
             let time = timeline.date.timeIntervalSinceReferenceDate
             let elapsed = timeline.date.timeIntervalSince(animationStart)
-            let pulse = (sin((time / (profile.breatheDuration * personality.breatheSpeed)) * .pi * 2) + 1) / 2
+            let basePulse = (sin((time / (profile.breatheDuration * personality.breatheSpeed)) * .pi * 2) + 1) / 2
+            let pulse = min(1, basePulse * personality.pulseMultiplier)
             let introProgress = min(max(elapsed / 18, 0), 1)
             let easedIntroProgress = introProgress * introProgress * (3 - 2 * introProgress)
             let drift = motionStyle == .intro ? easedIntroProgress * 88 : (elapsed / profile.motionDuration) * profile.motionOffset
@@ -162,17 +163,17 @@ struct AICircleView: View {
                         .scaleEffect(1.08)
                 }
 
-                if state == .responding || state == .checkIn || state == .typing {
+                if state == .responding || state == .checkIn || state == .typing || state == .thinking || state == .listening {
                     ForEach(0..<personality.orbitDots, id: \.self) { index in
                         let phase = (Double(index) / 6.0) * .pi * 2
-                        let orbit = size * (state == .responding ? 0.62 : 0.56) * personality.orbitRadius
+                        let orbit = size * (state == .responding || state == .thinking ? 0.62 : 0.56) * personality.orbitRadius
                         let x = cos((time * personality.orbitSpeed) + phase) * orbit
                         let y = sin((time * personality.orbitSpeed) + phase) * orbit
                         Circle()
-                            .fill(tint.opacity(state == .responding ? personality.respondingOpacity : personality.idleOrbitOpacity))
+                            .fill(tint.opacity(state == .responding || state == .thinking ? personality.respondingOpacity : personality.idleOrbitOpacity))
                             .frame(width: max(2, size * personality.dotSize), height: max(2, size * personality.dotSize))
                             .offset(x: x, y: y)
-                            .blur(radius: state == .responding ? 0.9 : 0.35)
+                            .blur(radius: state == .responding || state == .thinking ? 0.9 : 0.35)
                     }
                 }
 
@@ -438,7 +439,7 @@ private struct CompanionPersonalityProfile {
     var swaySpeed: Double {
         switch kind {
         case .grounded: 0.58
-        case .energetic: 1.2
+        case .energetic: 1.55
         case .calm: 0.36
         case .analytic: 0.88
         }
@@ -447,9 +448,18 @@ private struct CompanionPersonalityProfile {
     var swayAmount: Double {
         switch kind {
         case .grounded: 1.1
-        case .energetic: 2.6
+        case .energetic: 4.2
         case .calm: 0.7
         case .analytic: 1.4
+        }
+    }
+
+    var pulseMultiplier: Double {
+        switch kind {
+        case .grounded: 1.0
+        case .energetic: 1.28
+        case .calm: 0.82
+        case .analytic: 1.08
         }
     }
 

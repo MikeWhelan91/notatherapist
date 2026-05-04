@@ -320,12 +320,10 @@ final class AppViewModel: ObservableObject {
 
         let personality: CompanionPersonality
         switch state {
-        case .overwhelmed:
-            personality = .grounded
-        case .activated:
-            personality = .analytic
+        case .overwhelmed, .activated:
+            personality = .energetic
         case .steadying:
-            personality = .grounded
+            personality = .analytic
         case .balanced, .thriving:
             personality = .calm
         }
@@ -600,8 +598,8 @@ final class AppViewModel: ObservableObject {
 
     private func mapState(from score: Double) -> CompanionEmotionalState {
         switch score {
-        case ..<0.25: .overwhelmed
-        case ..<0.45: .activated
+        case ..<0.35: .overwhelmed
+        case ..<0.55: .activated
         case ..<0.65: .steadying
         case ..<0.82: .balanced
         default: .thriving

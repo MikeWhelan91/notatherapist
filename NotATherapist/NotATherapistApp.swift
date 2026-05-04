@@ -60,7 +60,7 @@ private struct OnboardingCompanionHandoffOverlay: View {
                 size: 132,
                 strokeWidth: 3.2,
                 motionStyle: .continuous,
-                tint: appModel.companionTint,
+                tint: appModel.journalCompanionTint,
                 personality: appModel.companionPersonality
             )
             .position(
@@ -258,8 +258,10 @@ private struct GlobalCompanionOverlay: View {
     private var overlayTint: Color {
         switch router.companionPresentation {
         case .hidden:
-            appModel.companionTint
-        case .journal, .insights, .messages, .calm, .composer, .transitioningToComposer:
+            appModel.journalCompanionTint
+        case .journal, .transitioningToComposer:
+            appModel.journalCompanionTint
+        case .insights, .messages, .calm, .composer:
             appModel.companionTint
         }
     }
