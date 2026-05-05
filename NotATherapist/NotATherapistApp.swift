@@ -200,7 +200,7 @@ struct MainTabView: View {
     private func presentation(for tab: MainTab) -> CompanionPresentation {
         switch tab {
         case .journal: .journal
-        case .insights: .hidden
+        case .insights: .insights
         case .messages: .hidden
         case .calm: .calm
         }

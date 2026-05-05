@@ -187,15 +187,12 @@ private struct MessagesEmptyState: View {
     let progressText: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Weekly check-ins unlock automatically")
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Weekly check-ins")
                 .font(.title3.weight(.bold))
             Text(progressText)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            Text("Once a check-in is available, your conversation history will appear here.")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 4)

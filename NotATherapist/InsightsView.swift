@@ -9,27 +9,11 @@ struct InsightsView: View {
         NavigationStack {
             ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 22) {
+                    VStack(alignment: .leading, spacing: 0) {
                         Color.clear
                             .frame(height: 1)
                             .id("insights-top")
-                        Text("Insights")
-                            .font(.title2.weight(.semibold))
-                            .padding(.horizontal, AppSpacing.page)
-                            .padding(.top, 8)
-                        HStack {
-                            Spacer()
-                            AICircleView(
-                                state: appModel.companionCircleState,
-                                size: 110,
-                                strokeWidth: 3,
-                                tint: appModel.journalCompanionTint,
-                                personality: appModel.companionPersonality
-                            )
-                            Spacer()
-                        }
-                        .padding(.top, -2)
-                        .padding(.bottom, 4)
+                        CompanionTabHeader(title: "Insights", state: appModel.companionCircleState, tint: appModel.journalCompanionTint)
                         ProfessionalInsightsDashboard()
                             .padding(.horizontal, AppSpacing.page)
                             .padding(.bottom, 92)
@@ -94,7 +78,7 @@ private struct ProfessionalInsightsDashboard: View {
             ContentUnavailableView(
                 "No data yet",
                 systemImage: "chart.line.uptrend.xyaxis",
-                description: Text("Write a few entries and Anchor will show mood trends, consistency, and review signals here.")
+                description: Text("Write a few entries to unlock trends.")
             )
             .padding(.top, 80)
         } else {
@@ -130,7 +114,7 @@ private struct ProfessionalInsightsDashboard: View {
         if appModel.hasWeeklyReview, appModel.weeklyReview.suggestion.isEmpty == false {
             return appModel.weeklyReview.suggestion
         }
-        return "Real signals from your entries, reviews, mood calendar, and follow-through."
+        return "Mood, journal, and review signals."
     }
 
     private var metricStrip: some View {
@@ -199,7 +183,7 @@ private struct ProfessionalInsightsDashboard: View {
             } else {
                 LockedInsightPreview(
                     title: "Weekly review",
-                    detail: appModel.weeklyUnlockProgressText,
+                    detail: weeklyLockedDetail,
                     systemImage: "calendar.badge.clock",
                     premiumOnly: false
                 ) {
@@ -219,7 +203,7 @@ private struct ProfessionalInsightsDashboard: View {
             } else {
                 LockedInsightPreview(
                     title: "Monthly review",
-                    detail: appModel.hasMonthlyReviewAccess ? appModel.monthlyReviewAvailabilityText : "Monthly reviews are Premium only.",
+                    detail: monthlyLockedDetail,
                     systemImage: appModel.hasMonthlyReviewAccess ? "calendar" : "lock.fill",
                     premiumOnly: appModel.hasMonthlyReviewAccess == false
                 ) {
@@ -236,6 +220,19 @@ private struct ProfessionalInsightsDashboard: View {
             appModel.weeklyReview.progressSignal?.isEmpty == false ||
             appModel.weeklyReview.goalFollowThrough.isEmpty == false
         )
+    }
+
+    private var weeklyLockedDetail: String {
+        let readiness = appModel.weeklyReadiness
+        if readiness.ready { return "Weekly review ready." }
+        return "\(readiness.dayCount)/3 active days"
+    }
+
+    private var monthlyLockedDetail: String {
+        guard appModel.hasMonthlyReviewAccess else { return "Premium only." }
+        let entries = appModel.monthlyReviewContextEntries
+        let days = Set(entries.map { Calendar.current.startOfDay(for: $0.date) }).count
+        return "\(days)/8 days • \(entries.count)/14 entries"
     }
 
     private var dailyReviewSummary: some View {
