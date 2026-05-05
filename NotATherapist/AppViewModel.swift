@@ -41,6 +41,7 @@ final class AppViewModel: ObservableObject {
     @Published var insights: [Insight]
     @Published var conversations: [Conversation] = []
     @Published var weeklyReview: WeeklyReview
+    @Published var monthlyReview: MonthlyReview?
     @Published var sounds: [CalmSound] = MockData.sounds
     @Published var selectedJournalDate: Date = Date()
     @Published var onboardingProfile: OnboardingProfile = .current
@@ -95,6 +96,7 @@ final class AppViewModel: ObservableObject {
             insights = snapshot.insights
             conversations = snapshot.conversations
             weeklyReview = snapshot.weeklyReview
+            monthlyReview = snapshot.monthlyReview
             healthSummary = snapshot.healthSummary
             reflectionGoals = snapshot.reflectionGoals
             dailyReviews = snapshot.dailyReviews
@@ -135,7 +137,7 @@ final class AppViewModel: ObservableObject {
     }
 
     var currentMonthlyReview: MonthlyReview? {
-        monthlyReview(containing: Date())
+        monthlyReview ?? monthlyStatsReview(containing: Date())
     }
 
     var hasInsightContent: Bool {
@@ -488,7 +490,7 @@ final class AppViewModel: ObservableObject {
             .sorted { $0.date > $1.date }
     }
 
-    func monthlyReview(containing date: Date) -> MonthlyReview? {
+    func monthlyStatsReview(containing date: Date) -> MonthlyReview? {
         let calendar = Calendar.current
         guard let interval = calendar.dateInterval(of: .month, for: date) else { return nil }
         let entries = journalEntries.filter { $0.date >= interval.start && $0.date < interval.end }
@@ -802,6 +804,35 @@ final class AppViewModel: ObservableObject {
 
     var hasWeeklyReview: Bool {
         weeklyReadiness.ready
+    }
+
+    var hasMonthlyReviewAccess: Bool {
+        planTier == .premium
+    }
+
+    var monthlyReviewContextEntries: [JournalEntry] {
+        let calendar = Calendar.current
+        let start = calendar.date(byAdding: .day, value: -27, to: calendar.startOfDay(for: Date())) ?? Date()
+        return journalEntries
+            .filter { $0.date >= start && $0.date <= Date() }
+            .sorted { $0.date < $1.date }
+    }
+
+    var hasMonthlyReview: Bool {
+        guard hasMonthlyReviewAccess else { return false }
+        let entries = monthlyReviewContextEntries
+        let activeDays = Set(entries.map { Calendar.current.startOfDay(for: $0.date) }).count
+        return activeDays >= 8 || entries.count >= 14
+    }
+
+    var monthlyReviewAvailabilityText: String {
+        guard hasMonthlyReviewAccess else { return "Monthly reviews are Premium only." }
+        guard hasMonthlyReview else {
+            let entries = monthlyReviewContextEntries
+            let days = Set(entries.map { Calendar.current.startOfDay(for: $0.date) }).count
+            return "Monthly review unlocks after 8 active days or 14 entries in the last 4 weeks. Current: \(days) days, \(entries.count) entries."
+        }
+        return "Monthly review is ready from your last 4 weeks."
     }
 
     var isWeeklyCheckInAvailableNow: Bool {
@@ -1157,6 +1188,32 @@ final class AppViewModel: ObservableObject {
         saveSnapshot()
     }
 
+    func refreshMonthlyReview() async {
+        guard hasMonthlyReviewAccess else {
+            monthlyReview = nil
+            saveSnapshot()
+            return
+        }
+        guard hasMonthlyReview else { return }
+
+        onboardingProfile = .current
+        do {
+            if let review = try await apiService.monthlyReview(
+                entries: monthlyReviewContextEntries,
+                weeklyReviews: [weeklyReview],
+                profile: onboardingProfile,
+                healthSummary: healthSummary,
+                goals: reflectionGoals,
+                planTier: planTier
+            ) {
+                monthlyReview = review
+                saveSnapshot()
+            }
+        } catch {
+            aiConnection = .unavailable
+        }
+    }
+
     func startWeeklyConversation() async -> Conversation {
         guard isWeeklyCheckInAvailableNow else {
             let preview = weeklyCheckInAvailabilityText
@@ -1209,6 +1266,48 @@ final class AppViewModel: ObservableObject {
         return conversation
     }
 
+    func startMonthlyConversation() async -> Conversation {
+        guard hasMonthlyReviewAccess else {
+            return blockedConversation(title: "Monthly review", message: "Monthly reviews are Premium only.", cadence: .monthly)
+        }
+        guard hasMonthlyReview else {
+            return blockedConversation(title: "Monthly review", message: monthlyReviewAvailabilityText, cadence: .monthly)
+        }
+
+        onboardingProfile = .current
+        await refreshMonthlyReview()
+        guard let monthlyReview else {
+            return blockedConversation(title: "Monthly review", message: "Monthly review could not be generated right now.", cadence: .monthly)
+        }
+
+        let conversation: Conversation
+        do {
+            conversation = try await apiService.startMonthlyConversation(monthlyReview: monthlyReview, profile: onboardingProfile)
+        } catch {
+            conversation = blockedConversation(title: "AI unavailable", message: "AI monthly check-in could not be generated. Try again when the service is available.", cadence: .monthly)
+        }
+
+        conversations.insert(conversation, at: 0)
+        saveSnapshot()
+        return conversation
+    }
+
+    private func blockedConversation(title: String, message: String, cadence: ReviewCadence) -> Conversation {
+        Conversation(
+            id: UUID(),
+            title: title,
+            date: Date(),
+            preview: message,
+            messages: [ConversationMessage(id: UUID(), sender: .ai, text: message, date: Date())],
+            status: .ended,
+            remainingTurns: 0,
+            maxTurns: 0,
+            deepeningUsed: false,
+            phase: .core,
+            reviewCadence: cadence
+        )
+    }
+
     private func mostRecentWeeklySlot(beforeOrAt date: Date) -> Date {
         let defaults = UserDefaults.standard
         let weekdayRaw = defaults.integer(forKey: weeklyReminderWeekdayKey)
@@ -1254,11 +1353,12 @@ final class AppViewModel: ObservableObject {
             }
 
             let synthesized = synthesizeWeeklyGoal(from: updated, suggestion: suggestion)
+            let isMonthly = updated.reviewCadence == .monthly
             let goal = addReflectionGoal(
                 title: synthesized.title,
                 reason: synthesized.reason,
                 sourceConversationID: updated.id,
-                durationDays: 7
+                durationDays: isMonthly ? 30 : 7
             )
             updated.contextHints.removeAll { $0.hasPrefix("suggested_goal::") }
             updated.messages.append(
@@ -1724,6 +1824,7 @@ final class AppViewModel: ObservableObject {
             insights: insights,
             conversations: conversations,
             weeklyReview: weeklyReview,
+            monthlyReview: monthlyReview,
             healthSummary: healthSummary,
             reflectionGoals: reflectionGoals,
             dailyReviews: dailyReviews
@@ -1746,6 +1847,7 @@ final class AppViewModel: ObservableObject {
         insights = snapshot.insights
         conversations = snapshot.conversations
         weeklyReview = snapshot.weeklyReview
+        monthlyReview = snapshot.monthlyReview
         healthSummary = snapshot.healthSummary
         reflectionGoals = snapshot.reflectionGoals
         dailyReviews = snapshot.dailyReviews

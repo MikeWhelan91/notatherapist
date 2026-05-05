@@ -5,6 +5,7 @@ struct MessagesView: View {
     @EnvironmentObject private var router: AppRouter
     @State private var path: [Conversation] = []
     @State private var isStartingConversation = false
+    @State private var isStartingMonthlyConversation = false
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -35,7 +36,7 @@ struct MessagesView: View {
                         .padding(.bottom, 4)
 
                         VStack(alignment: .leading, spacing: AppSpacing.section) {
-                            if appModel.hasWeeklyReview == false && appModel.conversations.isEmpty {
+                            if appModel.hasWeeklyReview == false && appModel.hasMonthlyReviewAccess == false && appModel.conversations.isEmpty {
                                 MessagesEmptyState(progressText: appModel.weeklyUnlockProgressText)
                             } else {
                                 VStack(alignment: .leading, spacing: 8) {
@@ -67,6 +68,26 @@ struct MessagesView: View {
                                         }
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                         .padding(.vertical, 4)
+                                    }
+                                }
+
+                                VStack(alignment: .leading, spacing: 8) {
+                                    SectionLabel(title: "Monthly review")
+                                    ReferenceCard {
+                                        VStack(alignment: .leading, spacing: 12) {
+                                            Text(appModel.hasMonthlyReviewAccess ? "A deeper review across your last 4 weeks." : "Monthly reviews are included with Premium.")
+                                                .font(.subheadline)
+                                            Text(appModel.monthlyReviewAvailabilityText)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                            Button {
+                                                startMonthlyConversation()
+                                            } label: {
+                                                Text(isStartingMonthlyConversation ? "Starting" : (appModel.hasMonthlyReview ? "Start monthly review" : "Not available yet"))
+                                            }
+                                            .buttonStyle(PrimaryCapsuleButtonStyle())
+                                            .disabled(isStartingMonthlyConversation || appModel.hasMonthlyReview == false)
+                                        }
                                     }
                                 }
 
@@ -148,6 +169,16 @@ struct MessagesView: View {
             let conversation = await appModel.startWeeklyConversation()
             path.append(conversation)
             isStartingConversation = false
+        }
+    }
+
+    private func startMonthlyConversation() {
+        guard isStartingMonthlyConversation == false else { return }
+        isStartingMonthlyConversation = true
+        Task {
+            let conversation = await appModel.startMonthlyConversation()
+            path.append(conversation)
+            isStartingMonthlyConversation = false
         }
     }
 }
@@ -340,7 +371,8 @@ struct ConversationView: View {
 
     private var statusLine: String {
         guard conversation.status == .active else { return "Settled" }
-        let phasePrefix = conversation.phase == .deeper ? "Deeper mode" : "Check-in"
+        let label = conversation.reviewCadence == .monthly ? "Monthly review" : "Check-in"
+        let phasePrefix = conversation.phase == .deeper ? "Deeper mode" : label
         return "\(phasePrefix) · \(conversation.remainingTurns) replies left"
     }
 

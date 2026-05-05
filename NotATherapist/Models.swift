@@ -266,6 +266,11 @@ enum ConversationPhase: String, Codable {
     case deeper
 }
 
+enum ReviewCadence: String, Codable {
+    case weekly
+    case monthly
+}
+
 struct ConversationMessage: Identifiable, Codable, Hashable {
     let id: UUID
     var sender: MessageSender
@@ -286,6 +291,7 @@ struct Conversation: Identifiable, Codable, Hashable {
     var deepeningUsed: Bool = false
     var phase: ConversationPhase = .core
     var contextHints: [String] = []
+    var reviewCadence: ReviewCadence? = .weekly
 }
 
 struct CalmSound: Identifiable, Codable, Hashable {
@@ -316,6 +322,7 @@ struct WeeklyReview: Identifiable, Codable, Hashable {
 struct MonthlyReview: Identifiable, Codable, Hashable {
     let id: UUID
     var monthTitle: String
+    var dateRange: String = ""
     var entryCount: Int
     var activeDays: Int
     var averageMood: Double
@@ -326,6 +333,17 @@ struct MonthlyReview: Identifiable, Codable, Hashable {
     var dataQuality: String = "early"
     var summary: String = ""
     var moodRange: String = ""
+    var patterns: [String] = []
+    var risk: String = ""
+    var suggestion: String = ""
+    var healthPatterns: [String] = []
+    var patternShift: String = ""
+    var goalFollowThrough: String = ""
+    var progressSignal: String?
+    var primaryLoop: String?
+    var baselineComparison: String?
+    var suggestedTemplate: String?
+    var researchPrompt: String?
 }
 
 struct MemorySignal: Identifiable, Codable, Hashable {

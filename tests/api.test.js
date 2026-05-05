@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const { createConversation, replyToConversation } = require("../lib/api/conversationEngine");
-const { createDailyReview, createGoalFromReview, createWeeklyReview } = require("../lib/api/reviewEngine");
+const { createDailyReview, createGoalFromReview, createMonthlyReview, createWeeklyReview } = require("../lib/api/reviewEngine");
 const { crisisDailyReview, detectSafety, validateGeneratedText } = require("../lib/api/safety");
 const { normalizeEntries } = require("../lib/api/validation");
 
@@ -122,6 +122,29 @@ assert.equal(thinWeeklyResult.canReview, true);
 assert.equal(thinWeeklyResult.weeklyReview.patterns.length, 0);
 assert.equal(thinWeeklyResult.weeklyReview.risk, "");
 
+const freeMonthlyResult = createMonthlyReview({ entries, planTier: "free" });
+assert.equal(freeMonthlyResult.canReview, false);
+assert.equal(freeMonthlyResult.monthlyReview, null);
+
+const monthlyEntries = normalizeEntries(Array.from({ length: 14 }, (_, index) => ({
+  id: `month-${index}`,
+  date: new Date(Date.UTC(2026, 4, index + 1, 18)).toISOString(),
+  mood: index % 3 === 0 ? "low" : "okay",
+  entryType: index % 4 === 0 ? "win" : "reflection",
+  text: index % 2 === 0 ? "Work decisions kept coming up." : "I tried to park one work loop.",
+  themes: ["Work"]
+})));
+const monthlyResult = createMonthlyReview({
+  entries: monthlyEntries,
+  weeklyReviews: [premiumWeeklyResult.weeklyReview],
+  healthSummary,
+  goals: [],
+  planTier: "premium"
+});
+assert.equal(monthlyResult.canReview, true);
+assert.equal(monthlyResult.monthlyReview.patterns.length > 0, true);
+assert.equal(monthlyResult.monthlyReview.nextExperiment.includes("30 days"), true);
+
 const conversation = createConversation({
   weeklyReview: weeklyResult.weeklyReview,
   profile: { preferredName: "Mike" }
@@ -155,6 +178,24 @@ assert.equal(deeper.remainingTurns, 11);
 assert.equal(deeper.deepeningUsed, true);
 assert.equal(deeper.phase, "deeper");
 assert.equal(typeof deeper.replyContext, "string");
+
+const monthlyConversation = createConversation({
+  monthlyReview: monthlyResult.monthlyReview,
+  profile: { preferredName: "Mike" },
+  cadence: "monthly"
+});
+assert.equal(monthlyConversation.remainingTurns, 12);
+assert.equal(monthlyConversation.reviewCadence, "monthly");
+
+const monthlyAction = replyToConversation({
+  text: "",
+  action: "Give me one action",
+  remainingTurns: monthlyConversation.remainingTurns,
+  profile: {},
+  conversation: monthlyConversation,
+  planTier: "premium"
+});
+assert.equal(monthlyAction.suggestedGoal.dueDate.length > 0, true);
 
 const safety = detectSafety(["I might kill myself tonight"]);
 assert.equal(safety.level, "crisis");

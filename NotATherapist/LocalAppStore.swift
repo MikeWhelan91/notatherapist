@@ -12,6 +12,7 @@ struct AppSnapshot: Codable {
     var insights: [Insight]
     var conversations: [Conversation]
     var weeklyReview: WeeklyReview
+    var monthlyReview: MonthlyReview?
     var healthSummary: HealthSummary?
     var reflectionGoals: [ReflectionGoal]
     var dailyReviews: [DailyReview]

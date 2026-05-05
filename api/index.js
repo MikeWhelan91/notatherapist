@@ -15,6 +15,7 @@ module.exports = (req, res) => handleEndpoint(req, res, ["GET"], async () => {
       "POST /api/attest/verify",
       "POST /api/daily-review",
       "POST /api/weekly-review",
+      "POST /api/monthly-review",
       "POST /api/goals/from-review",
       "POST /api/conversation/start",
       "POST /api/conversation/reply"

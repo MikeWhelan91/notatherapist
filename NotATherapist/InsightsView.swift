@@ -203,10 +203,20 @@ private struct ProfessionalInsightsDashboard: View {
 
     private var monthlyInsights: some View {
         VStack(alignment: .leading, spacing: 22) {
-            monthlyReviewSummary
-            moodCalendar
-            moodTrend
-            moodBreakdown
+            if appModel.hasMonthlyReviewAccess {
+                monthlyReviewSummary
+                moodCalendar
+                moodTrend
+                moodBreakdown
+            } else {
+                InsightSummaryBlock(
+                    title: "Monthly review",
+                    value: "Premium",
+                    detail: "Monthly reviews are a Premium feature. They use the previous 4 weeks, weekly review carryover, and a 30-day goal.",
+                    symbol: "lock.fill",
+                    tint: .secondary
+                )
+            }
         }
     }
 

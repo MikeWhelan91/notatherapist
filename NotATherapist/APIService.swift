@@ -53,6 +53,12 @@ struct NotATherapistAPIService {
         return response.weeklyReview
     }
 
+    func monthlyReview(entries: [JournalEntry], weeklyReviews: [WeeklyReview], profile: OnboardingProfile, healthSummary: HealthSummary?, goals: [ReflectionGoal], planTier: AppPlanTier) async throws -> MonthlyReview? {
+        let request = MonthlyReviewRequest(entries: entries, weeklyReviews: weeklyReviews, profile: profile, healthSummary: healthSummary, goals: goals, planTier: planTier.rawValue)
+        let response: MonthlyReviewResponse = try await post("/api/monthly-review", body: request)
+        return response.monthlyReview
+    }
+
     func health() async throws -> APIHealthResponse {
         var request = URLRequest(url: baseURL.appending(path: "/api/health"))
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -69,7 +75,13 @@ struct NotATherapistAPIService {
     }
 
     func startConversation(weeklyReview: WeeklyReview, profile: OnboardingProfile) async throws -> Conversation {
-        let request = ConversationStartRequest(weeklyReview: weeklyReview, profile: profile)
+        let request = ConversationStartRequest(weeklyReview: weeklyReview, monthlyReview: nil, profile: profile, cadence: ReviewCadence.weekly.rawValue)
+        let response: ConversationStartResponse = try await post("/api/conversation/start", body: request)
+        return response.conversation
+    }
+
+    func startMonthlyConversation(monthlyReview: MonthlyReview, profile: OnboardingProfile) async throws -> Conversation {
+        let request = ConversationStartRequest(weeklyReview: nil, monthlyReview: monthlyReview, profile: profile, cadence: ReviewCadence.monthly.rawValue)
         let response: ConversationStartResponse = try await post("/api/conversation/start", body: request)
         return response.conversation
     }
@@ -172,6 +184,15 @@ private struct WeeklyReviewRequest: Encodable {
     let planTier: String
 }
 
+private struct MonthlyReviewRequest: Encodable {
+    let entries: [JournalEntry]
+    let weeklyReviews: [WeeklyReview]
+    let profile: OnboardingProfile
+    let healthSummary: HealthSummary?
+    let goals: [ReflectionGoal]
+    let planTier: String
+}
+
 private struct WeeklyReviewResponse: Decodable {
     let ok: Bool
     let canReview: Bool
@@ -180,9 +201,19 @@ private struct WeeklyReviewResponse: Decodable {
     let weeklyReview: WeeklyReview?
 }
 
+private struct MonthlyReviewResponse: Decodable {
+    let ok: Bool
+    let canReview: Bool
+    let reason: String
+    let source: String?
+    let monthlyReview: MonthlyReview?
+}
+
 private struct ConversationStartRequest: Encodable {
-    let weeklyReview: WeeklyReview
+    let weeklyReview: WeeklyReview?
+    let monthlyReview: MonthlyReview?
     let profile: OnboardingProfile
+    let cadence: String
 }
 
 private struct ConversationStartResponse: Decodable {
