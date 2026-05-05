@@ -14,7 +14,7 @@ struct MessagesView: View {
                         Color.clear
                             .frame(height: 1)
                             .id("messages-top")
-                        CompanionTabHeader(title: "Messages", state: .attentive, tint: appModel.journalCompanionTint)
+                        CompanionTabHeader(title: "Messages", state: appModel.companionCircleState, tint: appModel.journalCompanionTint)
 
                         VStack(alignment: .leading, spacing: AppSpacing.section) {
                             VStack(alignment: .leading, spacing: 8) {
@@ -51,30 +51,42 @@ struct MessagesView: View {
 
                             VStack(alignment: .leading, spacing: 8) {
                                 SectionLabel(title: "Recent conversations")
-                                VStack(spacing: 10) {
-                                    ForEach(appModel.conversations) { conversation in
-                                        NavigationLink(value: conversation) {
-                                            ReferenceCard {
-                                                HStack {
-                                                    VStack(alignment: .leading, spacing: 4) {
-                                                        Text(conversation.date.compactDate)
-                                                            .font(.caption2)
-                                                            .foregroundStyle(.secondary)
-                                                        Text(conversation.title)
-                                                            .font(.subheadline.weight(.semibold))
-                                                        Text(conversation.preview)
-                                                            .font(.caption)
-                                                            .foregroundStyle(.secondary)
-                                                            .lineLimit(1)
+                                if appModel.conversations.isEmpty {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text("No conversations yet")
+                                            .font(.headline.weight(.semibold))
+                                        Text("Start a weekly check-in when it unlocks. Conversations will appear here.")
+                                            .font(.subheadline)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.vertical, 4)
+                                } else {
+                                    VStack(spacing: 10) {
+                                        ForEach(appModel.conversations) { conversation in
+                                            NavigationLink(value: conversation) {
+                                                ReferenceCard {
+                                                    HStack {
+                                                        VStack(alignment: .leading, spacing: 4) {
+                                                            Text(conversation.date.compactDate)
+                                                                .font(.caption2)
+                                                                .foregroundStyle(.secondary)
+                                                            Text(conversation.title)
+                                                                .font(.subheadline.weight(.semibold))
+                                                            Text(conversation.preview)
+                                                                .font(.caption)
+                                                                .foregroundStyle(.secondary)
+                                                                .lineLimit(1)
+                                                        }
+                                                        Spacer()
+                                                        Image(systemName: "chevron.right")
+                                                            .font(.caption.weight(.semibold))
+                                                            .foregroundStyle(.tertiary)
                                                     }
-                                                    Spacer()
-                                                    Image(systemName: "chevron.right")
-                                                        .font(.caption.weight(.semibold))
-                                                        .foregroundStyle(.tertiary)
                                                 }
                                             }
+                                            .buttonStyle(.plain)
                                         }
-                                        .buttonStyle(.plain)
                                     }
                                 }
                             }

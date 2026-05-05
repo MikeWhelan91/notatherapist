@@ -14,11 +14,11 @@ struct CalmView: View {
                         Color.clear
                             .frame(height: 1)
                             .id("calm-top")
-                        CompanionTabHeader(title: "Calm", state: .settled, tint: appModel.journalCompanionTint)
+                        CompanionTabHeader(title: "Calm", state: appModel.companionCircleState, tint: appModel.journalCompanionTint)
 
                         VStack(alignment: .leading, spacing: AppSpacing.section) {
                             VStack(alignment: .leading, spacing: 8) {
-                                SectionLabel(title: "Sounds", action: "See all")
+                                SectionLabel(title: "Sounds")
                                 LazyVGrid(columns: soundColumns, spacing: 10) {
                                     ForEach(appModel.sounds.prefix(4)) { sound in
                                         Button {

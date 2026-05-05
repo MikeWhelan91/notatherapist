@@ -858,25 +858,6 @@ struct SettingsView: View {
         NavigationStack {
             List {
                 Section {
-                    HStack {
-                        Text("AI connection")
-                        Spacer()
-                        Text(appModel.aiConnection.label)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Button {
-                        Task { await appModel.refreshAIConnection() }
-                    } label: {
-                        Label("Check connection", systemImage: "arrow.clockwise")
-                    }
-                } header: {
-                    Text("About")
-                } footer: {
-                    Text("Your entries stay on your phone. AI is used only when you ask for a review.")
-                }
-
-                Section {
                     TextField(
                         "Name or nickname",
                         text: Binding(
@@ -898,9 +879,29 @@ struct SettingsView: View {
                         dismiss()
                     }
                 } header: {
-                    Text("Profile")
+                    Text("Your profile")
                 } footer: {
                     Text(appModel.baselineReassessmentStatusText)
+                }
+
+                Section {
+                    Toggle(
+                        "Premium",
+                        isOn: Binding(
+                            get: { appModel.isPremium },
+                            set: { appModel.isPremium = $0 }
+                        )
+                    )
+
+                    LabeledContent("Current plan", value: appModel.planTier.label)
+
+                    Text(appModel.isPremium
+                         ? "Premium enables deeper daily reviews, richer weekly pattern reports, baseline comparison, and longer context."
+                         : "Free includes local daily reflection, weekly summaries, journaling, widgets, and reminders.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("Plan")
                 }
 
                 Section {
@@ -941,59 +942,6 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Toggle(
-                        "Premium mode",
-                        isOn: Binding(
-                            get: { appModel.isPremium },
-                            set: { appModel.isPremium = $0 }
-                        )
-                    )
-
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("Current tier")
-                        Spacer()
-                        Text(appModel.planTier.label)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("Daily review")
-                        Spacer()
-                        Text(appModel.planTier.dailyReviewLabel)
-                            .multilineTextAlignment(.trailing)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("Daily context")
-                        Spacer()
-                        Text(appModel.planTier.dailyContextLabel)
-                            .multilineTextAlignment(.trailing)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("Weekly reviews")
-                        Spacer()
-                        Text(appModel.planTier.weeklyReviewLabel)
-                            .multilineTextAlignment(.trailing)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("Weekly memory")
-                        Spacer()
-                        Text(appModel.planTier.weeklyContextLabel)
-                            .multilineTextAlignment(.trailing)
-                            .foregroundStyle(.secondary)
-                    }
-                } header: {
-                    Text("Plan")
-                } footer: {
-                    Text("Free includes local daily reflection and weekly summaries. Premium adds deeper analysis, baseline comparison, and richer week-to-week reports.")
-                }
-
-                Section {
                     Picker(
                         "Widget style",
                         selection: Binding(
@@ -1027,12 +975,6 @@ struct SettingsView: View {
                     Text("These settings affect both Home Screen and Lock Screen widget text and style.")
                 }
 
-                Section("Scope") {
-                    Text("This is a reflection tool. It is not therapy, and it does not diagnose, treat, cure, or replace professional help.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-
                 Section("Apple Health") {
                     LabeledContent("Status", value: healthKitManager.summary == nil ? "Off" : "Connected")
 
@@ -1052,9 +994,9 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("iCloud") {
+                Section("iCloud sync") {
                     Toggle(
-                        "Sync with iCloud",
+                        "Sync journal data",
                         isOn: Binding(
                             get: { appModel.isICloudSyncEnabled },
                             set: { enabled in
@@ -1071,30 +1013,12 @@ struct SettingsView: View {
 
                     LabeledContent("Status", value: appModel.iCloudSyncState.label)
 
-                    HStack {
-                        Button("Pull from iCloud") {
-                            Task {
-                                await appModel.pullFromICloud()
-                            }
-                        }
-                        .disabled(appModel.isICloudSyncEnabled == false)
-
-                        Spacer()
-
-                        Button("Push now") {
-                            Task {
-                                await appModel.pushToICloud()
-                            }
-                        }
-                        .disabled(appModel.isICloudSyncEnabled == false)
-                    }
-
                     Text("Uses your Apple Account and the app's private iCloud database. No app account is created.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
-                Section("Weekly review reminder") {
+                Section("Reminders") {
                     Toggle(
                         "Daily mood reminder",
                         isOn: Binding(
@@ -1182,7 +1106,7 @@ struct SettingsView: View {
                         exportURL = appModel.exportLocalData()
                     }
 
-                    Button("Export therapy report") {
+                    Button("Export wellbeing report") {
                         exportURL = appModel.exportTherapistReport()
                     }
 
@@ -1196,13 +1120,27 @@ struct SettingsView: View {
                         showingDeleteConfirmation = true
                     }
                 }
+
+                Section("Legal") {
+                    Link(destination: URL(string: "https://getsolutions.app/privacy")!) {
+                        Label("Privacy Policy", systemImage: "hand.raised")
+                    }
+                    Link(destination: URL(string: "https://getsolutions.app/terms")!) {
+                        Label("Terms of Use", systemImage: "doc.text")
+                    }
+                }
+
+                Section("Scope") {
+                    Text("Anchor is a reflection tool. It is not therapy, and it does not diagnose, treat, cure, or replace professional help.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
             }
             .tint(AppTheme.accent)
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .task {
                 await notificationService.refreshAuthorizationStatus()
-                await appModel.refreshAIConnection()
                 await appModel.refreshICloudStatus()
             }
             .sheet(isPresented: $showingDeleteConfirmation) {
