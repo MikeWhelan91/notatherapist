@@ -169,10 +169,6 @@ struct OnboardingView: View {
             }
         }
         .overlay {
-            KeyboardDismissTapCatcher()
-                .ignoresSafeArea()
-        }
-        .overlay {
             ConfettiOverlayView(trigger: onboardingConfettiTrigger)
         }
         .onAppear {
@@ -2265,47 +2261,6 @@ private struct OnboardingQuestionPage<Content: View>: View {
         case .form: .easeOut(duration: 0.32).delay(0.08)
         case .assessment: .easeOut(duration: 0.22).delay(0.05)
         case .results: .interactiveSpring(response: 0.54, dampingFraction: 0.82, blendDuration: 0.22).delay(0.12)
-        }
-    }
-}
-
-private struct KeyboardDismissTapCatcher: UIViewRepresentable {
-    func makeUIView(context: Context) -> UIView {
-        let view = PassthroughView()
-        view.backgroundColor = .clear
-        let recognizer = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
-        recognizer.cancelsTouchesInView = false
-        recognizer.delegate = context.coordinator
-        view.addGestureRecognizer(recognizer)
-        return view
-    }
-
-    func updateUIView(_ uiView: UIView, context: Context) {}
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-
-    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
-        @objc func handleTap(_ recognizer: UITapGestureRecognizer) {
-            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        }
-
-        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-            var view = touch.view
-            while let current = view {
-                if current is UITextView || current is UITextField {
-                    return false
-                }
-                view = current.superview
-            }
-            return true
-        }
-    }
-
-    private final class PassthroughView: UIView {
-        override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-            true
         }
     }
 }
