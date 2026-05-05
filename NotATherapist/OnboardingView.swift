@@ -64,6 +64,14 @@ struct OnboardingView: View {
     @FocusState private var focusedField: OnboardingField?
 
     private let pageCount = 18
+    private let focusOptions: [(title: String, symbol: String)] = [
+        ("Relieve anxiety", "wind"),
+        ("Boost mood", "sun.max"),
+        ("Sleep better", "moon"),
+        ("Improve relationships", "person.2"),
+        ("Support personal growth", "figure.walk"),
+        ("Reduce overthinking", "text.bubble")
+    ]
 
     private let introPageIndex = 0
     private let goalsPageIndex = 1
@@ -569,12 +577,22 @@ struct OnboardingView: View {
             motionStyle: .form
         ) {
             VStack(spacing: 10) {
-                focusRow("Relieve anxiety", "wind")
-                focusRow("Boost mood", "sun.max")
-                focusRow("Sleep better", "moon")
-                focusRow("Improve relationships", "person.2")
-                focusRow("Support personal growth", "figure.walk")
-                focusRow("Reduce overthinking", "bubble.left.and.text.bubble.right")
+                ForEach(focusOptions, id: \.title) { option in
+                    OnboardingFocusRow(
+                        title: option.title,
+                        symbol: option.symbol,
+                        selected: focusAreas.contains(option.title),
+                        tint: onboardingCompanionTint
+                    ) {
+                        let wasSelected = focusAreas.contains(option.title)
+                        if wasSelected {
+                            focusAreas.remove(option.title)
+                        } else {
+                            focusAreas.insert(option.title)
+                        }
+                        reactCompanion(wasSelected ? .attentive : .checkIn)
+                    }
+                }
             }
         }
     }
@@ -1757,33 +1775,6 @@ struct OnboardingView: View {
         .overlay(alignment: .bottom) { Divider().overlay(Color.white.opacity(0.12)).padding(.horizontal, 4) }
     }
 
-    private func focusRow(_ title: String, _ symbol: String) -> some View {
-        let selected = focusAreas.contains(title)
-        return Button {
-            if selected { focusAreas.remove(title) } else { focusAreas.insert(title) }
-            reactCompanion(selected ? .attentive : .checkIn)
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: symbol)
-                    .font(.body.weight(.semibold))
-                    .frame(width: 30, height: 30)
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                Spacer()
-                if selected { Image(systemName: "checkmark") }
-            }
-            .padding(14)
-            .foregroundStyle(selected ? Color(.systemBackground) : .primary)
-            .background(selected ? onboardingCompanionTint : Color.clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(selected ? onboardingCompanionTint : Color.white.opacity(0.2), lineWidth: 0.8)
-            }
-            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        }
-        .buttonStyle(.plain)
-    }
-
     private func singleChoiceRow(_ title: String, _ symbol: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 12) {
@@ -2316,5 +2307,39 @@ private struct KeyboardDismissTapCatcher: UIViewRepresentable {
         override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
             true
         }
+    }
+}
+
+private struct OnboardingFocusRow: View {
+    let title: String
+    let symbol: String
+    let selected: Bool
+    let tint: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: symbol)
+                    .font(.body.weight(.semibold))
+                    .frame(width: 30, height: 30)
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                if selected {
+                    Image(systemName: "checkmark")
+                        .font(.subheadline.weight(.semibold))
+                }
+            }
+            .padding(14)
+            .foregroundStyle(selected ? Color(.systemBackground) : .primary)
+            .background(selected ? tint : Color.clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(selected ? tint : Color.white.opacity(0.2), lineWidth: 0.8)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 }
