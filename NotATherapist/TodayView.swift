@@ -875,6 +875,7 @@ struct SettingsView: View {
                     }
 
                     Button(appModel.isBaselineReassessmentDue ? "Retake 2-week baseline" : "Review onboarding answers") {
+                        UserDefaults.standard.set(true, forKey: "openOnboardingReview")
                         hasCompletedOnboarding = false
                         dismiss()
                     }

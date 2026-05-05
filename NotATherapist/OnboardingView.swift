@@ -60,6 +60,7 @@ struct OnboardingView: View {
     @State private var onboardingStreakCelebrationPending = false
     @State private var isCompletingOnboarding = false
     @State private var loadedExistingProfileForReview = false
+    @State private var shouldOpenReviewSummary = false
     @FocusState private var focusedField: OnboardingField?
 
     private let pageCount = 18
@@ -82,6 +83,7 @@ struct OnboardingView: View {
     private let firstReflectionPageIndex = 15
     private let voicePageIndex = 16
     private let completionPageIndex = 17
+    private let openOnboardingReviewKey = "openOnboardingReview"
 
     var body: some View {
         VStack(spacing: 0) {
@@ -164,6 +166,7 @@ struct OnboardingView: View {
             ConfettiOverlayView(trigger: onboardingConfettiTrigger)
         }
         .onAppear {
+            shouldOpenReviewSummary = UserDefaults.standard.bool(forKey: openOnboardingReviewKey)
             loadExistingProfileForReviewIfNeeded()
         }
         .task(id: page) {
@@ -1500,6 +1503,7 @@ struct OnboardingView: View {
 
     private func enforcePageRules(from oldPage: Int, to newPage: Int) {
         guard newPage != oldPage else { return }
+        if loadedExistingProfileForReview { return }
         if firstCheckInGenerated == false && newPage > firstCheckInPageIndex {
             withAnimation(.easeInOut(duration: 0.2)) {
                 page = firstCheckInPageIndex
@@ -1585,6 +1589,7 @@ struct OnboardingView: View {
 
     private func loadExistingProfileForReviewIfNeeded() {
         guard loadedExistingProfileForReview == false else { return }
+        guard shouldOpenReviewSummary || UserDefaults.standard.bool(forKey: openOnboardingReviewKey) else { return }
         let profile = appModel.onboardingProfile
         guard profile.assessment != nil else { return }
 
@@ -1612,6 +1617,7 @@ struct OnboardingView: View {
 
         firstCheckInGenerated = true
         loadedExistingProfileForReview = true
+        UserDefaults.standard.set(false, forKey: openOnboardingReviewKey)
         page = completionPageIndex
     }
 
