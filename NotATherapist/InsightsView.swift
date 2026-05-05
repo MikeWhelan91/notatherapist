@@ -61,6 +61,8 @@ private struct ProfessionalInsightsDashboard: View {
     @State private var selectedPeriod: InsightPeriod = .daily
     @State private var displayedMonthDate: Date?
     @State private var selectedCalendarDate: Date?
+    @State private var weeklyNotesExpanded = false
+    @State private var monthlyNotesExpanded = false
 
     private var entries: [JournalEntry] {
         appModel.journalEntries.sorted { $0.date < $1.date }
@@ -192,9 +194,18 @@ private struct ProfessionalInsightsDashboard: View {
 
     private var weeklyInsights: some View {
         VStack(alignment: .leading, spacing: 22) {
-            weeklyReviewSummary
-            weekdayPattern
-            themeImpact
+            if weeklyInsightsUnlocked {
+                weeklyOverview
+            } else {
+                LockedInsightPreview(
+                    title: "Weekly review",
+                    detail: appModel.weeklyUnlockProgressText,
+                    systemImage: "calendar.badge.clock",
+                    premiumOnly: false
+                ) {
+                    lockedWeeklyPreview
+                }
+            }
         }
         .task {
             await appModel.refreshWeeklyReview()
@@ -203,21 +214,28 @@ private struct ProfessionalInsightsDashboard: View {
 
     private var monthlyInsights: some View {
         VStack(alignment: .leading, spacing: 22) {
-            if appModel.hasMonthlyReviewAccess {
-                monthlyReviewSummary
-                moodCalendar
-                moodTrend
-                moodBreakdown
+            if let review = appModel.monthlyReview {
+                monthlyOverview(review)
             } else {
-                InsightSummaryBlock(
+                LockedInsightPreview(
                     title: "Monthly review",
-                    value: "Premium",
-                    detail: "Monthly reviews are a Premium feature. They use the previous 4 weeks, weekly review carryover, and a 30-day goal.",
-                    symbol: "lock.fill",
-                    tint: .secondary
-                )
+                    detail: appModel.hasMonthlyReviewAccess ? appModel.monthlyReviewAvailabilityText : "Monthly reviews are Premium only.",
+                    systemImage: appModel.hasMonthlyReviewAccess ? "calendar" : "lock.fill",
+                    premiumOnly: appModel.hasMonthlyReviewAccess == false
+                ) {
+                    lockedMonthlyPreview
+                }
             }
         }
+    }
+
+    private var weeklyInsightsUnlocked: Bool {
+        appModel.hasWeeklyReview && (
+            appModel.weeklyReview.patterns.isEmpty == false ||
+            appModel.weeklyReview.nextExperiment?.isEmpty == false ||
+            appModel.weeklyReview.progressSignal?.isEmpty == false ||
+            appModel.weeklyReview.goalFollowThrough.isEmpty == false
+        )
     }
 
     private var dailyReviewSummary: some View {
@@ -256,29 +274,56 @@ private struct ProfessionalInsightsDashboard: View {
         }
     }
 
-    private var monthlyReviewSummary: some View {
+    private var weeklyOverview: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            ReviewSignalStrip(items: [
+                ReviewSignal(label: "Entries", value: "\(last30.count)"),
+                ReviewSignal(label: "Days", value: "\(activeDays)"),
+                ReviewSignal(label: "Mood", value: averageMood == 0 ? "-" : String(format: "%.1f", averageMood)),
+                ReviewSignal(label: "Reviews", value: "\(appModel.dailyReviews.count)")
+            ])
+            weekdayPattern
+            themeImpact
+            ReviewNotesDisclosure(title: "Weekly notes", isExpanded: $weeklyNotesExpanded) {
+                weeklyReviewSummary
+            }
+        }
+    }
+
+    private func monthlyOverview(_ review: MonthlyReview) -> some View {
+        VStack(alignment: .leading, spacing: 18) {
+            ReviewSignalStrip(items: [
+                ReviewSignal(label: "Entries", value: "\(review.entryCount)"),
+                ReviewSignal(label: "Days", value: "\(review.activeDays)"),
+                ReviewSignal(label: "Mood", value: String(format: "%.1f", review.averageMood)),
+                ReviewSignal(label: "Topics", value: "\(review.topThemes.count)")
+            ])
+            moodTrend
+            moodBreakdown
+            ReviewNotesDisclosure(title: "Monthly notes", isExpanded: $monthlyNotesExpanded) {
+                monthlyReviewSummary(review)
+            }
+        }
+    }
+
+    private func monthlyReviewSummary(_ review: MonthlyReview) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             InsightSummaryBlock(
                 title: "Month in review",
-                value: monthlyReviewValue,
-                detail: monthlyReviewDetail,
+                value: String(format: "%.1f avg", review.averageMood),
+                detail: review.summary.isEmpty ? review.strongestPattern : review.summary,
                 symbol: "calendar",
-                tint: appModel.currentMonthlyReview == nil ? .secondary : MoodLevel.great.companionColor
+                tint: MoodLevel.great.companionColor
             )
-            if let review = appModel.currentMonthlyReview {
-                insightList(
-                    title: review.monthTitle,
-                    items: [
-                        review.summary,
-                        review.moodRange,
-                        review.strongestPattern,
-                        review.progress,
-                        "Active days: \(review.activeDays)",
-                        "Average mood: \(String(format: "%.1f", review.averageMood))",
-                        "Next: \(review.nextExperiment)"
-                    ] + Array(review.topThemes.prefix(3))
-                )
-            }
+            insightList(
+                title: review.monthTitle,
+                items: [
+                    review.moodRange,
+                    review.strongestPattern,
+                    review.progress,
+                    "Next: \(review.nextExperiment)"
+                ].filter { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false } + Array(review.topThemes.prefix(3))
+            )
         }
     }
 
@@ -340,18 +385,6 @@ private struct ProfessionalInsightsDashboard: View {
             }
         }
         return appModel.weeklyUnlockProgressText
-    }
-
-    private var monthlyReviewValue: String {
-        guard let review = appModel.currentMonthlyReview else { return "Not enough data" }
-        return String(format: "%.1f avg", review.averageMood)
-    }
-
-    private var monthlyReviewDetail: String {
-        guard let review = appModel.currentMonthlyReview else {
-            return "Monthly direction unlocks once this month has at least one journal entry."
-        }
-        return review.summary.isEmpty ? review.strongestPattern : review.summary
     }
 
     private var moodCalendar: some View {
@@ -612,6 +645,59 @@ private struct ProfessionalInsightsDashboard: View {
         }
     }
 
+    private var lockedWeeklyPreview: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            ReviewSignalStrip(items: [
+                ReviewSignal(label: "Entries", value: "12"),
+                ReviewSignal(label: "Days", value: "5"),
+                ReviewSignal(label: "Mood", value: "3.4"),
+                ReviewSignal(label: "Review", value: "Ready")
+            ])
+            weekdayBars
+                .frame(height: 118)
+        }
+    }
+
+    private var lockedMonthlyPreview: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            ReviewSignalStrip(items: [
+                ReviewSignal(label: "Entries", value: "32"),
+                ReviewSignal(label: "Days", value: "14"),
+                ReviewSignal(label: "Mood", value: "3.6"),
+                ReviewSignal(label: "Goal", value: "30d")
+            ])
+            Chart(sampleLockedTrend) { point in
+                LineMark(
+                    x: .value("Day", point.day),
+                    y: .value("Mood", point.value)
+                )
+                .interpolationMethod(.catmullRom)
+                .foregroundStyle(.white.opacity(0.68))
+                AreaMark(
+                    x: .value("Day", point.day),
+                    y: .value("Mood", point.value)
+                )
+                .interpolationMethod(.catmullRom)
+                .foregroundStyle(.white.opacity(0.12))
+            }
+            .chartYScale(domain: 1...5)
+            .chartXAxis(.hidden)
+            .chartYAxis(.hidden)
+            .frame(height: 120)
+        }
+    }
+
+    private var sampleLockedTrend: [LockedTrendPoint] {
+        [
+            LockedTrendPoint(day: 1, value: 2.6),
+            LockedTrendPoint(day: 6, value: 3.2),
+            LockedTrendPoint(day: 11, value: 3.0),
+            LockedTrendPoint(day: 17, value: 3.8),
+            LockedTrendPoint(day: 23, value: 3.4),
+            LockedTrendPoint(day: 28, value: 4.0)
+        ]
+    }
+
     private func sectionTitle(_ title: String) -> some View {
         Text(title)
             .font(.headline.weight(.semibold))
@@ -853,6 +939,108 @@ private struct CalendarSelectionSummary {
     let title: String
     let detail: String
     let mood: MoodLevel?
+}
+
+private struct LockedTrendPoint: Identifiable {
+    let id = UUID()
+    let day: Int
+    let value: Double
+}
+
+private struct ReviewSignal {
+    let label: String
+    let value: String
+}
+
+private struct ReviewSignalStrip: View {
+    let items: [ReviewSignal]
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                VStack(spacing: 4) {
+                    Text(item.value)
+                        .font(.title3.weight(.bold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    Text(item.label)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(.vertical, 10)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(AppSurface.stroke.opacity(0.65)).frame(height: 1)
+        }
+    }
+}
+
+private struct ReviewNotesDisclosure<Content: View>: View {
+    let title: String
+    @Binding var isExpanded: Bool
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $isExpanded) {
+            VStack(alignment: .leading, spacing: 12) {
+                content
+            }
+            .padding(.top, 10)
+        } label: {
+            Text(title)
+                .font(.headline.weight(.semibold))
+        }
+        .tint(.secondary)
+    }
+}
+
+private struct LockedInsightPreview<Content: View>: View {
+    let title: String
+    let detail: String
+    let systemImage: String
+    let premiumOnly: Bool
+    @ViewBuilder var preview: Content
+
+    var body: some View {
+        ZStack {
+            preview
+                .blur(radius: 7)
+                .opacity(0.5)
+                .allowsHitTesting(false)
+
+            VStack(spacing: 10) {
+                Image(systemName: systemImage)
+                    .font(.title3.weight(.semibold))
+                Text(title)
+                    .font(.headline.weight(.bold))
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                if premiumOnly {
+                    Text("Premium")
+                        .font(.caption2.weight(.bold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(.white.opacity(0.12), in: Capsule())
+                }
+            }
+            .padding(18)
+            .frame(maxWidth: .infinity)
+            .background(.black.opacity(0.38), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(AppSurface.stroke.opacity(0.65), lineWidth: 0.8)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 4)
+    }
 }
 
 private struct InsightSummaryBlock: View {
