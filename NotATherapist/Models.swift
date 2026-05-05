@@ -323,6 +323,9 @@ struct MonthlyReview: Identifiable, Codable, Hashable {
     var strongestPattern: String
     var progress: String
     var nextExperiment: String
+    var dataQuality: String = "early"
+    var summary: String = ""
+    var moodRange: String = ""
 }
 
 struct MemorySignal: Identifiable, Codable, Hashable {

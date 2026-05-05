@@ -90,6 +90,38 @@ assert.equal(premiumWeeklyResult.weeklyReview.risk.includes("Premium"), false);
 assert.equal(typeof premiumWeeklyResult.weeklyReview.patternShift, "string");
 assert.equal(typeof premiumWeeklyResult.weeklyReview.goalFollowThrough, "string");
 
+const thinWeeklyResult = createWeeklyReview({
+  entries: normalizeEntries([
+    {
+      id: "thin-1",
+      date: "2026-05-01T18:00:00.000Z",
+      mood: "okay",
+      entryType: "reflection",
+      text: "A fairly normal day.",
+      themes: []
+    },
+    {
+      id: "thin-2",
+      date: "2026-05-02T18:00:00.000Z",
+      mood: "good",
+      entryType: "quickThought",
+      text: "Nothing major to add.",
+      themes: []
+    },
+    {
+      id: "thin-3",
+      date: "2026-05-03T18:00:00.000Z",
+      mood: "okay",
+      entryType: "win",
+      text: "Kept things steady.",
+      themes: []
+    }
+  ])
+});
+assert.equal(thinWeeklyResult.canReview, true);
+assert.equal(thinWeeklyResult.weeklyReview.patterns.length, 0);
+assert.equal(thinWeeklyResult.weeklyReview.risk, "");
+
 const conversation = createConversation({
   weeklyReview: weeklyResult.weeklyReview,
   profile: { preferredName: "Mike" }

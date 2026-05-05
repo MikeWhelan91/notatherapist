@@ -259,6 +259,10 @@ private struct ProfessionalInsightsDashboard: View {
                 insightList(
                     title: review.monthTitle,
                     items: [
+                        review.summary,
+                        review.moodRange,
+                        review.strongestPattern,
+                        review.progress,
                         "Active days: \(review.activeDays)",
                         "Average mood: \(String(format: "%.1f", review.averageMood))",
                         "Next: \(review.nextExperiment)"
@@ -337,7 +341,7 @@ private struct ProfessionalInsightsDashboard: View {
         guard let review = appModel.currentMonthlyReview else {
             return "Monthly direction unlocks once this month has at least one journal entry."
         }
-        return "\(review.strongestPattern) \(review.progress)"
+        return review.summary.isEmpty ? review.strongestPattern : review.summary
     }
 
     private var moodCalendar: some View {
@@ -1171,17 +1175,23 @@ struct WeeklyReviewView: View {
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("Top patterns this week")
+                Text("This week")
                     .font(.subheadline.weight(.semibold))
-                ForEach(review.patterns, id: \.self) { pattern in
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Image(systemName: "sparkle")
-                            .font(.caption)
-                        Text(pattern)
-                            .font(.body)
-                            .fixedSize(horizontal: false, vertical: true)
+                if review.patterns.isEmpty {
+                    Text("There is not enough repeated evidence for a weekly conclusion yet.")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(review.patterns, id: \.self) { pattern in
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            Image(systemName: "sparkle")
+                                .font(.caption)
+                            Text(pattern)
+                                .font(.body)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.vertical, 5)
                     }
-                    .padding(.vertical, 5)
                 }
             }
             Divider().background(AppSurface.stroke.opacity(0.55))
@@ -1361,6 +1371,11 @@ private struct AnalyticsView: View {
                             }
                             Text(review.strongestPattern)
                                 .font(.subheadline)
+                            if review.moodRange.isEmpty == false {
+                                Text(review.moodRange)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                             Text(review.progress)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)

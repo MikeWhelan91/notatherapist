@@ -496,27 +496,87 @@ final class AppViewModel: ObservableObject {
 
         let activeDays = Set(entries.map { calendar.startOfDay(for: $0.date) }).count
         let averageMood = Double(entries.map(\.mood.score).reduce(0, +)) / Double(entries.count)
-        let themeCounts = Dictionary(grouping: entries.flatMap(\.themes), by: { $0 })
+        let evidenceQuality: String
+        if activeDays >= 12 || entries.count >= 18 {
+            evidenceQuality = "solid"
+        } else if activeDays >= 5 || entries.count >= 8 {
+            evidenceQuality = "building"
+        } else {
+            evidenceQuality = "early"
+        }
+
+        let meaningfulThemes = entries
+            .flatMap(\.themes)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { theme in
+                guard theme.isEmpty == false else { return false }
+                return EntryType.allCases.contains(where: { $0.label.caseInsensitiveCompare(theme) == .orderedSame }) == false
+            }
+        let themeCounts = Dictionary(grouping: meaningfulThemes, by: { $0 })
             .mapValues(\.count)
             .sorted { lhs, rhs in
                 lhs.value == rhs.value ? lhs.key < rhs.key : lhs.value > rhs.value
             }
-        let topThemes = themeCounts.prefix(4).map(\.key)
-        let bestTheme = themeCounts.first
+        let repeatedThemes = themeCounts.filter { $0.value >= 2 }
+        let topThemes = repeatedThemes.prefix(4).map(\.key)
+        let bestTheme = repeatedThemes.first
         let completedGoals = reflectionGoals.filter { goal in
             guard let feedbackAt = goal.feedbackAt else { return false }
             return feedbackAt >= interval.start && feedbackAt < interval.end && goal.status == .completed
         }
+        let sortedEntries = entries.sorted { $0.date < $1.date }
+        let lowMoodDays = Set(entries.filter { $0.mood.score <= 2 }.map { calendar.startOfDay(for: $0.date) }).count
+        let highMoodDays = Set(entries.filter { $0.mood.score >= 4 }.map { calendar.startOfDay(for: $0.date) }).count
+        let firstHalfAverage = averageMoodScore(for: sortedEntries.prefix(max(1, sortedEntries.count / 2)))
+        let secondHalfAverage = averageMoodScore(for: sortedEntries.suffix(max(1, sortedEntries.count - sortedEntries.count / 2)))
+        let delta = secondHalfAverage - firstHalfAverage
 
-        let pattern = bestTheme.map { "\($0.key) appeared \($0.value) time\($0.value == 1 ? "" : "s") this month." } ?? "This month is still forming a clear pattern."
-        let progress = completedGoals.isEmpty
-            ? "Progress data is still thin; completed next steps will make this clearer."
-            : "You completed \(completedGoals.count) next step\(completedGoals.count == 1 ? "" : "s") this month."
+        let summary: String
+        switch evidenceQuality {
+        case "solid":
+            summary = "\(activeDays) active days and \(entries.count) entries give this month a usable signal."
+        case "building":
+            summary = "\(activeDays) active days logged. Enough to show direction, but not enough for strong conclusions."
+        default:
+            summary = "\(activeDays) active day\(activeDays == 1 ? "" : "s") logged. Treat this month as a starting snapshot, not a review yet."
+        }
+
+        let direction: String
+        if entries.count < 4 {
+            direction = "Mood direction needs a few more entries before it is meaningful."
+        } else if delta >= 0.4 {
+            direction = "Mood is trending up compared with the start of the month."
+        } else if delta <= -0.4 {
+            direction = "Mood is trending down compared with the start of the month."
+        } else {
+            direction = "Mood is broadly steady across the logged entries."
+        }
+
+        let strongestSignal: String
+        if let bestTheme {
+            strongestSignal = "\(bestTheme.key) is the strongest repeated topic so far, showing up \(bestTheme.value) times."
+        } else if lowMoodDays >= 2 || highMoodDays >= 2 {
+            strongestSignal = "Mood data is the clearest signal so far: \(highMoodDays) higher-mood day\(highMoodDays == 1 ? "" : "s") and \(lowMoodDays) lower-mood day\(lowMoodDays == 1 ? "" : "s")."
+        } else {
+            strongestSignal = "No repeated topic is strong enough to call out yet."
+        }
+
+        let progress: String
+        if completedGoals.isEmpty == false {
+            progress = "You completed \(completedGoals.count) next step\(completedGoals.count == 1 ? "" : "s") this month."
+        } else if entries.contains(where: { $0.entryType == .win }) {
+            progress = "You logged at least one win this month. Marking next steps complete will make follow-through clearer."
+        } else {
+            progress = "No completed next steps recorded yet."
+        }
+
         let experiment = bestTheme?.key == "Sleep"
             ? "Protect one consistent wind-down cue for the next 7 days."
             : bestTheme?.key == "Work"
                 ? "Close or park one work loop before ending each day for a week."
-                : "Repeat one condition from your steadiest day this month."
+                : evidenceQuality == "early"
+                    ? "Log three more days this month before drawing conclusions."
+                    : "Repeat one condition from your steadiest logged day this month."
 
         return MonthlyReview(
             id: UUID(),
@@ -525,10 +585,19 @@ final class AppViewModel: ObservableObject {
             activeDays: activeDays,
             averageMood: averageMood,
             topThemes: topThemes,
-            strongestPattern: pattern,
+            strongestPattern: strongestSignal,
             progress: progress,
-            nextExperiment: experiment
+            nextExperiment: experiment,
+            dataQuality: evidenceQuality,
+            summary: summary,
+            moodRange: direction
         )
+    }
+
+    private func averageMoodScore<S: Sequence>(for entries: S) -> Double where S.Element == JournalEntry {
+        let scores = entries.map(\.mood.score)
+        guard scores.isEmpty == false else { return 0 }
+        return Double(scores.reduce(0, +)) / Double(scores.count)
     }
 
     func latestEntry(on date: Date) -> JournalEntry? {

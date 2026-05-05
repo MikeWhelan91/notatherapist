@@ -98,7 +98,13 @@ struct LocalAppStore {
             cursor += 10
 
             if let monthlyReview {
-                draw("Monthly Pattern", at: &cursor, size: 16, weight: .semibold)
+                draw("Monthly Stats", at: &cursor, size: 16, weight: .semibold)
+                if monthlyReview.summary.isEmpty == false {
+                    draw(monthlyReview.summary, at: &cursor)
+                }
+                if monthlyReview.moodRange.isEmpty == false {
+                    draw(monthlyReview.moodRange, at: &cursor)
+                }
                 draw(monthlyReview.strongestPattern, at: &cursor)
                 draw(monthlyReview.progress, at: &cursor)
                 draw("Next experiment: \(monthlyReview.nextExperiment)", at: &cursor)

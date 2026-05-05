@@ -1145,9 +1145,6 @@ struct MockWeeklyReviewService {
         if goodMoodWithMovement >= 1 {
             patterns.append("Better mood appeared on a movement day.")
         }
-        if patterns.isEmpty {
-            patterns.append("Your entries are starting to show early themes.")
-        }
 
         return Array(patterns.prefix(3))
     }
@@ -1160,7 +1157,7 @@ struct MockWeeklyReviewService {
         if entries.flatMap(\.themes).filter({ $0 == "Work" }).count >= 2 {
             return "Work may be taking up more attention than usual."
         }
-        return "There is not enough history for a strong pattern yet."
+        return entries.count >= 5 ? "Keep next steps small until a repeated signal is clearer." : ""
     }
 
     private func suggestion(from entries: [JournalEntry]) -> String {
@@ -1171,7 +1168,7 @@ struct MockWeeklyReviewService {
         if themes.filter({ $0 == "Sleep" }).count >= 2 {
             return "Write down a stop point before tonight."
         }
-        return "Pick one small next step and leave the rest written down."
+        return entries.count >= 5 ? "Pick one small next step and leave the rest written down." : "Log a few more days before treating this as a weekly review."
     }
 
     private func healthPatterns(from entries: [JournalEntry], summary: HealthSummary?) -> [String] {
@@ -1200,7 +1197,7 @@ struct MockWeeklyReviewService {
         if let latest = wins.sorted(by: { $0.date > $1.date }).first {
             return "Progress signal: \(latest.entryType == .win ? "you recorded a win" : "your wording included a shift toward progress")."
         }
-        return "Progress signal is still light. Track what helps, not only what hurts."
+        return entries.count >= 5 ? "Progress signal is still light. Track what helps, not only what hurts." : ""
     }
 
     private func primaryLoop(from entries: [JournalEntry]) -> String {
@@ -1218,7 +1215,7 @@ struct MockWeeklyReviewService {
         if (counts["Relationships"] ?? 0) >= 2 {
             return "Likely loop: an interaction sticks, the story grows, and repair gets delayed."
         }
-        return "Likely loop is still forming. Keep entries concrete so next week can compare better."
+        return entries.count >= 5 ? "Likely loop is still forming. Keep entries concrete so next week can compare better." : ""
     }
 
     private func nextExperiment(from entries: [JournalEntry]) -> String {
