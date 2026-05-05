@@ -6,6 +6,8 @@ struct JournalHistoryView: View {
     @State private var searchText = ""
     @State private var selectedMood: MoodLevel?
     @State private var selectedEntryType: EntryType?
+    @State private var displayedMonthDate = Date()
+    @FocusState private var searchFocused: Bool
 
     private var selectedEntries: [JournalEntry] {
         appModel.entries(on: appModel.selectedJournalDate)
@@ -22,17 +24,11 @@ struct JournalHistoryView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppSpacing.section) {
-                DatePicker(
-                    "",
-                    selection: $appModel.selectedJournalDate,
-                    displayedComponents: .date
-                )
-                .datePickerStyle(.graphical)
-                .labelsHidden()
-                .tint(.primary)
+                historyCalendar
 
                 VStack(alignment: .leading, spacing: 10) {
                     TextField("Search entries, themes, or types", text: $searchText)
+                        .focused($searchFocused)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .padding(12)
@@ -64,6 +60,7 @@ struct JournalHistoryView: View {
                         VStack(spacing: 10) {
                             Text(isFiltering ? "No matching entries." : "No entries on this date.")
                                 .font(.headline)
+                                .multilineTextAlignment(.center)
                             Text(isFiltering ? "Try a different search or clear one filter." : "Pick another day to view entries.")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
@@ -88,15 +85,128 @@ struct JournalHistoryView: View {
             }
             .padding(AppSpacing.page)
         }
+        .simultaneousGesture(
+            TapGesture().onEnded {
+                searchFocused = false
+            }
+        )
         .navigationTitle("Journal history")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            syncDisplayedMonthToSelection()
+        }
+        .onChange(of: appModel.selectedJournalDate) { _, _ in
+            syncDisplayedMonthToSelection()
+        }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button("Done") {
                     dismiss()
                 }
             }
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    searchFocused = false
+                }
+            }
         }
+    }
+
+    private var calendarMonthDate: Date {
+        Calendar.current.dateInterval(of: .month, for: displayedMonthDate)?.start ?? displayedMonthDate
+    }
+
+    private var weekdaySymbols: [String] {
+        let calendar = Calendar.current
+        let symbols = calendar.shortWeekdaySymbols
+        let start = max(0, calendar.firstWeekday - 1)
+        return Array(symbols[start...] + symbols[..<start]).map { $0.uppercased() }
+    }
+
+    private var monthCells: [JournalHistoryCalendarCell] {
+        let calendar = Calendar.current
+        guard let interval = calendar.dateInterval(of: .month, for: calendarMonthDate),
+              let dayRange = calendar.range(of: .day, in: .month, for: interval.start) else {
+            return []
+        }
+
+        let entriesByDay = Dictionary(grouping: appModel.journalEntries) { calendar.startOfDay(for: $0.date) }
+        let weekdayOffset = calendar.component(.weekday, from: interval.start) - calendar.firstWeekday
+        let leading = (weekdayOffset + 7) % 7
+        var cells: [JournalHistoryCalendarCell] = (0..<leading).map { _ in .empty(UUID()) }
+
+        for offset in 0..<dayRange.count {
+            guard let date = calendar.date(byAdding: .day, value: offset, to: interval.start) else { continue }
+            let dayEntries = entriesByDay[calendar.startOfDay(for: date)] ?? []
+            let latest = dayEntries.max { $0.date < $1.date }
+            cells.append(.day(date: date, mood: latest?.mood, count: dayEntries.count))
+        }
+
+        while cells.count % 7 != 0 {
+            cells.append(.empty(UUID()))
+        }
+        return cells
+    }
+
+    private var historyCalendar: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Button {
+                    shiftMonth(by: -1)
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.headline.weight(.semibold))
+                        .frame(width: 36, height: 36)
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                Text(calendarMonthDate.formatted(.dateTime.month(.wide).year()))
+                    .font(.title3.weight(.bold))
+
+                Spacer()
+
+                Button {
+                    shiftMonth(by: 1)
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.headline.weight(.semibold))
+                        .frame(width: 36, height: 36)
+                }
+                .buttonStyle(.plain)
+            }
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 7), spacing: 10) {
+                ForEach(weekdaySymbols, id: \.self) { symbol in
+                    Text(symbol)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                }
+
+                ForEach(monthCells, id: \.id) { cell in
+                    JournalHistoryDayCell(cell: cell, selectedDate: appModel.selectedJournalDate) { selected in
+                        guard case .day(let date, _, _) = selected else { return }
+                        appModel.selectedJournalDate = date
+                    }
+                }
+            }
+        }
+    }
+
+    private func shiftMonth(by value: Int) {
+        guard let next = Calendar.current.date(byAdding: .month, value: value, to: calendarMonthDate) else { return }
+        displayedMonthDate = next
+    }
+
+    private func syncDisplayedMonthToSelection() {
+        displayedMonthDate = calendarMonthDateForSelection(appModel.selectedJournalDate)
+    }
+
+    private func calendarMonthDateForSelection(_ date: Date) -> Date {
+        Calendar.current.dateInterval(of: .month, for: date)?.start ?? date
     }
 
     private func filterChip(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
@@ -112,5 +222,67 @@ struct JournalHistoryView: View {
                 }
         }
         .buttonStyle(.plain)
+    }
+}
+
+private enum JournalHistoryCalendarCell {
+    case empty(UUID)
+    case day(date: Date, mood: MoodLevel?, count: Int)
+
+    var id: String {
+        switch self {
+        case .empty(let id): id.uuidString
+        case .day(let date, _, _): date.ISO8601Format()
+        }
+    }
+}
+
+private struct JournalHistoryDayCell: View {
+    let cell: JournalHistoryCalendarCell
+    let selectedDate: Date
+    let onSelect: (JournalHistoryCalendarCell) -> Void
+
+    var body: some View {
+        switch cell {
+        case .empty:
+            Color.clear
+                .aspectRatio(1, contentMode: .fit)
+        case .day(let date, let mood, let count):
+            Button {
+                onSelect(cell)
+            } label: {
+                dayView(date: date, mood: mood, count: count)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func dayView(date: Date, mood: MoodLevel?, count: Int) -> some View {
+        let selected = Calendar.current.isDate(date, inSameDayAs: selectedDate)
+        let textColor: Color = mood?.interfaceAccentColor ?? .primary
+        let background = selected
+            ? (mood?.companionColor.opacity(0.28) ?? Color.white.opacity(0.12))
+            : Color.clear
+
+        return Text("\(Calendar.current.component(.day, from: date))")
+            .font(.title3.weight(.medium))
+            .foregroundStyle(textColor)
+            .frame(maxWidth: .infinity, minHeight: 42)
+            .background(background, in: Circle())
+            .overlay {
+                if selected {
+                    Circle()
+                        .stroke((mood?.companionColor ?? Color.white).opacity(0.9), lineWidth: 1.2)
+                }
+            }
+            .opacity(count == 0 ? 0.42 : 1)
+            .accessibilityLabel(accessibilityLabel(date: date, mood: mood, count: count))
+    }
+
+    private func accessibilityLabel(date: Date, mood: MoodLevel?, count: Int) -> String {
+        if let mood {
+            return "\(date.formatted(date: .abbreviated, time: .omitted)), latest mood \(mood.label), \(count) \(count == 1 ? "entry" : "entries")"
+        }
+        return "\(date.formatted(date: .abbreviated, time: .omitted)), no entry"
     }
 }

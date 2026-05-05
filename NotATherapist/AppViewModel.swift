@@ -51,7 +51,9 @@ final class AppViewModel: ObservableObject {
     @Published var aiConnection: AIConnectionState = .unknown
     @Published var iCloudSyncState: ICloudSyncState = .off
     @Published var planTier: AppPlanTier
+    @Published var isDemoDataEnabled: Bool
     @Published var widgetStylePreset: WidgetStylePreset
+    @Published var widgetAccentColor: WidgetAccentColor
     @Published var widgetAffirmationCategories: Set<WidgetAffirmationCategory>
 
     private let insightService = MockAIInsightService()
@@ -63,7 +65,9 @@ final class AppViewModel: ObservableObject {
     private let iCloudSyncService = ICloudSyncService.shared
     private let iCloudSyncEnabledKey = "iCloudSyncEnabled"
     private let planTierKey = "appPlanTier"
+    private let demoDataEnabledKey = "demoDataEnabled"
     private let widgetStylePresetKey = "widgetStylePreset"
+    private let widgetAccentColorKey = "widgetAccentColor"
     private let widgetAffirmationCategoriesKey = "widgetAffirmationCategories"
     private let widgetAffirmationIndexKey = "widgetAffirmationIndex"
     private let onboardingCompletedAtKey = "onboardingCompletedAt"
@@ -79,17 +83,26 @@ final class AppViewModel: ObservableObject {
         let defaults = UserDefaults.standard
         let savedTier = defaults.string(forKey: planTierKey)
         let migratedPremium = defaults.bool(forKey: "premiumDailyReviewsEnabled")
+        let demoEnabled = defaults.bool(forKey: demoDataEnabledKey)
         _planTier = Published(initialValue: AppPlanTier(rawValue: savedTier ?? "") ?? (migratedPremium ? .premium : .free))
+        _isDemoDataEnabled = Published(initialValue: demoEnabled)
         _widgetStylePreset = Published(initialValue: WidgetStylePreset(rawValue: defaults.string(forKey: widgetStylePresetKey) ?? "") ?? .minimal)
+        _widgetAccentColor = Published(initialValue: WidgetAccentColor(rawValue: defaults.string(forKey: widgetAccentColorKey) ?? "") ?? .green)
         let storedCategoryIDs = defaults.stringArray(forKey: widgetAffirmationCategoriesKey) ?? []
         let storedCategories = Set(storedCategoryIDs.compactMap(WidgetAffirmationCategory.init(rawValue:)))
         _widgetAffirmationCategories = Published(initialValue: storedCategories.isEmpty ? Set(WidgetAffirmationCategory.allCases) : storedCategories)
 
-        if seedWithMockData {
-            let initialEntries = MockData.entries
-            journalEntries = initialEntries
-            insights = MockData.insights
-            weeklyReview = weeklyReviewService.latestReview(from: initialEntries)
+        if seedWithMockData || demoEnabled {
+            let demo = localStore.load() ?? Self.buildDemoSnapshot(using: weeklyReviewService)
+            selectedMood = demo.selectedMood
+            journalEntries = demo.journalEntries
+            insights = demo.insights
+            conversations = demo.conversations
+            weeklyReview = demo.weeklyReview
+            monthlyReview = demo.monthlyReview
+            healthSummary = demo.healthSummary
+            reflectionGoals = demo.reflectionGoals
+            dailyReviews = demo.dailyReviews
         } else if let snapshot = localStore.load() {
             selectedMood = snapshot.selectedMood
             journalEntries = snapshot.journalEntries
@@ -179,6 +192,36 @@ final class AppViewModel: ObservableObject {
         refreshWidgetPayload()
     }
 
+    func updateWidgetAccentColor(_ color: WidgetAccentColor) {
+        widgetAccentColor = color
+        UserDefaults.standard.set(color.rawValue, forKey: widgetAccentColorKey)
+        refreshWidgetPayload()
+    }
+
+    func setDemoDataEnabled(_ enabled: Bool) {
+        guard enabled != isDemoDataEnabled else { return }
+
+        let defaults = UserDefaults.standard
+        if enabled {
+            localStore.saveBackup(snapshot)
+            let demo = demoSnapshot
+            isDemoDataEnabled = true
+            defaults.set(true, forKey: demoDataEnabledKey)
+            apply(demo)
+            localStore.save(demo)
+            refreshWidgetPayload()
+            return
+        }
+
+        let restored = localStore.loadBackup() ?? emptySnapshot
+        isDemoDataEnabled = false
+        defaults.set(false, forKey: demoDataEnabledKey)
+        apply(restored)
+        localStore.save(restored)
+        localStore.deleteBackup()
+        refreshWidgetPayload()
+    }
+
     func setWidgetAffirmationCategory(_ category: WidgetAffirmationCategory, enabled: Bool) {
         if enabled {
             widgetAffirmationCategories.insert(category)
@@ -255,6 +298,18 @@ final class AppViewModel: ObservableObject {
 
     var latestDailyReview: DailyReview? {
         dailyReviews.sorted { $0.createdAt > $1.createdAt }.first
+    }
+
+    var activeWeeklyConversation: Conversation? {
+        conversations.first {
+            $0.reviewCadence == .weekly && $0.status == .active
+        }
+    }
+
+    var activeMonthlyConversation: Conversation? {
+        conversations.first {
+            $0.reviewCadence == .monthly && $0.status == .active
+        }
     }
 
     var currentWeekDates: [Date] {
@@ -1841,10 +1896,43 @@ final class AppViewModel: ObservableObject {
         )
     }
 
+    private var demoSnapshot: AppSnapshot {
+        Self.buildDemoSnapshot(using: weeklyReviewService)
+    }
+
+    private var emptySnapshot: AppSnapshot {
+        AppSnapshot(
+            selectedMood: .okay,
+            journalEntries: [],
+            insights: [],
+            conversations: [],
+            weeklyReview: weeklyReviewService.latestReview(from: [], goals: reflectionGoals),
+            monthlyReview: nil,
+            healthSummary: nil,
+            reflectionGoals: [],
+            dailyReviews: []
+        )
+    }
+
+    private static func buildDemoSnapshot(using weeklyReviewService: MockWeeklyReviewService) -> AppSnapshot {
+        let entries = MockData.entries
+        return AppSnapshot(
+            selectedMood: entries.first?.mood ?? .okay,
+            journalEntries: entries,
+            insights: MockData.insights,
+            conversations: [],
+            weeklyReview: weeklyReviewService.latestReview(from: entries),
+            monthlyReview: nil,
+            healthSummary: nil,
+            reflectionGoals: [],
+            dailyReviews: []
+        )
+    }
+
     private func saveSnapshot() {
         localStore.save(snapshot)
         refreshWidgetPayload()
-        if isICloudSyncEnabled {
+        if isICloudSyncEnabled && isDemoDataEnabled == false {
             Task {
                 await pushToICloud()
             }
@@ -1882,6 +1970,7 @@ final class AppViewModel: ObservableObject {
         let savedIndex = defaults.integer(forKey: widgetAffirmationIndexKey)
         let normalizedIndex = affirmationOptions.isEmpty ? 0 : min(savedIndex, affirmationOptions.count - 1)
         defaults.set(normalizedIndex, forKey: widgetAffirmationIndexKey)
+        let recentEntries = recentWidgetEntries()
         let payload = WidgetAffirmationPayload(
             preferredName: onboardingProfile.preferredName,
             planTier: planTier == .premium ? .premium : .free,
@@ -1891,12 +1980,14 @@ final class AppViewModel: ObservableObject {
             affirmationOptions: affirmationOptions,
             affirmationIndex: normalizedIndex,
             stylePreset: widgetStylePreset,
+            accentColor: widgetAccentColor,
             enabledCategories: Array(widgetAffirmationCategories),
             issueContext: widgetIssueContext(),
-            entryCount: journalEntries.count,
+            entryCount: recentEntries.count,
             currentStreak: currentStreakDays,
-            averageMood: widgetAverageMoodScore(),
-            latestMood: latestJournalEntry?.mood.rawValue ?? "okay",
+            averageMood: widgetAverageMoodScore(from: recentEntries),
+            latestMood: (recentEntries.last ?? latestJournalEntry)?.mood.rawValue ?? "okay",
+            recentMoodScores: recentWidgetMoodScores(from: recentEntries),
             updatedAt: Date()
         )
         widgetPayloadStore.save(payload)
@@ -1949,59 +2040,142 @@ final class AppViewModel: ObservableObject {
         return "Your journal history builds clearer weekly patterns over time."
     }
 
-    private func widgetAverageMoodScore() -> Double {
-        let recent = Array(journalEntries.prefix(14))
+    private func recentWidgetEntries() -> [JournalEntry] {
+        let calendar = Calendar.current
+        let cutoff = calendar.date(byAdding: .day, value: -29, to: Date()) ?? Date.distantPast
+        return journalEntries
+            .filter { $0.date >= cutoff }
+            .sorted { $0.date < $1.date }
+    }
+
+    private func widgetAverageMoodScore(from recent: [JournalEntry]) -> Double {
         guard recent.isEmpty == false else { return 0 }
         let total = recent.reduce(0) { $0 + $1.mood.score }
         return Double(total) / Double(recent.count)
     }
 
+    private func recentWidgetMoodScores(from recent: [JournalEntry]) -> [Int] {
+        Array(recent.suffix(12)).map(\.mood.score)
+    }
+
     private func widgetAffirmationOptions() -> [String] {
         let categories = widgetAffirmationCategories.isEmpty ? Set(WidgetAffirmationCategory.allCases) : widgetAffirmationCategories
-        var options: [String] = []
         let preferred = onboardingProfile.preferredName.trimmingCharacters(in: .whitespacesAndNewlines)
         let issue = widgetIssueContext().lowercased()
-        if categories.contains(.grounding) {
-            options.append("You are safe in this moment.")
-            options.append("You can slow down and come back to the present.")
-        }
-        if categories.contains(.confidence) {
-            options.append(preferred.isEmpty ? "You can handle this one step at a time." : "\(preferred), you are doing better than you think.")
-            options.append("You have already handled hard days before.")
-        }
-        if categories.contains(.focus) {
-            options.append("Small progress still counts.")
-            options.append("One clear task is enough right now.")
-        }
-        if categories.contains(.rest) {
-            options.append("Rest is productive.")
-            options.append("You do not need to earn recovery.")
-        }
-        if categories.contains(.stress) {
-            options.append("You can let go of what is not urgent.")
-            options.append("Pressure does not define your worth.")
+        let latestMood = latestJournalEntry?.mood ?? .okay
+        let lastSleep = healthSummary?.lastNightSleep ?? latestJournalEntry?.sleepHours ?? 0
+        let lowSleep = lastSleep > 0 && lastSleep < 6.25
+        let lowerGoal = onboardingProfile.reflectionGoal.lowercased()
+
+        let candidates = widgetAffirmationCandidates(
+            categories: categories,
+            preferredName: preferred,
+            issue: issue,
+            latestMood: latestMood,
+            lowSleep: lowSleep,
+            goal: lowerGoal
+        )
+
+        let sorted = candidates
+            .sorted { lhs, rhs in
+                if lhs.score == rhs.score {
+                    return lhs.text < rhs.text
+                }
+                return lhs.score > rhs.score
+            }
+            .map(\.text)
+
+        if sorted.isEmpty {
+            return ["You are allowed to take this one step at a time."]
         }
 
-        if issue.contains("anxiety") {
-            options.append("Anxiety is a feeling, not a verdict.")
-        }
-        if issue.contains("sleep") {
-            options.append("Protecting sleep is an act of care.")
-        }
-        if issue.contains("stress") || issue.contains("burnout") {
-            options.append("Doing one thing well is enough.")
-        }
-        if issue.contains("focus") || issue.contains("adhd") || issue.contains("attention") {
-            options.append("You can begin small and still make progress.")
-        }
-        if options.isEmpty {
-            options = ["You are allowed to take this one step at a time."]
-        }
         var deduped: [String] = []
-        for option in options where deduped.contains(option) == false {
+        for option in sorted where deduped.contains(option) == false {
             deduped.append(option)
         }
         return deduped
+    }
+
+    private func widgetAffirmationCandidates(
+        categories: Set<WidgetAffirmationCategory>,
+        preferredName: String,
+        issue: String,
+        latestMood: MoodLevel,
+        lowSleep: Bool,
+        goal: String
+    ) -> [(text: String, score: Int)] {
+        var candidates: [(text: String, score: Int)] = []
+
+        func add(_ text: String, base: Int, category: WidgetAffirmationCategory? = nil, tags: [String] = []) {
+            var score = base
+
+            if let category, categories.contains(category) {
+                score += 3
+            }
+
+            for tag in tags {
+                if issue.contains(tag) {
+                    score += 3
+                }
+                if goal.contains(tag) {
+                    score += 2
+                }
+            }
+
+            switch latestMood {
+            case .terrible, .low:
+                if category == .grounding || category == .rest || category == .stress {
+                    score += 3
+                }
+            case .okay:
+                if category == .focus || category == .confidence {
+                    score += 1
+                }
+            case .good, .great:
+                if category == .confidence || category == .focus {
+                    score += 2
+                }
+            }
+
+            if lowSleep && (category == .rest || tags.contains("sleep")) {
+                score += 4
+            }
+
+            candidates.append((text: text, score: score))
+        }
+
+        add("You are safe in this moment.", base: 5, category: .grounding, tags: ["anxiety", "panic", "overwhelm"])
+        add("Come back to this moment one breath at a time.", base: 5, category: .grounding, tags: ["anxiety", "stress", "overwhelm"])
+        add("You can meet today gently and still make progress.", base: 5, category: .confidence)
+        add(preferredName.isEmpty ? "You can handle this one step at a time." : "\(preferredName), you can handle this one step at a time.", base: 6, category: .confidence)
+        add("You have already survived hard moments before.", base: 5, category: .confidence, tags: ["anxiety", "stress", "burnout"])
+        add("One clear task is enough right now.", base: 5, category: .focus, tags: ["focus", "adhd", "attention", "work"])
+        add("Small progress still counts.", base: 4, category: .focus, tags: ["focus", "adhd", "attention"])
+        add("You only need to begin, not finish everything.", base: 4, category: .focus, tags: ["focus", "stress", "work"])
+        add("Rest helps your mind and body recover.", base: 5, category: .rest, tags: ["sleep", "tired", "energy", "illness"])
+        add("You do not need to earn recovery.", base: 5, category: .rest, tags: ["sleep", "rest", "burnout", "illness"])
+        add("A slower pace can still be a good day.", base: 4, category: .rest, tags: ["energy", "illness", "tired"])
+        add("You can let go of what is not urgent.", base: 5, category: .stress, tags: ["stress", "burnout", "pressure"])
+        add("Pressure does not define your worth.", base: 5, category: .stress, tags: ["stress", "burnout", "work"])
+        add("Doing one thing well is enough for today.", base: 6, category: .stress, tags: ["stress", "burnout", "focus"])
+
+        if issue.contains("anxiety") {
+            add("Anxiety is a feeling, not a verdict.", base: 10, category: .grounding, tags: ["anxiety"])
+        }
+        if issue.contains("sleep") {
+            add("Protecting sleep is an act of care.", base: 10, category: .rest, tags: ["sleep"])
+        }
+        if issue.contains("stress") || issue.contains("burnout") {
+            add("You can narrow the day and still do enough.", base: 10, category: .stress, tags: ["stress", "burnout"])
+        }
+        if issue.contains("focus") || issue.contains("adhd") || issue.contains("attention") {
+            add("You can begin small and still make real progress.", base: 10, category: .focus, tags: ["focus", "adhd", "attention"])
+        }
+        if issue.contains("illness") || issue.contains("physical") || issue.contains("pain") {
+            add("Your body may need care more than pressure right now.", base: 10, category: .rest, tags: ["illness", "physical", "pain"])
+        }
+
+        return candidates
     }
 
     private func widgetIssueContext() -> String {

@@ -13,7 +13,7 @@ struct InsightsView: View {
                         Color.clear
                             .frame(height: 1)
                             .id("insights-top")
-                        CompanionTabHeader(title: "Insights", state: appModel.companionCircleState, tint: appModel.journalCompanionTint)
+                        CompanionTabHeader(title: "Insights", state: appModel.companionCircleState, tint: appModel.journalCompanionTint, showsCircle: true)
                         ProfessionalInsightsDashboard()
                             .padding(.horizontal, AppSpacing.page)
                             .padding(.bottom, 92)

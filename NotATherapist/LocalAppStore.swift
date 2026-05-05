@@ -23,14 +23,46 @@ struct LocalAppStore {
     private let currentSchemaVersion = 1
 
     private var storeURL: URL {
+        fileURL(named: "app-state.json")
+    }
+
+    private var backupURL: URL {
+        fileURL(named: "app-state.backup.json")
+    }
+
+    private func fileURL(named name: String) -> URL {
         let directory = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appending(path: "NotATherapist", directoryHint: .isDirectory)
-        return directory.appending(path: "app-state.json")
+        return directory.appending(path: name)
     }
 
     func load() -> AppSnapshot? {
+        load(from: storeURL)
+    }
+
+    func save(_ snapshot: AppSnapshot) {
+        save(snapshot, to: storeURL)
+    }
+
+    func delete() {
+        try? fileManager.removeItem(at: storeURL)
+    }
+
+    func loadBackup() -> AppSnapshot? {
+        load(from: backupURL)
+    }
+
+    func saveBackup(_ snapshot: AppSnapshot) {
+        save(snapshot, to: backupURL)
+    }
+
+    func deleteBackup() {
+        try? fileManager.removeItem(at: backupURL)
+    }
+
+    private func load(from url: URL) -> AppSnapshot? {
         do {
-            let data = try Data(contentsOf: storeURL)
+            let data = try Data(contentsOf: url)
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
             if let versioned = try? decoder.decode(VersionedAppSnapshot.self, from: data) {
@@ -42,9 +74,9 @@ struct LocalAppStore {
         }
     }
 
-    func save(_ snapshot: AppSnapshot) {
+    private func save(_ snapshot: AppSnapshot, to url: URL) {
         do {
-            let directory = storeURL.deletingLastPathComponent()
+            let directory = url.deletingLastPathComponent()
             try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
 
             let encoder = JSONEncoder()
@@ -53,14 +85,10 @@ struct LocalAppStore {
 
             let versioned = VersionedAppSnapshot(schemaVersion: currentSchemaVersion, snapshot: snapshot)
             let data = try encoder.encode(versioned)
-            try data.write(to: storeURL, options: [.atomic, .completeFileProtection])
+            try data.write(to: url, options: [.atomic, .completeFileProtection])
         } catch {
             assertionFailure("Failed to save app state: \(error)")
         }
-    }
-
-    func delete() {
-        try? fileManager.removeItem(at: storeURL)
     }
 
     func export(_ snapshot: AppSnapshot) throws -> URL {

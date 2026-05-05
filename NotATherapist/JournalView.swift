@@ -584,6 +584,11 @@ struct NewEntryView: View {
                 .padding(.bottom, 24)
             }
             .scrollDismissesKeyboard(.interactively)
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    editorFocused = false
+                }
+            )
             .background(
                 LinearGradient(
                     colors: [Color(.secondarySystemBackground), Color(.systemBackground)],
@@ -740,12 +745,7 @@ struct NewEntryView: View {
     private func applyTemplate(_ template: JournalTemplate) {
         selectedTemplateID = template.id
         entryType = template.entryType
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
-            text = template.body
-        } else {
-            text = "\(trimmed)\n\n\(template.body)"
-        }
+        text = template.body
         circleState = .typing
         editorFocused = true
     }
@@ -996,7 +996,7 @@ private struct JournalTemplateStrip: View {
                     body: "Templates help you give the review engine better evidence without making you write a perfect journal entry.",
                     bullets: [
                         "They are ranked from your strongest onboarding domains.",
-                        "Tapping one inserts editable prompts into the composer.",
+                        "Choosing a different template replaces the current template prompts.",
                         "You can ignore the structure and write naturally anytime."
                     ],
                     symbol: "questionmark.circle"

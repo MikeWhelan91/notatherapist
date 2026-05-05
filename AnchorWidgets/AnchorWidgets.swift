@@ -21,7 +21,7 @@ struct AnchorWidgetProvider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<AnchorWidgetEntry>) -> Void) {
         let payload = store.load() ?? fallbackPayload
         let entry = AnchorWidgetEntry(date: .now, payload: payload)
-        let refresh = Calendar.current.date(byAdding: .hour, value: 2, to: .now) ?? .now.addingTimeInterval(7200)
+        let refresh = Calendar.current.date(byAdding: .hour, value: 1, to: .now) ?? .now.addingTimeInterval(3600)
         completion(Timeline(entries: [entry], policy: .after(refresh)))
     }
 
@@ -35,6 +35,7 @@ struct AnchorWidgetProvider: TimelineProvider {
             affirmationOptions: ["You are allowed to take this one step at a time."],
             affirmationIndex: 0,
             stylePreset: .minimal,
+            accentColor: .green,
             enabledCategories: WidgetAffirmationCategory.allCases,
             issueContext: "General reflection",
             updatedAt: .now
@@ -46,168 +47,285 @@ struct AnchorWidgetSmallView: View {
     let entry: AnchorWidgetEntry
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            AnchorWidgetBackground(style: entry.payload.stylePreset)
-            VStack(alignment: .leading, spacing: 9) {
-                HStack {
-                    Text("Anchor")
-                        .font(entry.payload.stylePreset.headerFont)
-                        .foregroundStyle(.white.opacity(0.78))
-                    Spacer()
-                    Text(entry.payload.latestMood.capitalized)
-                        .font(.caption2.weight(.bold))
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 4)
-                        .background(moodColor.opacity(0.28), in: Capsule())
-                }
-                Text(entry.payload.averageMood > 0 ? String(format: "%.1f", entry.payload.averageMood) : "-")
-                    .font(.system(size: 34, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                Text("Average mood")
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.72))
-                miniBars
+        GeometryReader { geo in
+            let size = geo.size
+            let contentWidth = size.width * 0.8
+            let iconSize = min(size.width * 0.14, 28)
+            let iconSpacing = max(6, size.width * 0.035)
+            let copy = rotatingPrompt
+
+            VStack(spacing: max(10, size.height * 0.06)) {
                 Spacer(minLength: 0)
-                Label("\(entry.payload.currentStreak)d streak", systemImage: "flame")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.88))
+                Text(copy.title)
+                    .font(.system(size: smallTitleFontSize(for: copy.title, width: size.width), weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.72)
+                    .allowsTightening(true)
+
+                HStack(spacing: iconSpacing) {
+                    ForEach(checkInMoods, id: \.label) { mood in
+                        checkInMoodFace(mood: mood, size: iconSize)
+                    }
+                }
+                .frame(maxWidth: contentWidth)
+
+                Text(copy.subtitle)
+                    .font(.system(size: smallSubtitleFontSize(for: copy.subtitle, width: size.width), weight: .medium))
+                    .foregroundStyle(.white.opacity(0.64))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.76)
+                    .allowsTightening(true)
+                Spacer(minLength: 0)
             }
-            .padding(14)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, size.width * 0.08)
+            .background(checkInCardFill)
+        }
+        .widgetURL(URL(string: "anchor://journal/today"))
+    }
+
+    private var checkInCardFill: Color {
+        Color(red: 0.13, green: 0.13, blue: 0.15)
+    }
+
+    private var rotatingPrompt: (title: String, subtitle: String) {
+        let hour = Calendar.current.component(.hour, from: entry.date)
+        let issue = entry.payload.issueContext.lowercased()
+
+        if hour < 5 {
+            return ("Put one line\ndown", "Clear your head before sleep")
+        }
+        if hour < 12 {
+            if issue.contains("anxiety") {
+                return ("Check the tone\nof your morning", "Name the feeling before it runs")
+            }
+            if issue.contains("focus") || issue.contains("adhd") || issue.contains("attention") {
+                return ("Set the tone\nfor today", "Name the one thing to focus on")
+            }
+            return ("Start with an\nhonest check-in", "Open and set the tone for today")
+        }
+        if hour < 18 {
+            if issue.contains("stress") || issue.contains("burnout") {
+                return ("What is pulling\nat you?", "Open and unload the pressure")
+            }
+            return ("Pause and\ncheck in", "Open and name what is real")
+        }
+        if issue.contains("sleep") || issue.contains("rest") || issue.contains("energy") {
+            return ("How are you\nlanding tonight?", "Open and note what your body needs")
+        }
+        return ("What stayed\nwith you today?", "Open and clear your head")
+    }
+
+    private func smallTitleFontSize(for text: String, width: CGFloat) -> CGFloat {
+        switch text.count {
+        case 0...18: min(width * 0.12, 21)
+        case 19...28: min(width * 0.105, 19)
+        default: min(width * 0.095, 17)
+        }
+    }
+
+    private func smallSubtitleFontSize(for text: String, width: CGFloat) -> CGFloat {
+        switch text.count {
+        case 0...20: min(width * 0.08, 14)
+        case 21...34: min(width * 0.072, 13)
+        default: min(width * 0.066, 12)
+        }
+    }
+
+    private var checkInMoods: [(label: String, color: Color, icon: String)] {
+        [
+            ("Terrible", Color(red: 0.43, green: 0.45, blue: 0.84), "face.dashed"),
+            ("Low", Color(red: 0.37, green: 0.62, blue: 0.95), "face.dashed.fill"),
+            ("Okay", Color(red: 0.36, green: 0.71, blue: 0.68), "minus"),
+            ("Good", Color(red: 0.68, green: 0.84, blue: 0.42), "face.smiling"),
+            ("Great", Color(red: 0.98, green: 0.82, blue: 0.29), "face.smiling.inverse")
+        ]
+    }
+
+    private func checkInMoodFace(mood: (label: String, color: Color, icon: String), size: CGFloat) -> some View {
+        ZStack {
+            Circle()
+                .fill(mood.color)
+                .frame(width: size, height: size)
+            Image(systemName: mood.icon)
+                .font(.system(size: size * 0.46, weight: .semibold))
+                .foregroundStyle(.black.opacity(0.9))
+        }
+        .accessibilityLabel(mood.label)
+    }
+}
+
+struct AnchorAffirmationSmallView: View {
+    let entry: AnchorWidgetEntry
+
+    var body: some View {
+        GeometryReader { geo in
+            let size = geo.size
+            VStack {
+                Spacer(minLength: 0)
+                Text(primaryAffirmation)
+                    .font(.system(size: affirmationSmallFontSize(for: primaryAffirmation, width: size.width), weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(5)
+                    .minimumScaleFactor(0.68)
+                    .allowsTightening(true)
+                    .frame(maxWidth: size.width * 0.8)
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, size.width * 0.08)
+            .background(affirmationCardFill)
         }
         .widgetURL(URL(string: "anchor://journal/today"))
     }
 
     private var primaryAffirmation: String {
         let text = entry.payload.affirmationText ?? entry.payload.primaryText
-        return text.isEmpty ? entry.payload.primaryText : text
+        return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "One steady thought is enough today." : text
     }
 
-    private var moodColor: Color {
-        widgetMoodColor(entry.payload.latestMood)
+    private var affirmationCardFill: Color {
+        Color(red: 0.13, green: 0.13, blue: 0.15)
     }
 
-    private var miniBars: some View {
-        HStack(alignment: .bottom, spacing: 4) {
-            ForEach(0..<7, id: \.self) { index in
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(index == 6 ? moodColor : .white.opacity(0.28))
-                    .frame(width: 8, height: CGFloat(12 + (index % 4) * 6))
-            }
+    private func affirmationSmallFontSize(for text: String, width: CGFloat) -> CGFloat {
+        switch text.count {
+        case 0...36: min(width * 0.105, 18)
+        case 37...60: min(width * 0.09, 16)
+        default: min(width * 0.08, 14)
         }
-        .frame(height: 36, alignment: .bottom)
     }
 }
 
-struct AnchorWidgetMediumView: View {
+struct AnchorAffirmationMediumView: View {
     let entry: AnchorWidgetEntry
 
-    private var nameHeader: String {
-        let trimmed = entry.payload.preferredName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "Anchor check-in" : "\(trimmed), check in"
-    }
-
     var body: some View {
-        ZStack {
-            AnchorWidgetBackground(style: entry.payload.stylePreset)
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
-                    ZStack {
-                        Circle()
-                            .fill(.white.opacity(0.12))
-                            .frame(width: 22, height: 22)
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.95))
-                    }
-                    Text(nameHeader)
-                        .font(entry.payload.stylePreset.headerFont)
-                        .foregroundStyle(.white.opacity(0.82))
-                    Spacer()
-                    Text(entry.payload.planTier == .premium ? "Premium" : "Anchor")
-                        .font(.caption2.weight(.semibold))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(.white.opacity(0.12), in: Capsule())
-                        .foregroundStyle(.white.opacity(0.85))
+        GeometryReader { geo in
+            let size = geo.size
+            VStack(spacing: max(10, size.height * 0.05)) {
+                Spacer(minLength: 0)
+                Text(primaryAffirmation)
+                    .font(.system(size: affirmationMediumFontSize(for: primaryAffirmation, width: size.width), weight: .medium, design: .serif))
+                    .italic()
+                    .foregroundStyle(.white.opacity(0.96))
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(5)
+                    .lineLimit(5)
+                    .minimumScaleFactor(0.62)
+                    .allowsTightening(true)
+                    .frame(maxWidth: size.width * 0.78)
+
+                if contextualHint.isEmpty == false {
+                    Text(contextualHint)
+                        .font(.system(size: min(size.width * 0.028, 10.5), weight: .semibold, design: .rounded))
+                        .foregroundStyle(accentColor.opacity(0.78))
+                        .multilineTextAlignment(.center)
+                        .textCase(.uppercase)
+                        .tracking(1.1)
                 }
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Last 30 days")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.62))
-                    Text(entry.payload.averageMood > 0 ? String(format: "%.1f avg mood", entry.payload.averageMood) : "No mood data yet")
-                        .font(.headline.weight(.bold))
-                        .foregroundStyle(.white)
-                        .lineLimit(2)
-                }
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [accentColor.opacity(0.18), accentColor.opacity(0.85), accentColor.opacity(0.18)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: size.width * 0.26, height: 3)
 
-                HStack(spacing: 14) {
-                    metric("Entries", "\(entry.payload.entryCount)")
-                    metric("Streak", "\(entry.payload.currentStreak)")
-                    metric("Mood", entry.payload.latestMood.capitalized)
-                }
-
-                HStack(alignment: .bottom, spacing: 5) {
-                    ForEach(0..<14, id: \.self) { index in
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(index > 10 ? moodColor : .white.opacity(0.24))
-                            .frame(width: 8, height: CGFloat(10 + ((index * 7) % 28)))
-                    }
-                }
-                .frame(height: 42, alignment: .bottom)
-
-                HStack(spacing: 8) {
-                    Button(intent: OpenJournalIntent()) {
-                        Label("Journal now", systemImage: "square.and.pencil")
-                            .font(.caption.weight(.semibold))
-                            .frame(maxWidth: .infinity, minHeight: 30)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.white.opacity(0.17))
-
-                    Button(intent: NextAffirmationIntent()) {
-                        Label("Next", systemImage: "arrow.triangle.2.circlepath")
-                            .font(.caption.weight(.semibold))
-                            .frame(maxWidth: .infinity, minHeight: 30)
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(.white.opacity(0.6))
-                }
-                .foregroundStyle(.white)
+                Spacer(minLength: 0)
             }
-            .padding(16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, size.width * 0.08)
+            .background(
+                LinearGradient(
+                    colors: [gradientTop, gradientBottom],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                colors: [accentColor.opacity(0.22), .clear],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(height: max(28, size.height * 0.2))
+                }
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 0, style: .continuous)
+                    .strokeBorder(.white.opacity(0.05), lineWidth: 1)
+            }
         }
+        .widgetURL(URL(string: "anchor://journal/today"))
     }
 
     private var primaryAffirmation: String {
         let text = entry.payload.affirmationText ?? entry.payload.primaryText
-        return text.isEmpty ? entry.payload.primaryText : text
+        return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "You are allowed to take this one step at a time." : text
     }
 
-    private var moodColor: Color {
-        widgetMoodColor(entry.payload.latestMood)
+    private var contextualHint: String {
+        entry.payload.issueContext
+            .split(separator: "·")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first ?? ""
     }
 
-    private func metric(_ title: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(value)
-                .font(.caption.weight(.bold))
-                .foregroundStyle(.white)
-            Text(title)
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.62))
+    private var accentColor: Color {
+        widgetAccentColor(entry.payload.accentColor)
+    }
+
+    private var gradientTop: Color {
+        Color(red: 0.10, green: 0.10, blue: 0.12)
+    }
+
+    private var gradientBottom: Color {
+        switch entry.payload.accentColor {
+        case .green:
+            return Color(red: 0.10, green: 0.16, blue: 0.12)
+        case .blue:
+            return Color(red: 0.10, green: 0.13, blue: 0.18)
+        case .copper:
+            return Color(red: 0.18, green: 0.14, blue: 0.11)
+        case .purple:
+            return Color(red: 0.14, green: 0.12, blue: 0.18)
+        case .rose:
+            return Color(red: 0.18, green: 0.12, blue: 0.15)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func affirmationMediumFontSize(for text: String, width: CGFloat) -> CGFloat {
+        switch text.count {
+        case 0...42: min(width * 0.06, 23)
+        case 43...70: min(width * 0.053, 21)
+        case 71...100: min(width * 0.047, 19)
+        default: min(width * 0.042, 17)
+        }
     }
 }
 
-private func widgetMoodColor(_ raw: String) -> Color {
-    switch raw {
-    case "terrible": Color(red: 0.82, green: 0.40, blue: 0.39)
-    case "low": Color(red: 0.86, green: 0.60, blue: 0.34)
-    case "good": Color(red: 0.30, green: 0.61, blue: 0.95)
-    case "great": Color(red: 0.36, green: 0.76, blue: 0.56)
-    default: .white
+private func widgetAccentColor(_ accent: WidgetAccentColor) -> Color {
+    switch accent {
+    case .green:
+        return Color(red: 0.44, green: 0.80, blue: 0.52)
+    case .blue:
+        return Color(red: 0.44, green: 0.67, blue: 0.96)
+    case .copper:
+        return Color(red: 0.86, green: 0.60, blue: 0.34)
+    case .purple:
+        return Color(red: 0.68, green: 0.55, blue: 0.94)
+    case .rose:
+        return Color(red: 0.90, green: 0.48, blue: 0.65)
     }
 }
 
@@ -382,9 +500,24 @@ struct AnchorWidget: Widget {
         StaticConfiguration(kind: kind, provider: AnchorWidgetProvider()) { entry in
             AnchorWidgetEntryView(entry: entry)
         }
-        .configurationDisplayName("Anchor Reflection")
-        .description("Daily reflection lines based on your journal context.")
-        .supportedFamilies([.systemSmall, .systemMedium, .accessoryInline, .accessoryCircular, .accessoryRectangular])
+        .configurationDisplayName("Check In")
+        .description("A simple shortcut into your check-in.")
+        .supportedFamilies([.systemSmall])
+        .contentMarginsDisabled()
+    }
+}
+
+struct AnchorAffirmationWidget: Widget {
+    let kind = "AnchorAffirmationWidget"
+
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: AnchorWidgetProvider()) { entry in
+            AnchorAffirmationEntryView(entry: entry)
+        }
+        .configurationDisplayName("Affirmation of the Day")
+        .description("A single affirmation card.")
+        .supportedFamilies([.systemMedium])
+        .contentMarginsDisabled()
     }
 }
 
@@ -394,7 +527,9 @@ private struct AnchorWidgetEntryView: View {
 
     var body: some View {
         content
-            .containerBackground(.black, for: .widget)
+            .containerBackground(for: .widget) {
+                Color.black
+            }
     }
 
     @ViewBuilder
@@ -402,15 +537,21 @@ private struct AnchorWidgetEntryView: View {
         switch widgetFamily {
         case .systemSmall:
             AnchorWidgetSmallView(entry: entry)
-        case .accessoryInline:
-            AnchorWidgetLockInlineView(entry: entry)
-        case .accessoryCircular:
-            AnchorWidgetLockCircularView(entry: entry)
-        case .accessoryRectangular:
-            AnchorWidgetLockRectangularView(entry: entry)
         default:
-            AnchorWidgetMediumView(entry: entry)
+            AnchorWidgetSmallView(entry: entry)
         }
+    }
+}
+
+private struct AnchorAffirmationEntryView: View {
+    let entry: AnchorWidgetEntry
+    @Environment(\.widgetFamily) private var widgetFamily
+
+    var body: some View {
+        AnchorAffirmationMediumView(entry: entry)
+            .containerBackground(for: .widget) {
+                Color.black
+            }
     }
 }
 
@@ -418,5 +559,6 @@ private struct AnchorWidgetEntryView: View {
 struct AnchorWidgetsBundle: WidgetBundle {
     var body: some Widget {
         AnchorWidget()
+        AnchorAffirmationWidget()
     }
 }

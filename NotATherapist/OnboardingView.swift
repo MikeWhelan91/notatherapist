@@ -101,10 +101,12 @@ struct OnboardingView: View {
                 .padding(.horizontal, AppSpacing.page)
                 .padding(.top, 10)
 
-            circleHeader
-                .padding(.top, 30)
-                .padding(.bottom, page == firstReflectionPageIndex ? 34 : 18)
-                .opacity(isCompletingOnboarding ? 0 : 1)
+            if shouldShowCircleHeader {
+                circleHeader
+                    .padding(.top, 30)
+                    .padding(.bottom, page == firstReflectionPageIndex ? 34 : 18)
+                    .opacity(isCompletingOnboarding ? 0 : 1)
+            }
 
             TabView(selection: $page) {
                 introPage.tag(introPageIndex)
@@ -260,6 +262,10 @@ struct OnboardingView: View {
             trigger: companionTrigger,
             ringRotationDegrees: circleSpinDegrees
         )
+    }
+
+    private var shouldShowCircleHeader: Bool {
+        page != scoreSummaryPageIndex
     }
 
     private var onboardingCompanionPersonality: CompanionPersonality {
@@ -789,15 +795,6 @@ struct OnboardingView: View {
                     .opacity(scoreLineProgress > 0.45 ? 1 : 0)
                     .offset(y: scoreLineProgress > 0.45 ? 0 : 10)
 
-                Text("The companion mirrors recent signal intensity. It looks more active when the baseline is noisier, then settles as your check-ins, reviews, and follow-through become steadier.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(2)
-                    .padding(.horizontal, 10)
-                    .opacity(scoreLineProgress > 0.62 ? 1 : 0)
-                    .offset(y: scoreLineProgress > 0.62 ? 0 : 8)
-
                 VStack(spacing: 14) {
                     scoreSignalRow("Anxiety", value: animatedAnxietyScore, symbol: "waveform.path.ecg")
                     scoreSignalRow("Mood", value: animatedMoodScore, symbol: "circle.lefthalf.filled")
@@ -899,9 +896,6 @@ struct OnboardingView: View {
             motionStyle: .results
         ) {
             VStack(alignment: .leading, spacing: 10) {
-                Text(planName)
-                    .font(.title3.weight(.bold))
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 Text(planFocusTitle)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -1110,7 +1104,7 @@ struct OnboardingView: View {
         ) {
             VStack(spacing: 20) {
                 if let review = firstCheckInReview {
-                    Text(reflectionLead(review))
+                    Text(firstReflectionHeroText(review))
                         .font(.title2.weight(.bold))
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1133,12 +1127,6 @@ struct OnboardingView: View {
                         body: review.insight.action,
                         emphasized: false
                     )
-
-                    Text("Your companion mirrors recent signal intensity. It becomes more active when your entries suggest heavier strain, then settles as check-ins and follow-through get steadier.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
                 } else {
                     Text("No reflection yet. Go back and generate one.")
                         .font(.subheadline)
@@ -1310,31 +1298,7 @@ struct OnboardingView: View {
     }
 
     private var planFocusTitle: String {
-        "Your first loop: check in, get a useful read, try one action, review the pattern."
-    }
-
-    private var planName: String {
-        switch dominantDomain {
-        case "Anxiety":
-            return "Calm Response Plan"
-        case "Mood":
-            return "Mood Stability Plan"
-        case "Functioning":
-            return "Daily Function Plan"
-        default:
-            return "Stress Reset Plan"
-        }
-    }
-
-    private var planWhyLine: String {
-        let ranked = rankedDomains
-        guard let first = ranked.first else {
-            return "We start with consistency first, then adjust once more entries are available."
-        }
-        if ranked.count > 1 {
-            return "\(first.name) came through strongest, with \(ranked[1].name) as a secondary focus."
-        }
-        return "\(first.name) came through strongest, so this week is tuned for that."
+        "A tighter rhythm: check in daily, review weekly, and step back monthly."
     }
 
     private var dailyPlanLine: String {
@@ -1361,6 +1325,14 @@ struct OnboardingView: View {
         default:
             return "Stress support track with boundary, pacing, and recovery prompts."
         }
+    }
+
+    private var weeklyCheckInLine: String {
+        "A weekly check-in that compares the last 7 days to this baseline and sharpens the next focus."
+    }
+
+    private var monthlyCheckInLine: String {
+        "A monthly check-in that zooms out, reviews what is changing, and resets the plan when needed."
     }
 
     private var rankedDomains: [(name: String, value: Double)] {
@@ -1758,6 +1730,14 @@ struct OnboardingView: View {
         return "\(prefix)\(review.insight.emotionalRead)"
     }
 
+    private func firstReflectionHeroText(_ review: DailyReview) -> String {
+        let reframe = review.insight.reframe.trimmingCharacters(in: .whitespacesAndNewlines)
+        if reframe.isEmpty == false {
+            return reframe
+        }
+        return reflectionLead(review)
+    }
+
     private func singleRow(_ text: String, symbol: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: symbol)
@@ -2050,20 +2030,16 @@ struct OnboardingView: View {
 
     private func planItemIcon(for title: String) -> String {
         switch title {
-        case "Why this plan":
-            return "scope"
         case "Daily check-in":
             return "sun.max"
         case "Daily review":
             return "sparkles"
-        case "One tiny experiment":
+        case "One small action":
             return "checkmark.seal"
-        case "Guided journal track":
-            return "book"
-        case "Weekly pattern report":
+        case "Weekly check-in":
             return "chart.line.uptrend.xyaxis"
-        case "Companion memory":
-            return "brain.head.profile"
+        case "Monthly check-in":
+            return "calendar"
         default:
             return "circle"
         }
@@ -2071,12 +2047,11 @@ struct OnboardingView: View {
 
     private var planItems: [(title: String, body: String)] {
         [
-            ("Why this plan", planWhyLine),
             ("Daily check-in", dailyPlanLine),
             ("Daily review", "Turns the entry into one pattern, one reframe, one action, and evidence strength."),
-            ("One tiny experiment", guidedTrackLine),
-            ("Weekly pattern report", "Compares your week against this baseline, then updates the next focus."),
-            ("Companion memory", "Keeps your goals, context, and strongest domains so guidance compounds over time.")
+            ("One small action", guidedTrackLine),
+            ("Weekly check-in", weeklyCheckInLine),
+            ("Monthly check-in", monthlyCheckInLine)
         ]
     }
 }

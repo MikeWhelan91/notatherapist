@@ -956,6 +956,18 @@ struct SettingsView: View {
                         }
                     }
 
+                    Picker(
+                        "Widget accent",
+                        selection: Binding(
+                            get: { appModel.widgetAccentColor },
+                            set: { appModel.updateWidgetAccentColor($0) }
+                        )
+                    ) {
+                        ForEach(WidgetAccentColor.allCases) { color in
+                            Text(color.label).tag(color)
+                        }
+                    }
+
                     ForEach(WidgetAffirmationCategory.allCases) { category in
                         Toggle(
                             category.label,
@@ -975,6 +987,20 @@ struct SettingsView: View {
                     Text("Widget personalization")
                 } footer: {
                     Text("These settings affect both Home Screen and Lock Screen widget text and style.")
+                }
+
+                Section {
+                    Toggle(
+                        "Use demo data",
+                        isOn: Binding(
+                            get: { appModel.isDemoDataEnabled },
+                            set: { appModel.setDemoDataEnabled($0) }
+                        )
+                    )
+                } header: {
+                    Text("Demo data")
+                } footer: {
+                    Text("Temporarily swaps in sample entries and restores your real data when turned off.")
                 }
 
                 Section("Apple Health") {

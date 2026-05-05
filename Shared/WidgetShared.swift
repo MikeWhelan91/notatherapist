@@ -39,6 +39,26 @@ enum WidgetAffirmationCategory: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+enum WidgetAccentColor: String, CaseIterable, Codable, Identifiable {
+    case green
+    case blue
+    case copper
+    case purple
+    case rose
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .green: "Green"
+        case .blue: "Blue"
+        case .copper: "Copper"
+        case .purple: "Purple"
+        case .rose: "Rose"
+        }
+    }
+}
+
 struct WidgetAffirmationPayload: Codable {
     var preferredName: String
     var planTier: WidgetPlanTier
@@ -48,12 +68,14 @@ struct WidgetAffirmationPayload: Codable {
     var affirmationOptions: [String]
     var affirmationIndex: Int
     var stylePreset: WidgetStylePreset
+    var accentColor: WidgetAccentColor
     var enabledCategories: [WidgetAffirmationCategory]
     var issueContext: String
     var entryCount: Int
     var currentStreak: Int
     var averageMood: Double
     var latestMood: String
+    var recentMoodScores: [Int]
     var updatedAt: Date
 
     init(
@@ -65,12 +87,14 @@ struct WidgetAffirmationPayload: Codable {
         affirmationOptions: [String],
         affirmationIndex: Int,
         stylePreset: WidgetStylePreset,
+        accentColor: WidgetAccentColor,
         enabledCategories: [WidgetAffirmationCategory],
         issueContext: String,
         entryCount: Int = 0,
         currentStreak: Int = 0,
         averageMood: Double = 0,
         latestMood: String = "okay",
+        recentMoodScores: [Int] = [],
         updatedAt: Date
     ) {
         self.preferredName = preferredName
@@ -81,12 +105,14 @@ struct WidgetAffirmationPayload: Codable {
         self.affirmationOptions = affirmationOptions
         self.affirmationIndex = affirmationIndex
         self.stylePreset = stylePreset
+        self.accentColor = accentColor
         self.enabledCategories = enabledCategories
         self.issueContext = issueContext
         self.entryCount = entryCount
         self.currentStreak = currentStreak
         self.averageMood = averageMood
         self.latestMood = latestMood
+        self.recentMoodScores = recentMoodScores
         self.updatedAt = updatedAt
     }
 
@@ -99,12 +125,14 @@ struct WidgetAffirmationPayload: Codable {
         case affirmationOptions
         case affirmationIndex
         case stylePreset
+        case accentColor
         case enabledCategories
         case issueContext
         case entryCount
         case currentStreak
         case averageMood
         case latestMood
+        case recentMoodScores
         case updatedAt
     }
 
@@ -118,12 +146,14 @@ struct WidgetAffirmationPayload: Codable {
         affirmationOptions = try container.decodeIfPresent([String].self, forKey: .affirmationOptions) ?? []
         affirmationIndex = try container.decodeIfPresent(Int.self, forKey: .affirmationIndex) ?? 0
         stylePreset = try container.decodeIfPresent(WidgetStylePreset.self, forKey: .stylePreset) ?? .minimal
+        accentColor = try container.decodeIfPresent(WidgetAccentColor.self, forKey: .accentColor) ?? .green
         enabledCategories = try container.decodeIfPresent([WidgetAffirmationCategory].self, forKey: .enabledCategories) ?? WidgetAffirmationCategory.allCases
         issueContext = try container.decode(String.self, forKey: .issueContext)
         entryCount = try container.decodeIfPresent(Int.self, forKey: .entryCount) ?? 0
         currentStreak = try container.decodeIfPresent(Int.self, forKey: .currentStreak) ?? 0
         averageMood = try container.decodeIfPresent(Double.self, forKey: .averageMood) ?? 0
         latestMood = try container.decodeIfPresent(String.self, forKey: .latestMood) ?? "okay"
+        recentMoodScores = try container.decodeIfPresent([Int].self, forKey: .recentMoodScores) ?? []
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
     }
 }

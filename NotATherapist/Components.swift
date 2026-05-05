@@ -375,6 +375,7 @@ struct CompanionTabHeader: View {
     let title: String
     let state: AICircleState
     let tint: Color
+    var showsCircle = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -388,8 +389,12 @@ struct CompanionTabHeader: View {
 
             HStack {
                 Spacer()
-                AICircleView(state: state, size: 122, strokeWidth: 3.1, tint: tint)
-                    .opacity(0)
+                if showsCircle {
+                    AICircleView(state: state, size: 122, strokeWidth: 3.1, tint: tint)
+                } else {
+                    Color.clear
+                        .frame(width: 122, height: 122)
+                }
                 Spacer()
             }
             .padding(.top, 6)

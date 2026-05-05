@@ -25,6 +25,39 @@ struct DailyReviewView: View {
         embedded ? 12 : 180
     }
 
+    private var primaryHeadline: String {
+        let candidates = [
+            currentReview.suggestedGoalTitle,
+            currentReview.insight.reframe,
+            currentReview.insight.pattern,
+            currentReview.summary
+        ]
+
+        for candidate in candidates {
+            let cleaned = cleaned(candidate)
+            if cleaned.isEmpty == false {
+                return cleaned
+            }
+        }
+        return "A clearer next step is starting to show up."
+    }
+
+    private var supportingRead: String {
+        let candidates = [
+            currentReview.insight.pattern,
+            currentReview.insight.emotionalRead,
+            currentReview.summary
+        ]
+
+        for candidate in candidates {
+            let cleaned = cleaned(candidate)
+            if cleaned.isEmpty == false, cleaned != primaryHeadline {
+                return cleaned
+            }
+        }
+        return ""
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppSpacing.section) {
@@ -54,7 +87,7 @@ struct DailyReviewView: View {
                 .opacity(showHeader ? 1 : 0)
                 .offset(y: showHeader ? 0 : 12)
 
-                Text(currentReview.summary)
+                Text(primaryHeadline)
                     .font(.largeTitle.weight(.bold))
                     .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.center)
@@ -63,13 +96,28 @@ struct DailyReviewView: View {
                     .opacity(showSummary ? 1 : 0)
                     .offset(y: showSummary ? 0 : 10)
 
-                VStack(alignment: .leading, spacing: 18) {
-                    reviewBlock(title: "Noticed", body: currentReview.insight.emotionalRead, symbol: "sparkle.magnifyingglass")
-                    reviewBlock(title: "Pattern", body: currentReview.insight.pattern, symbol: InsightType.pattern.symbol)
-                    reviewBlock(title: "Reframe", body: currentReview.insight.reframe, symbol: InsightType.reframe.symbol, emphasized: true)
-                    reviewBlock(title: "Try next", body: currentReview.insight.action, symbol: InsightType.action.symbol)
+                VStack(alignment: .leading, spacing: 14) {
+                    if supportingRead.isEmpty == false {
+                        reviewCard(
+                            title: "What this points to",
+                            body: supportingRead,
+                            symbol: InsightType.pattern.symbol
+                        )
+                    }
+
+                    reviewCard(
+                        title: "Try next",
+                        body: currentReview.insight.action,
+                        symbol: InsightType.action.symbol,
+                        emphasized: true
+                    )
+
                     if appModel.isPremium, currentReview.evidenceStrength.isEmpty == false {
-                        reviewBlock(title: "Evidence", body: currentReview.evidenceStrength, symbol: "dial.medium")
+                        reviewCard(
+                            title: "Why this seems likely",
+                            body: currentReview.evidenceStrength,
+                            symbol: "dial.medium"
+                        )
                     }
                     if hasSupportInfo {
                         supportInfoDisclosure
@@ -85,7 +133,7 @@ struct DailyReviewView: View {
                             .foregroundStyle(appModel.companionTint)
                         Text("Suggested next step")
                             .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(appModel.companionTint)
+                        .foregroundStyle(appModel.companionTint)
                     }
                     if currentReview.suggestedGoalTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Text("No clear next step was suggested yet. Review again after another entry.")
@@ -191,8 +239,12 @@ struct DailyReviewView: View {
         .buttonStyle(.plain)
     }
 
-    private func reviewBlock(title: String, body: String, symbol: String, emphasized: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+    private func reviewCard(title: String, body: String, symbol: String, emphasized: Bool = false) -> some View {
+        let cleanedBody = cleaned(body)
+        guard cleanedBody.isEmpty == false else { return AnyView(EmptyView()) }
+
+        return AnyView(
+        VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: symbol)
                     .font(.caption.weight(.semibold))
@@ -204,12 +256,15 @@ struct DailyReviewView: View {
                     .textCase(.uppercase)
                     .foregroundStyle(.secondary)
             }
-            Text(body)
+            Text(cleanedBody)
                 .font(emphasized ? .title3.weight(.semibold) : .body)
                 .foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        )
     }
 
     private var hasSupportInfo: Bool {

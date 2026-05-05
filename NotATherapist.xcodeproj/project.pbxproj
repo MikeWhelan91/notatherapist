@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -80,10 +80,10 @@
 		3494D6D6C7904FF91E44735E /* Design.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Design.swift; sourceTree = "<group>"; };
 		4526177357FDDD334C4B7A82 /* ICloudSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ICloudSyncService.swift; sourceTree = "<group>"; };
 		468F4E2B1C96DE08C27E8932 /* AppViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppViewModel.swift; sourceTree = "<group>"; };
-		47AFDDF38EB4DD7FDB8A2441 /* AnchorWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = AnchorWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		47AFDDF38EB4DD7FDB8A2441 /* AnchorWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AnchorWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		4B2A86DD82E5AEA38D2581EF /* InsightsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsightsView.swift; sourceTree = "<group>"; };
 		4EC1FCDA511960C4285A6A2C /* WidgetShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetShared.swift; sourceTree = "<group>"; };
-		59389A36ADA0EEE4C28117C9 /* NotATherapist.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = NotATherapist.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		59389A36ADA0EEE4C28117C9 /* Anchor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Anchor.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5A4B528419784EBC6ADC1296 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		67226F0879E563CCE13765F5 /* VoiceModelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceModelManager.swift; sourceTree = "<group>"; };
 		688255F7CDA2BEFF17229452 /* MockData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockData.swift; sourceTree = "<group>"; };
@@ -134,7 +134,7 @@
 			isa = PBXGroup;
 			children = (
 				47AFDDF38EB4DD7FDB8A2441 /* AnchorWidgets.appex */,
-				59389A36ADA0EEE4C28117C9 /* NotATherapist.app */,
+				59389A36ADA0EEE4C28117C9 /* Anchor.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -217,7 +217,7 @@
 				0BD54767EF7D982052E949FB /* WhisperKit */,
 			);
 			productName = NotATherapist;
-			productReference = 59389A36ADA0EEE4C28117C9 /* NotATherapist.app */;
+			productReference = 59389A36ADA0EEE4C28117C9 /* Anchor.app */;
 			productType = "com.apple.product-type.application";
 		};
 		F56FFDA4BD80FCE34C0EF511 /* AnchorWidgets */ = {
@@ -260,7 +260,6 @@
 				EF4DE0BE787974F1CC4B369A /* XCRemoteSwiftPackageReference "argmax-oss-swift" */,
 				BB9889830FA3B3E931CEFBB5 /* XCRemoteSwiftPackageReference "lottie-ios" */,
 			);
-			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -409,6 +408,7 @@
 				CODE_SIGN_ENTITLEMENTS = NotATherapist/NotATherapist.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5976U4WSJN;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Anchor;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Optional Apple Health access helps spot simple patterns between sleep, steps, mood, and journal entries.";
@@ -435,6 +435,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = AnchorWidgets/AnchorWidgets.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5976U4WSJN;
 				INFOPLIST_FILE = AnchorWidgets/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -457,6 +458,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = AnchorWidgets/AnchorWidgets.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5976U4WSJN;
 				INFOPLIST_FILE = AnchorWidgets/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -481,6 +483,7 @@
 				CODE_SIGN_ENTITLEMENTS = NotATherapist/NotATherapist.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5976U4WSJN;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Anchor;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Optional Apple Health access helps spot simple patterns between sleep, steps, mood, and journal entries.";
