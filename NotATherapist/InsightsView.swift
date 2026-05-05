@@ -20,7 +20,7 @@ struct InsightsView: View {
                         HStack {
                             Spacer()
                             AICircleView(
-                                state: .checkIn,
+                                state: appModel.companionCircleState,
                                 size: 110,
                                 strokeWidth: 3,
                                 tint: appModel.journalCompanionTint,
@@ -90,12 +90,12 @@ private struct ProfessionalInsightsDashboard: View {
             VStack(alignment: .leading, spacing: 22) {
                 header
                 metricStrip
+                intelligenceStack
                 moodCalendar
                 moodTrend
                 moodBreakdown
                 weekdayPattern
                 themeImpact
-                reviewSignals
             }
             .onAppear {
                 displayedMonthDate = displayedMonthDate ?? latestMonthDate
@@ -106,12 +106,24 @@ private struct ProfessionalInsightsDashboard: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text("Mood and journal stats")
+            Text("Your patterns")
                 .font(.title2.weight(.bold))
-            Text("Real patterns from your entries, reviews, and follow-through.")
+            Text(insightSummaryLine)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    private var insightSummaryLine: String {
+        if let latest = appModel.latestDailyReview {
+            return latest.summary
+        }
+        if appModel.hasWeeklyReview, let loop = appModel.weeklyReview.primaryLoop, loop.isEmpty == false {
+            return loop
+        }
+        return "Log a few days and Anchor will connect daily entries into weekly and monthly patterns."
     }
 
     private var metricStrip: some View {
@@ -141,6 +153,77 @@ private struct ProfessionalInsightsDashboard: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(AppSurface.stroke).frame(height: 1)
         }
+    }
+
+    private var intelligenceStack: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionTitle("Daily, weekly, monthly")
+            VStack(spacing: 8) {
+                IntelligenceRow(
+                    title: "Daily review",
+                    value: latestDailyReviewValue,
+                    detail: latestDailyReviewDetail,
+                    symbol: "checkmark.seal",
+                    tint: appModel.journalCompanionTint
+                )
+                IntelligenceRow(
+                    title: "Weekly pattern",
+                    value: weeklyReviewValue,
+                    detail: weeklyReviewDetail,
+                    symbol: "calendar.badge.clock",
+                    tint: appModel.hasWeeklyReview ? MoodLevel.good.companionColor : .secondary
+                )
+                IntelligenceRow(
+                    title: "Monthly direction",
+                    value: monthlyReviewValue,
+                    detail: monthlyReviewDetail,
+                    symbol: "calendar",
+                    tint: appModel.currentMonthlyReview == nil ? .secondary : MoodLevel.great.companionColor
+                )
+            }
+        }
+    }
+
+    private var latestDailyReviewValue: String {
+        guard let review = appModel.latestDailyReview else { return "Not reviewed" }
+        if Calendar.current.isDateInToday(review.date) { return "Today" }
+        return review.date.formatted(.dateTime.day().month(.abbreviated))
+    }
+
+    private var latestDailyReviewDetail: String {
+        guard let review = appModel.latestDailyReview else {
+            return "Run a daily review after journaling to capture the clearest signal from the day."
+        }
+        let action = review.insight.action.trimmingCharacters(in: .whitespacesAndNewlines)
+        return action.isEmpty ? review.summary : action
+    }
+
+    private var weeklyReviewValue: String {
+        appModel.hasWeeklyReview ? "Ready" : "Building"
+    }
+
+    private var weeklyReviewDetail: String {
+        if appModel.hasWeeklyReview {
+            if let experiment = appModel.weeklyReview.nextExperiment, experiment.isEmpty == false {
+                return experiment
+            }
+            if appModel.weeklyReview.suggestion.isEmpty == false {
+                return appModel.weeklyReview.suggestion
+            }
+        }
+        return appModel.weeklyUnlockProgressText
+    }
+
+    private var monthlyReviewValue: String {
+        guard let review = appModel.currentMonthlyReview else { return "Not enough data" }
+        return String(format: "%.1f avg", review.averageMood)
+    }
+
+    private var monthlyReviewDetail: String {
+        guard let review = appModel.currentMonthlyReview else {
+            return "Monthly direction unlocks once this month has at least one journal entry."
+        }
+        return "\(review.strongestPattern) \(review.progress)"
     }
 
     private var moodCalendar: some View {
@@ -401,44 +484,11 @@ private struct ProfessionalInsightsDashboard: View {
         }
     }
 
-    private var reviewSignals: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionTitle("Latest review")
-            if let review = appModel.latestDailyReview {
-                VStack(alignment: .leading, spacing: 10) {
-                    insightLine("Summary", review.summary)
-                    insightLine("Pattern", review.insight.pattern)
-                    insightLine("Next step", review.insight.action)
-                }
-            } else {
-                Text("Run a daily review after writing to add pattern and next-step analysis.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
     private func sectionTitle(_ title: String) -> some View {
         Text(title)
             .font(.headline.weight(.semibold))
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, 2)
-    }
-
-    private func insightLine(_ label: String, _ body: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label.uppercased())
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.tertiary)
-            Text(body.isEmpty ? "No signal yet." : body)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.vertical, 8)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(AppSurface.stroke.opacity(0.6)).frame(height: 1)
-        }
     }
 
     private var moodCounts: [(mood: MoodLevel, count: Int)] {
@@ -675,6 +725,45 @@ private struct CalendarSelectionSummary {
     let title: String
     let detail: String
     let mood: MoodLevel?
+}
+
+private struct IntelligenceRow: View {
+    let title: String
+    let value: String
+    let detail: String
+    let symbol: String
+    let tint: Color
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: symbol)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(tint)
+                .frame(width: 28, height: 28)
+                .background(tint.opacity(0.14), in: Circle())
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                    Spacer(minLength: 8)
+                    Text(value)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.vertical, 10)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(AppSurface.stroke.opacity(0.55)).frame(height: 1)
+        }
+    }
 }
 
 private enum InsightTab: String, CaseIterable, Identifiable {
