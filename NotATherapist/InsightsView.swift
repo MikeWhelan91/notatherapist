@@ -49,7 +49,16 @@ struct InsightsView: View {
 }
 
 private struct ProfessionalInsightsDashboard: View {
+    private enum InsightPeriod: String, CaseIterable, Identifiable {
+        case daily = "Daily"
+        case weekly = "Weekly"
+        case monthly = "Monthly"
+
+        var id: String { rawValue }
+    }
+
     @EnvironmentObject private var appModel: AppViewModel
+    @State private var selectedPeriod: InsightPeriod = .daily
     @State private var displayedMonthDate: Date?
     @State private var selectedCalendarDate: Date?
 
@@ -90,12 +99,8 @@ private struct ProfessionalInsightsDashboard: View {
             VStack(alignment: .leading, spacing: 22) {
                 header
                 metricStrip
-                intelligenceStack
-                moodCalendar
-                moodTrend
-                moodBreakdown
-                weekdayPattern
-                themeImpact
+                periodPicker
+                periodContent
             }
             .onAppear {
                 displayedMonthDate = displayedMonthDate ?? latestMonthDate
@@ -106,7 +111,7 @@ private struct ProfessionalInsightsDashboard: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text("Your patterns")
+            Text("Mood and journal stats")
                 .font(.title2.weight(.bold))
             Text(insightSummaryLine)
                 .font(.caption)
@@ -120,10 +125,10 @@ private struct ProfessionalInsightsDashboard: View {
         if let latest = appModel.latestDailyReview {
             return latest.summary
         }
-        if appModel.hasWeeklyReview, let loop = appModel.weeklyReview.primaryLoop, loop.isEmpty == false {
-            return loop
+        if appModel.hasWeeklyReview, appModel.weeklyReview.suggestion.isEmpty == false {
+            return appModel.weeklyReview.suggestion
         }
-        return "Log a few days and Anchor will connect daily entries into weekly and monthly patterns."
+        return "Real signals from your entries, reviews, mood calendar, and follow-through."
     }
 
     private var metricStrip: some View {
@@ -155,32 +160,141 @@ private struct ProfessionalInsightsDashboard: View {
         }
     }
 
-    private var intelligenceStack: some View {
+    private var periodPicker: some View {
+        Picker("Insights range", selection: $selectedPeriod) {
+            ForEach(InsightPeriod.allCases) { period in
+                Text(period.rawValue).tag(period)
+            }
+        }
+        .pickerStyle(.segmented)
+    }
+
+    @ViewBuilder
+    private var periodContent: some View {
+        switch selectedPeriod {
+        case .daily:
+            dailyInsights
+        case .weekly:
+            weeklyInsights
+        case .monthly:
+            monthlyInsights
+        }
+    }
+
+    private var dailyInsights: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            dailyReviewSummary
+            moodCalendar
+            moodTrend
+            moodBreakdown
+        }
+    }
+
+    private var weeklyInsights: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            weeklyReviewSummary
+            weekdayPattern
+            themeImpact
+        }
+        .task {
+            await appModel.refreshWeeklyReview()
+        }
+    }
+
+    private var monthlyInsights: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            monthlyReviewSummary
+            moodCalendar
+            moodTrend
+            moodBreakdown
+        }
+    }
+
+    private var dailyReviewSummary: some View {
+        InsightSummaryBlock(
+            title: "Latest daily review",
+            value: latestDailyReviewValue,
+            detail: latestDailyReviewDetail,
+            symbol: "checkmark.seal",
+            tint: appModel.journalCompanionTint
+        )
+    }
+
+    private var weeklyReviewSummary: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionTitle("Daily, weekly, monthly")
-            VStack(spacing: 8) {
-                IntelligenceRow(
-                    title: "Daily review",
-                    value: latestDailyReviewValue,
-                    detail: latestDailyReviewDetail,
-                    symbol: "checkmark.seal",
-                    tint: appModel.journalCompanionTint
-                )
-                IntelligenceRow(
-                    title: "Weekly pattern",
-                    value: weeklyReviewValue,
-                    detail: weeklyReviewDetail,
-                    symbol: "calendar.badge.clock",
-                    tint: appModel.hasWeeklyReview ? MoodLevel.good.companionColor : .secondary
-                )
-                IntelligenceRow(
-                    title: "Monthly direction",
-                    value: monthlyReviewValue,
-                    detail: monthlyReviewDetail,
-                    symbol: "calendar",
-                    tint: appModel.currentMonthlyReview == nil ? .secondary : MoodLevel.great.companionColor
+            InsightSummaryBlock(
+                title: appModel.hasWeeklyReview ? "Weekly review" : "Weekly review building",
+                value: weeklyReviewValue,
+                detail: weeklyReviewDetail,
+                symbol: "calendar.badge.clock",
+                tint: appModel.hasWeeklyReview ? MoodLevel.good.companionColor : .secondary
+            )
+
+            if appModel.hasWeeklyReview {
+                VStack(alignment: .leading, spacing: 10) {
+                    if appModel.weeklyReview.patterns.isEmpty == false {
+                        insightList(title: "This week", items: Array(appModel.weeklyReview.patterns.prefix(3)))
+                    }
+                    if appModel.weeklyReview.goalFollowThrough.isEmpty == false {
+                        insightText(title: "Goal follow-through", text: appModel.weeklyReview.goalFollowThrough)
+                    }
+                    if let experiment = appModel.weeklyReview.nextExperiment, experiment.isEmpty == false {
+                        insightText(title: "Next experiment", text: experiment)
+                    }
+                }
+            }
+        }
+    }
+
+    private var monthlyReviewSummary: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            InsightSummaryBlock(
+                title: "Month in review",
+                value: monthlyReviewValue,
+                detail: monthlyReviewDetail,
+                symbol: "calendar",
+                tint: appModel.currentMonthlyReview == nil ? .secondary : MoodLevel.great.companionColor
+            )
+            if let review = appModel.currentMonthlyReview {
+                insightList(
+                    title: review.monthTitle,
+                    items: [
+                        "Active days: \(review.activeDays)",
+                        "Average mood: \(String(format: "%.1f", review.averageMood))",
+                        "Next: \(review.nextExperiment)"
+                    ] + Array(review.topThemes.prefix(3))
                 )
             }
+        }
+    }
+
+    private func insightList(title: String, items: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionTitle(title)
+            VStack(alignment: .leading, spacing: 7) {
+                ForEach(items, id: \.self) { item in
+                    HStack(alignment: .top, spacing: 9) {
+                        Circle()
+                            .fill(appModel.journalCompanionTint)
+                            .frame(width: 5, height: 5)
+                            .padding(.top, 7)
+                        Text(item)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+    }
+
+    private func insightText(title: String, text: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            sectionTitle(title)
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -395,9 +509,9 @@ private struct ProfessionalInsightsDashboard: View {
 
     private var weekdayPattern: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionTitle("Day-of-week pattern")
+            sectionTitle("Day-of-week mood")
             if weekdayAveragesWithEntries.isEmpty {
-                Text("Log on a few different days and Anchor will compare which weekdays tend to feel steadier or heavier.")
+                    Text("Log on a few different days and Anchor will compare which weekdays tend to feel steadier or heavier.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
@@ -405,7 +519,7 @@ private struct ProfessionalInsightsDashboard: View {
                 if let strongest = weekdayAveragesWithEntries.max(by: { $0.average < $1.average }),
                    let weakest = weekdayAveragesWithEntries.min(by: { $0.average < $1.average }) {
                     if strongest.weekday == weakest.weekday {
-                        Text("\(strongest.name) is your only logged weekday so far. More entries will make this pattern meaningful.")
+                        Text("\(strongest.name) is your only logged weekday so far. More entries will make this meaningful.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else {
@@ -725,6 +839,34 @@ private struct CalendarSelectionSummary {
     let title: String
     let detail: String
     let mood: MoodLevel?
+}
+
+private struct InsightSummaryBlock: View {
+    let title: String
+    let value: String
+    let detail: String
+    let symbol: String
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(title, systemImage: symbol)
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(tint)
+                Spacer()
+                Text(value)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Text(detail)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 4)
+    }
 }
 
 private struct IntelligenceRow: View {

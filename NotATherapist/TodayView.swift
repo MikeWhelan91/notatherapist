@@ -322,7 +322,7 @@ struct TodayView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Start with one entry.")
                                     .font(.subheadline.weight(.semibold))
-                                Text("Reviews and patterns appear after you write.")
+                                Text("Reviews and stats appear after you write.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -384,7 +384,7 @@ struct TodayView: View {
                                     Spacer()
                                     ExplainerButton(
                                         title: "Adaptive follow-up",
-                                        body: "This question is chosen from your baseline, recent mood, and repeated patterns. Answering it gives the next review better evidence.",
+                                        body: "This question is chosen from your baseline, recent mood, and repeated signals. Answering it gives the next review better evidence.",
                                         bullets: [
                                             "It changes as your entries change.",
                                             "It is designed to improve the next entry, not diagnose anything.",
@@ -437,7 +437,7 @@ struct TodayView: View {
                             HStack(spacing: 12) {
                                 AICircleView(state: .checkIn, size: 42, strokeWidth: 2.1, tint: .white)
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text("I noticed a few patterns.")
+                                    Text("Your weekly review is ready.")
                                         .font(.subheadline.weight(.semibold))
                                     Text(appModel.weeklyCheckInAvailabilityText)
                                         .font(.caption)
@@ -896,7 +896,7 @@ struct SettingsView: View {
                     LabeledContent("Current plan", value: appModel.planTier.label)
 
                     Text(appModel.isPremium
-                         ? "Premium enables deeper daily reviews, richer weekly pattern reports, baseline comparison, and longer context."
+                         ? "Premium enables deeper daily reviews, richer weekly reports, baseline comparison, and longer context."
                          : "Free includes local daily reflection, weekly summaries, journaling, widgets, and reminders.")
                         .font(.caption)
                         .foregroundStyle(.secondary)

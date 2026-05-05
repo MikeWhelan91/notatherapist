@@ -59,6 +59,7 @@ struct OnboardingView: View {
     @State private var onboardingStreakCelebrationMessage: String?
     @State private var onboardingStreakCelebrationPending = false
     @State private var isCompletingOnboarding = false
+    @State private var loadedExistingProfileForReview = false
     @FocusState private var focusedField: OnboardingField?
 
     private let pageCount = 18
@@ -161,6 +162,9 @@ struct OnboardingView: View {
         }
         .overlay {
             ConfettiOverlayView(trigger: onboardingConfettiTrigger)
+        }
+        .onAppear {
+            loadExistingProfileForReviewIfNeeded()
         }
         .task(id: page) {
             lensFocusActive = false
@@ -417,6 +421,7 @@ struct OnboardingView: View {
     }
 
     private var shouldShowBackButton: Bool {
+        if loadedExistingProfileForReview && page == completionPageIndex { return false }
         if page == introPageIndex { return false }
         if page == scoreLoadingPageIndex { return false }
         return true
@@ -466,6 +471,7 @@ struct OnboardingView: View {
 
     private var continueTitle: String {
         if isRequestingNotificationPermission { return "Connecting" }
+        if loadedExistingProfileForReview && page == completionPageIndex { return "Return to Anchor" }
         return page == completionPageIndex ? "Start using Anchor" : "Continue"
     }
 
@@ -1216,12 +1222,30 @@ struct OnboardingView: View {
 
     private var completionPage: some View {
         OnboardingQuestionPage(
-            title: "You’re ready",
-            subtitle: "Your plan, preferences, and first check-in are saved.",
+            title: loadedExistingProfileForReview ? "Your setup" : "You’re ready",
+            subtitle: loadedExistingProfileForReview ? "These are the choices Anchor is using to personalize your journal." : "Your plan, preferences, and first check-in are saved.",
             motionStyle: .hero
         ) {
             VStack(spacing: 10) {
+                if preferredName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                    singleRow("Name: \(preferredName.trimmingCharacters(in: .whitespacesAndNewlines))", symbol: "person")
+                }
+                if ageRange.isEmpty == false {
+                    singleRow("Age range: \(ageRange)", symbol: "calendar")
+                }
+                if focusAreas.isEmpty == false {
+                    singleRow("Focus: \(Array(focusAreas).sorted().joined(separator: ", "))", symbol: "scope")
+                }
                 singleRow("Main goal: \(selectedGoal.isEmpty ? "Support mental wellness" : selectedGoal)", symbol: "target")
+                if therapyExperience.isEmpty == false {
+                    singleRow("Therapy familiarity: \(therapyExperience)", symbol: "person.2")
+                }
+                if emotionAwarenessLevel.isEmpty == false {
+                    singleRow("Emotion awareness: \(emotionAwarenessLevel)", symbol: "heart.text.square")
+                }
+                if appModel.onboardingProfile.assessment != nil {
+                    singleRow("Baseline score: \(totalScore)/63", symbol: "chart.bar")
+                }
                 singleRow("Streak goal: \(streakGoal) days", symbol: "flame")
                 singleRow(onboardingStreakMessage, symbol: "calendar.badge.clock")
                 singleRow("Reminder: \(checkInTime)", symbol: "clock")
@@ -1557,6 +1581,38 @@ struct OnboardingView: View {
         )
 
         completeOnboardingWithCompanionHandoff()
+    }
+
+    private func loadExistingProfileForReviewIfNeeded() {
+        guard loadedExistingProfileForReview == false else { return }
+        let profile = appModel.onboardingProfile
+        guard profile.assessment != nil else { return }
+
+        preferredName = profile.preferredName
+        ageRange = profile.ageRange
+        focusAreas = Set(profile.focusAreas)
+        selectedGoal = profile.reflectionGoal
+        personalStory = profile.personalStory
+        streakGoal = profile.streakGoal > 0 ? profile.streakGoal : streakGoal
+        assessmentAnswers = profile.assessment?.answers.map { min(max($0, 0), 3) } ?? assessmentAnswers
+
+        for item in profile.lifeContext {
+            if let value = item.value(after: "Therapy familiarity: ") {
+                therapyExperience = value
+                triedTherapy = value == "Never tried" ? false : true
+            } else if let value = item.value(after: "Emotion awareness frequency: ") {
+                emotionAwarenessLevel = value
+                emotionAwarenessHard = value == "Often" || value == "Almost always"
+            } else if let value = item.value(after: "Preferred check-in: ") {
+                checkInTime = value
+            } else if let value = item.value(after: "Main goal: "), selectedGoal.isEmpty {
+                selectedGoal = value
+            }
+        }
+
+        firstCheckInGenerated = true
+        loadedExistingProfileForReview = true
+        page = completionPageIndex
     }
 
     private func completeOnboardingWithCompanionHandoff() {
@@ -2015,6 +2071,14 @@ private enum OnboardingField {
     case name
     case story
     case firstEntry
+}
+
+private extension String {
+    func value(after prefix: String) -> String? {
+        guard hasPrefix(prefix) else { return nil }
+        let value = String(dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
+    }
 }
 
 private enum OnboardingAssessment {

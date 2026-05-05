@@ -207,7 +207,7 @@ final class NotificationService: ObservableObject {
 
         let content = UNMutableNotificationContent()
         content.title = "Weekly review is ready"
-        content.body = "I noticed a few patterns. Start a short check-in."
+        content.body = "Your weekly review is ready. Start a short check-in."
         content.sound = .default
         content.categoryIdentifier = weeklyReviewCategoryIdentifier
         content.userInfo = ["route": "weeklyCheckIn"]

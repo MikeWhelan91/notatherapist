@@ -412,10 +412,10 @@ private struct CompanionPersonalityProfile {
 
     var orbitSpeed: Double {
         switch kind {
-        case .grounded: 1.35
-        case .energetic: 1.9
-        case .calm: 1.05
-        case .analytic: 1.6
+        case .grounded: 0.42
+        case .energetic: 0.64
+        case .calm: 0.34
+        case .analytic: 0.52
         }
     }
 
@@ -1232,14 +1232,16 @@ private struct AICircleProfile {
 
     func orbitActivity(at time: TimeInterval) -> Double {
         switch state {
-        case .responding, .thinking, .typing, .listening:
-            1
+        case .responding, .thinking:
+            intermittentActivity(at: time, period: 5.6, activeFraction: 0.46)
+        case .typing, .listening:
+            intermittentActivity(at: time, period: 6.4, activeFraction: 0.36)
         case .checkIn:
-            intermittentActivity(at: time, period: 7.2, activeFraction: 0.34)
+            intermittentActivity(at: time, period: 9.2, activeFraction: 0.24)
         case .idle, .attentive:
-            intermittentActivity(at: time, period: 9.5, activeFraction: 0.2) * 0.5
+            intermittentActivity(at: time, period: 13.5, activeFraction: 0.12) * 0.42
         case .settled:
-            intermittentActivity(at: time, period: 12, activeFraction: 0.14) * 0.36
+            intermittentActivity(at: time, period: 16, activeFraction: 0.08) * 0.26
         }
     }
 
