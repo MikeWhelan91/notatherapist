@@ -48,6 +48,7 @@ struct AICircleView: View {
             let easedIntroProgress = introProgress * introProgress * (3 - 2 * introProgress)
             let drift = motionStyle == .intro ? easedIntroProgress * 88 : (elapsed / profile.motionDuration) * profile.motionOffset
             let lineMotion = motionStyle == .intro ? easedIntroProgress * 420 : (elapsed / profile.lineDuration) * profile.lineTravel
+            let orbitActivity = reduceMotion ? 0 : profile.orbitActivity(at: time)
             let maxScale = motionStyle == .intro ? CGFloat(1.006) : profile.maxScale + personality.extraScale
             let ringRotation = ringRotationDegrees + (reduceMotion ? 0 : sin(time * personality.swaySpeed) * personality.swayAmount)
 
@@ -170,10 +171,10 @@ struct AICircleView: View {
                         let x = cos((time * personality.orbitSpeed) + phase) * orbit
                         let y = sin((time * personality.orbitSpeed) + phase) * orbit
                         Circle()
-                            .fill(tint.opacity(state == .responding || state == .thinking ? personality.respondingOpacity : personality.idleOrbitOpacity))
+                            .fill(tint.opacity((state == .responding || state == .thinking ? personality.respondingOpacity : personality.idleOrbitOpacity) * orbitActivity))
                             .frame(width: max(2, size * personality.dotSize), height: max(2, size * personality.dotSize))
                             .offset(x: x, y: y)
-                            .blur(radius: state == .responding || state == .thinking ? 0.9 : 0.35)
+                            .blur(radius: state == .responding || state == .thinking ? 0.75 : 0.25)
                     }
                 }
 
@@ -564,7 +565,7 @@ private struct CompanionGlyphView: View {
                 pulse: pulse,
                 time: time,
                 blinkScale: synchronizedBlinkScale,
-                glancePhase: 0
+                glancePhase: 0.47
             )
         }
         .offset(y: faceSize * stateProfile.eyeY)
@@ -920,7 +921,7 @@ private struct RingCompanionEye: View {
 
     private var opacity: Double {
         switch shape {
-        case .resting: 0.76
+        case .resting: glancePhase > 0.4 ? 0 : 0.76
         default: 1
         }
     }
@@ -1218,15 +1219,35 @@ private struct AICircleProfile {
 
     var lineTravel: Double {
         switch state {
-        case .idle: 180
-        case .attentive: 120
+        case .idle: 80
+        case .attentive: 64
         case .listening: 230
         case .typing: 320
         case .thinking: 460
         case .responding: 260
-        case .checkIn: 300
-        case .settled: 40
+        case .checkIn: 130
+        case .settled: 24
         }
+    }
+
+    func orbitActivity(at time: TimeInterval) -> Double {
+        switch state {
+        case .responding, .thinking, .typing, .listening:
+            1
+        case .checkIn:
+            intermittentActivity(at: time, period: 7.2, activeFraction: 0.34)
+        case .idle, .attentive:
+            intermittentActivity(at: time, period: 9.5, activeFraction: 0.2) * 0.5
+        case .settled:
+            intermittentActivity(at: time, period: 12, activeFraction: 0.14) * 0.36
+        }
+    }
+
+    private func intermittentActivity(at time: TimeInterval, period: Double, activeFraction: Double) -> Double {
+        let position = time.truncatingRemainder(dividingBy: period) / period
+        guard position < activeFraction else { return 0 }
+        let phase = position / activeFraction
+        return pow(sin(phase * .pi), 0.7)
     }
 
     var primaryScale: CGFloat {

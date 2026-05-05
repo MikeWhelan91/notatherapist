@@ -417,13 +417,7 @@ struct JournalView: View {
 
     private func openComposer() {
         companionTrigger += 1
-        withAnimation(.easeOut(duration: 0.16)) {
-            companionHiddenForComposer = true
-        }
-        Task {
-            try? await Task.sleep(for: .milliseconds(120))
-            showingNewEntry = true
-        }
+        showingNewEntry = true
     }
 
     private func handlePendingRouterActions() {
