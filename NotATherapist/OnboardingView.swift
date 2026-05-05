@@ -84,6 +84,8 @@ struct OnboardingView: View {
     private let voicePageIndex = 16
     private let completionPageIndex = 17
     private let openOnboardingReviewKey = "openOnboardingReview"
+    private let retakeOnboardingAssessmentKey = "retakeOnboardingAssessment"
+    private let onboardingCompletedAtKey = "onboardingCompletedAt"
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1589,7 +1591,12 @@ struct OnboardingView: View {
 
     private func loadExistingProfileForReviewIfNeeded() {
         guard loadedExistingProfileForReview == false else { return }
-        guard shouldOpenReviewSummary || UserDefaults.standard.bool(forKey: openOnboardingReviewKey) else { return }
+        if UserDefaults.standard.bool(forKey: retakeOnboardingAssessmentKey) {
+            UserDefaults.standard.set(false, forKey: retakeOnboardingAssessmentKey)
+            return
+        }
+        let hasCompletedProfile = UserDefaults.standard.object(forKey: onboardingCompletedAtKey) != nil
+        guard shouldOpenReviewSummary || UserDefaults.standard.bool(forKey: openOnboardingReviewKey) || hasCompletedProfile else { return }
         let profile = appModel.onboardingProfile
         guard profile.assessment != nil else { return }
 
