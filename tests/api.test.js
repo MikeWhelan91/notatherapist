@@ -51,6 +51,8 @@ assert.equal(dailyReview.entryIDs.length, 1);
 assert.equal(typeof dailyReview.insight.action, "string");
 assert.equal(typeof dailyReview.suggestedGoalTitle, "string");
 assert.equal(typeof dailyReview.evidenceStrength, "string");
+assert.equal(typeof dailyReview.supportInfoTitle, "string");
+assert.equal(dailyReview.supportSteps.length >= 2, true);
 
 const calmDailyReview = createDailyReview({
   date: "2026-05-04T00:00:00.000Z",
@@ -196,6 +198,7 @@ const monthlyAction = replyToConversation({
   planTier: "premium"
 });
 assert.equal(monthlyAction.suggestedGoal.dueDate.length > 0, true);
+assert.equal(monthlyAction.suggestedGoal.reason.includes("monthly"), true);
 
 const safety = detectSafety(["I might kill myself tonight"]);
 assert.equal(safety.level, "crisis");

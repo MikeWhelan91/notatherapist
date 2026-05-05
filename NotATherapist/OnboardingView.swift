@@ -1591,14 +1591,28 @@ struct OnboardingView: View {
 
     private func loadExistingProfileForReviewIfNeeded() {
         guard loadedExistingProfileForReview == false else { return }
-        if UserDefaults.standard.bool(forKey: retakeOnboardingAssessmentKey) {
-            UserDefaults.standard.set(false, forKey: retakeOnboardingAssessmentKey)
+        let defaults = UserDefaults.standard
+        if defaults.bool(forKey: retakeOnboardingAssessmentKey) {
+            defaults.set(false, forKey: retakeOnboardingAssessmentKey)
             return
         }
-        let hasCompletedProfile = UserDefaults.standard.object(forKey: onboardingCompletedAtKey) != nil
-        guard shouldOpenReviewSummary || UserDefaults.standard.bool(forKey: openOnboardingReviewKey) || hasCompletedProfile else { return }
+        let explicitlyReviewing = shouldOpenReviewSummary || defaults.bool(forKey: openOnboardingReviewKey)
+        let hasCompletedProfile = defaults.object(forKey: onboardingCompletedAtKey) != nil
+        guard explicitlyReviewing || hasCompletedProfile else { return }
         let profile = appModel.onboardingProfile
-        guard profile.assessment != nil else { return }
+        let hasProfileDetails = hasCompletedProfile ||
+            profile.preferredName.isEmpty == false ||
+            profile.ageRange.isEmpty == false ||
+            profile.focusAreas.isEmpty == false ||
+            profile.reflectionGoal.isEmpty == false ||
+            profile.personalStory.isEmpty == false ||
+            profile.assessment != nil
+
+        guard hasProfileDetails else {
+            defaults.set(false, forKey: openOnboardingReviewKey)
+            hasCompletedOnboarding = true
+            return
+        }
 
         preferredName = profile.preferredName
         ageRange = profile.ageRange

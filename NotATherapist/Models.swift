@@ -203,6 +203,9 @@ struct DailyReview: Identifiable, Codable, Hashable {
     var evidenceStrength: String = ""
     var suggestedGoalTitle: String
     var suggestedGoalReason: String
+    var supportInfoTitle: String? = nil
+    var supportInfoBody: String? = nil
+    var supportSteps: [String]? = nil
     var acceptedGoalID: UUID?
     var entryIDs: [UUID]
     var createdAt: Date

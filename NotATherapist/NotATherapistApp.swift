@@ -33,13 +33,21 @@ struct NotATherapistApp: App {
             .preferredColorScheme(.dark)
             .tint(AppTheme.accent)
             .onAppear {
+                repairOnboardingGateIfNeeded()
                 consumePendingCommandIfNeeded()
             }
             .onChange(of: scenePhase) { _, phase in
                 guard phase == .active else { return }
+                repairOnboardingGateIfNeeded()
                 consumePendingCommandIfNeeded()
             }
         }
+    }
+
+    private func repairOnboardingGateIfNeeded() {
+        guard hasCompletedOnboarding == false else { return }
+        guard appModel.hasExistingUserState else { return }
+        hasCompletedOnboarding = true
     }
 
     private func consumePendingCommandIfNeeded() {

@@ -148,6 +148,16 @@ final class AppViewModel: ObservableObject {
         weeklyReview.progressSignal?.isEmpty == false
     }
 
+    var hasExistingUserState: Bool {
+        UserDefaults.standard.object(forKey: onboardingCompletedAtKey) != nil ||
+            journalEntries.isEmpty == false ||
+            dailyReviews.isEmpty == false ||
+            conversations.isEmpty == false ||
+            onboardingProfile.focusAreas.isEmpty == false ||
+            onboardingProfile.reflectionGoal.isEmpty == false ||
+            onboardingProfile.personalStory.isEmpty == false
+    }
+
     var isPremium: Bool {
         get { planTier == .premium }
         set {

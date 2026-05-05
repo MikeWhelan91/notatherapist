@@ -573,14 +573,13 @@ private struct CompanionGlyphView: View {
 
     private var synchronizedBlinkScale: CGFloat {
         guard reduceMotion == false else { return 1 }
-        let period = 5.8
+        let period = 7.8
         let position = time.truncatingRemainder(dividingBy: period)
         let blinkCenter = 0.22
         let distance = abs(position - blinkCenter)
-        let squint = 0.92 + (sin(time * 0.9) * 0.08)
-        guard distance < 0.12 else { return squint }
-        let blink = 1 - CGFloat(distance / 0.12)
-        return max(0.16, squint * (1 - blink * 0.84))
+        guard distance < 0.055 else { return 1 }
+        let blink = 1 - CGFloat(distance / 0.055)
+        return max(0.34, 1 - blink * 0.66)
     }
 
     private var stateMarks: some View {
@@ -701,10 +700,9 @@ private struct CompanionGlyphProfile {
 
     var eyeShape: RingCompanionEye.ShapeKind {
         switch state {
-        case .settled: .resting
-        case .thinking: .pixelChevron
-        case .typing: .softCapsule
-        case .responding: .smileArc
+        case .settled: .displayOval
+        case .thinking, .typing: .displayOval
+        case .responding: .brightOval
         case .checkIn: .brightOval
         case .attentive, .idle: .displayOval
         case .listening: .sideOval
@@ -921,7 +919,7 @@ private struct RingCompanionEye: View {
 
     private var opacity: Double {
         switch shape {
-        case .resting: glancePhase > 0.4 ? 0 : 0.76
+        case .resting: 0.84
         default: 1
         }
     }

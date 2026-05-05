@@ -10,6 +10,7 @@ struct DailyReviewView: View {
     @State private var showSummary = false
     @State private var showReviewSection = false
     @State private var showSuggestedSection = false
+    @State private var supportExpanded = false
 
     private var currentReview: DailyReview {
         appModel.dailyReview(on: review.date) ?? review
@@ -69,6 +70,9 @@ struct DailyReviewView: View {
                     reviewBlock(title: "Try next", body: currentReview.insight.action, symbol: InsightType.action.symbol)
                     if appModel.isPremium, currentReview.evidenceStrength.isEmpty == false {
                         reviewBlock(title: "Evidence", body: currentReview.evidenceStrength, symbol: "dial.medium")
+                    }
+                    if hasSupportInfo {
+                        supportInfoDisclosure
                     }
                 }
                 .opacity(showReviewSection ? 1 : 0)
@@ -206,6 +210,65 @@ struct DailyReviewView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var hasSupportInfo: Bool {
+        cleaned(currentReview.supportInfoTitle).isEmpty == false ||
+            cleaned(currentReview.supportInfoBody).isEmpty == false ||
+            supportSteps.isEmpty == false
+    }
+
+    private var supportSteps: [String] {
+        (currentReview.supportSteps ?? [])
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.isEmpty == false }
+            .prefix(3)
+            .map { $0 }
+    }
+
+    private var supportInfoDisclosure: some View {
+        DisclosureGroup(isExpanded: $supportExpanded) {
+            VStack(alignment: .leading, spacing: 12) {
+                let body = cleaned(currentReview.supportInfoBody)
+                if body.isEmpty == false {
+                    Text(body)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if supportSteps.isEmpty == false {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(Array(supportSteps.enumerated()), id: \.offset) { index, step in
+                            HStack(alignment: .top, spacing: 10) {
+                                Text("\(index + 1)")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(Color(.systemBackground))
+                                    .frame(width: 22, height: 22)
+                                    .background(appModel.companionTint, in: Circle())
+                                Text(step)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.primary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(.top, 8)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "book.closed")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(appModel.companionTint)
+                Text(cleaned(currentReview.supportInfoTitle).isEmpty ? "What could help" : cleaned(currentReview.supportInfoTitle))
+                    .font(.subheadline.weight(.semibold))
+            }
+        }
+        .tint(.secondary)
+    }
+
+    private func cleaned(_ value: String?) -> String {
+        value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 }
 
