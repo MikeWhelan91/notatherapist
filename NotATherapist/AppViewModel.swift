@@ -54,7 +54,9 @@ final class AppViewModel: ObservableObject {
     @Published var isDemoDataEnabled: Bool
     @Published var widgetStylePreset: WidgetStylePreset
     @Published var widgetAccentColor: WidgetAccentColor
+    @Published var widgetFontStyle: WidgetFontStyle
     @Published var widgetAffirmationCategories: Set<WidgetAffirmationCategory>
+    @Published var premiumBillingCycle: PremiumBillingCycle
 
     private let insightService = MockAIInsightService()
     private let weeklyReviewService = MockWeeklyReviewService()
@@ -68,7 +70,9 @@ final class AppViewModel: ObservableObject {
     private let demoDataEnabledKey = "demoDataEnabled"
     private let widgetStylePresetKey = "widgetStylePreset"
     private let widgetAccentColorKey = "widgetAccentColor"
+    private let widgetFontStyleKey = "widgetFontStyle"
     private let widgetAffirmationCategoriesKey = "widgetAffirmationCategories"
+    private let premiumBillingCycleKey = "premiumBillingCycle"
     private let widgetAffirmationIndexKey = "widgetAffirmationIndex"
     private let onboardingCompletedAtKey = "onboardingCompletedAt"
     private let midnightTimestampMigrationKey = "midnightTimestampMigrationV1"
@@ -88,6 +92,8 @@ final class AppViewModel: ObservableObject {
         _isDemoDataEnabled = Published(initialValue: demoEnabled)
         _widgetStylePreset = Published(initialValue: WidgetStylePreset(rawValue: defaults.string(forKey: widgetStylePresetKey) ?? "") ?? .minimal)
         _widgetAccentColor = Published(initialValue: WidgetAccentColor(rawValue: defaults.string(forKey: widgetAccentColorKey) ?? "") ?? .green)
+        _widgetFontStyle = Published(initialValue: WidgetFontStyle(rawValue: defaults.string(forKey: widgetFontStyleKey) ?? "") ?? .rounded)
+        _premiumBillingCycle = Published(initialValue: PremiumBillingCycle(rawValue: defaults.string(forKey: premiumBillingCycleKey) ?? "") ?? .annual)
         let storedCategoryIDs = defaults.stringArray(forKey: widgetAffirmationCategoriesKey) ?? []
         let storedCategories = Set(storedCategoryIDs.compactMap(WidgetAffirmationCategory.init(rawValue:)))
         _widgetAffirmationCategories = Published(initialValue: storedCategories.isEmpty ? Set(WidgetAffirmationCategory.allCases) : storedCategories)
@@ -182,8 +188,32 @@ final class AppViewModel: ObservableObject {
 
     func updatePreferredName(_ name: String) {
         UserDefaults.standard.set(name, forKey: "onboardingPreferredName")
-        onboardingProfile = .current
+        var profile = onboardingProfile
+        profile.preferredName = name
+        persistOnboardingProfile(profile)
         refreshWidgetPayload()
+    }
+
+    func activatePremium(plan: PremiumPlanOption) {
+        premiumBillingCycle = plan.cycle
+        UserDefaults.standard.set(plan.cycle.rawValue, forKey: premiumBillingCycleKey)
+        isPremium = true
+    }
+
+    func updateAgeRange(_ ageRange: String) {
+        UserDefaults.standard.set(ageRange, forKey: "onboardingAgeRange")
+        var profile = onboardingProfile
+        profile.ageRange = ageRange
+        persistOnboardingProfile(profile)
+        refreshWidgetPayload()
+    }
+
+    func updateReflectionGoal(_ goal: String) {
+        UserDefaults.standard.set(goal, forKey: "onboardingReflectionGoal")
+        var profile = onboardingProfile
+        profile.reflectionGoal = goal
+        persistOnboardingProfile(profile)
+        saveSnapshot()
     }
 
     func updateWidgetStylePreset(_ style: WidgetStylePreset) {
@@ -195,6 +225,12 @@ final class AppViewModel: ObservableObject {
     func updateWidgetAccentColor(_ color: WidgetAccentColor) {
         widgetAccentColor = color
         UserDefaults.standard.set(color.rawValue, forKey: widgetAccentColorKey)
+        refreshWidgetPayload()
+    }
+
+    func updateWidgetFontStyle(_ style: WidgetFontStyle) {
+        widgetFontStyle = style
+        UserDefaults.standard.set(style.rawValue, forKey: widgetFontStyleKey)
         refreshWidgetPayload()
     }
 
@@ -538,6 +574,47 @@ final class AppViewModel: ObservableObject {
         journalEntries
             .filter { Calendar.current.isDate($0.date, inSameDayAs: date) }
             .sorted { $0.date > $1.date }
+    }
+
+    var activeReflectionGoals: [ReflectionGoal] {
+        reflectionGoals
+            .filter { $0.status == .active }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    func activeGoals(for cadence: GoalCadence) -> [ReflectionGoal] {
+        activeReflectionGoals.filter { ($0.cadence ?? .daily) == cadence }
+    }
+
+    func completedGoals(for cadence: GoalCadence) -> [ReflectionGoal] {
+        completedReflectionGoals.filter { ($0.cadence ?? .daily) == cadence }
+    }
+
+    var longTermGoalTitle: String {
+        let value = onboardingProfile.reflectionGoal.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? "Build a steadier reflection habit" : value
+    }
+
+    var suggestedWeeklyGoalText: String? {
+        guard hasWeeklyReview else { return nil }
+        let value = weeklyReview.nextExperiment?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return value.isEmpty ? nil : value
+    }
+
+    var suggestedMonthlyGoalText: String? {
+        guard let monthlyReview else { return nil }
+        let value = monthlyReview.nextExperiment.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
+    }
+
+    var completedReflectionGoals: [ReflectionGoal] {
+        reflectionGoals
+            .filter { $0.status == .completed }
+            .sorted { ($0.feedbackAt ?? $0.createdAt) > ($1.feedbackAt ?? $1.createdAt) }
+    }
+
+    var completedReflectionGoalCount: Int {
+        completedReflectionGoals.count
     }
 
     func searchEntries(query: String, mood: MoodLevel?, entryType: EntryType?) -> [JournalEntry] {
@@ -1003,11 +1080,50 @@ final class AppViewModel: ObservableObject {
         journalEntries.insert(entry, at: 0)
 
         checkForGoalProgress(in: entry)
-        weeklyReview = weeklyReviewService.latestReview(from: journalEntries, healthSummary: healthSummary, goals: reflectionGoals)
+        weeklyReview = weeklyReviewService.latestReview(from: journalEntries, profile: onboardingProfile, healthSummary: healthSummary, goals: reflectionGoals)
         applyAdaptiveAssessmentAdjustment(reason: "entry_update")
         selectedMood = mood
         saveSnapshot()
         return entry
+    }
+
+    func updateEntry(id: UUID, text: String, mood: MoodLevel, type: EntryType, date: Date) {
+        guard let index = journalEntries.firstIndex(where: { $0.id == id }) else { return }
+        let original = journalEntries[index]
+        let themes = insightService.themes(for: text, entryType: type)
+
+        journalEntries[index].date = date
+        journalEntries[index].mood = mood
+        journalEntries[index].entryType = type
+        journalEntries[index].text = text
+        journalEntries[index].themes = themes
+        journalEntries[index].aiInsight = insightService.insight(for: journalEntries[index], recentEntries: journalEntries)
+
+        dailyReviews.removeAll {
+            $0.entryIDs.contains(id) ||
+            Calendar.current.isDate($0.date, inSameDayAs: original.date) ||
+            Calendar.current.isDate($0.date, inSameDayAs: date)
+        }
+        insights.removeAll {
+            Calendar.current.isDate($0.date, inSameDayAs: original.date) ||
+            Calendar.current.isDate($0.date, inSameDayAs: date)
+        }
+
+        weeklyReview = weeklyReviewService.latestReview(from: journalEntries, profile: onboardingProfile, healthSummary: healthSummary, goals: reflectionGoals)
+        applyAdaptiveAssessmentAdjustment(reason: "entry_edit")
+        saveSnapshot()
+    }
+
+    func deleteEntry(id: UUID) {
+        guard let entry = journalEntries.first(where: { $0.id == id }) else { return }
+        journalEntries.removeAll { $0.id == id }
+        dailyReviews.removeAll {
+            $0.entryIDs.contains(id) || Calendar.current.isDate($0.date, inSameDayAs: entry.date)
+        }
+        insights.removeAll { Calendar.current.isDate($0.date, inSameDayAs: entry.date) }
+        weeklyReview = weeklyReviewService.latestReview(from: journalEntries, profile: onboardingProfile, healthSummary: healthSummary, goals: reflectionGoals)
+        applyAdaptiveAssessmentAdjustment(reason: "entry_delete")
+        saveSnapshot()
     }
 
     func dailyReview(on date: Date) -> DailyReview? {
@@ -1021,9 +1137,12 @@ final class AppViewModel: ObservableObject {
         onboardingProfile = .current
         let dayEntries = entries(on: date)
         guard dayEntries.isEmpty == false else { return nil }
+        archiveStaleActiveGoals(before: date)
         let recentEntries = dailyContextEntries(for: date)
         let existingDayReview = dailyReviews.first { Calendar.current.isDate($0.date, inSameDayAs: date) }
         let hasUsedAIDailyReview = existingDayReview?.source == "openai"
+        let premiumGoalContext = dailyReviewGoalContext(includeArchived: true)
+        let freeGoalContext = dailyReviewGoalContext(includeArchived: false)
 
         let review: DailyReview
         if planTier == .premium && hasUsedAIDailyReview == false && preferLocal == false {
@@ -1037,7 +1156,7 @@ final class AppViewModel: ObservableObject {
                         recentEntries: recentEntries,
                         profile: onboardingProfile,
                         healthSummary: healthSummary,
-                        goals: reflectionGoals
+                        goals: premiumGoalContext
                     )
                     if candidate.source == "openai" {
                         apiReview = candidate
@@ -1063,7 +1182,8 @@ final class AppViewModel: ObservableObject {
                 entries: dayEntries,
                 recentEntries: recentEntries,
                 profile: onboardingProfile,
-                healthSummary: healthSummary
+                healthSummary: healthSummary,
+                goals: premiumGoalContext
             ) else { return nil }
             aiConnection = .connected(model: "openai")
             var localReview = local
@@ -1075,7 +1195,8 @@ final class AppViewModel: ObservableObject {
                 entries: dayEntries,
                 recentEntries: recentEntries,
                 profile: onboardingProfile,
-                healthSummary: healthSummary
+                healthSummary: healthSummary,
+                goals: freeGoalContext
             ) else { return nil }
             var localReview = local
             localReview.source = "local"
@@ -1216,25 +1337,18 @@ final class AppViewModel: ObservableObject {
 
     func updateHealthSummary(_ summary: HealthSummary?) {
         healthSummary = summary
-        weeklyReview = weeklyReviewService.latestReview(from: journalEntries, healthSummary: summary, goals: reflectionGoals)
+        weeklyReview = weeklyReviewService.latestReview(from: journalEntries, profile: onboardingProfile, healthSummary: summary, goals: reflectionGoals)
         saveSnapshot()
     }
 
     func refreshWeeklyReview() async {
         let scopedEntries = weeklyContextEntries()
         guard hasWeeklyReview else {
-            weeklyReview = weeklyReviewService.latestReview(from: scopedEntries, healthSummary: healthSummary, goals: reflectionGoals)
+            weeklyReview = weeklyReviewService.latestReview(from: scopedEntries, profile: onboardingProfile, healthSummary: healthSummary, goals: reflectionGoals)
             return
         }
 
         onboardingProfile = .current
-        guard planTier == .premium else {
-            weeklyReview = weeklyReviewService.latestReview(from: scopedEntries, healthSummary: healthSummary, goals: reflectionGoals)
-            applyAdaptiveAssessmentAdjustment(reason: "weekly_review")
-            saveSnapshot()
-            return
-        }
-
         do {
             if let review = try await apiService.weeklyReview(
                 entries: scopedEntries,
@@ -1244,10 +1358,11 @@ final class AppViewModel: ObservableObject {
                 planTier: planTier
             ) {
                 weeklyReview = review
+                aiConnection = .connected(model: "openai")
             }
         } catch {
+            weeklyReview = weeklyReviewService.latestReview(from: scopedEntries, profile: onboardingProfile, healthSummary: healthSummary, goals: reflectionGoals)
             aiConnection = .unavailable
-            return
         }
         applyAdaptiveAssessmentAdjustment(reason: "weekly_review")
         saveSnapshot()
@@ -1579,12 +1694,24 @@ final class AppViewModel: ObservableObject {
     }
 
     @discardableResult
-    func addReflectionGoal(title: String, reason: String, sourceConversationID: UUID? = nil, durationDays: Int = 3) -> ReflectionGoal {
+    func addReflectionGoal(title: String, reason: String, sourceConversationID: UUID? = nil, durationDays: Int = 3, cadence: GoalCadence = .daily) -> ReflectionGoal {
         let existing = reflectionGoals.first {
-            $0.status == .active && $0.title.caseInsensitiveCompare(title) == .orderedSame
+            $0.status == .active &&
+            ($0.cadence ?? .daily) == cadence &&
+            $0.title.caseInsensitiveCompare(title) == .orderedSame
         }
         if let existing {
             return existing
+        }
+
+        if cadence != .daily {
+            for index in reflectionGoals.indices where reflectionGoals[index].status == .active && (reflectionGoals[index].cadence ?? .daily) == cadence {
+                reflectionGoals[index].status = .archived
+                if reflectionGoals[index].feedback == nil {
+                    reflectionGoals[index].feedback = "replaced"
+                    reflectionGoals[index].feedbackAt = Date()
+                }
+            }
         }
 
         let goal = ReflectionGoal(
@@ -1594,15 +1721,46 @@ final class AppViewModel: ObservableObject {
             createdAt: Date(),
             dueDate: Calendar.current.date(byAdding: .day, value: max(1, durationDays), to: Date()),
             status: .active,
+            cadence: cadence,
             sourceConversationID: sourceConversationID,
             checkInPrompt: "How did this go: \(title.lowercased())?",
             feedback: nil,
             feedbackAt: nil
         )
         reflectionGoals.insert(goal, at: 0)
-        pruneActiveGoals(limit: 3)
+        if cadence == .daily {
+            pruneActiveGoals(limit: 3)
+        }
         saveSnapshot()
         return goal
+    }
+
+    @discardableResult
+    func saveSuggestedReviewGoal(cadence: GoalCadence) -> ReflectionGoal? {
+        switch cadence {
+        case .daily:
+            guard let review = latestDailyReview else { return nil }
+            let title = review.suggestedGoalTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+            let reason = review.suggestedGoalReason.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard title.isEmpty == false, reason.isEmpty == false else { return nil }
+            return addReflectionGoal(title: title, reason: reason, durationDays: 3, cadence: .daily)
+        case .weekly:
+            guard let text = suggestedWeeklyGoalText else { return nil }
+            return addReflectionGoal(
+                title: weeklyGoalTitle(from: text),
+                reason: text,
+                durationDays: 7,
+                cadence: .weekly
+            )
+        case .monthly:
+            guard let text = suggestedMonthlyGoalText else { return nil }
+            return addReflectionGoal(
+                title: monthlyGoalTitle(from: text),
+                reason: text,
+                durationDays: 30,
+                cadence: .monthly
+            )
+        }
     }
 
     func toggleGoal(_ goal: ReflectionGoal) {
@@ -1611,7 +1769,11 @@ final class AppViewModel: ObservableObject {
         if reflectionGoals[index].status == .completed, reflectionGoals[index].feedback == nil {
             reflectionGoals[index].feedback = "helped"
             reflectionGoals[index].feedbackAt = Date()
+        } else if reflectionGoals[index].status == .active {
+            reflectionGoals[index].feedback = nil
+            reflectionGoals[index].feedbackAt = nil
         }
+        weeklyReview = weeklyReviewService.latestReview(from: journalEntries, profile: onboardingProfile, healthSummary: healthSummary, goals: reflectionGoals)
         saveSnapshot()
     }
 
@@ -1622,7 +1784,7 @@ final class AppViewModel: ObservableObject {
         if feedback == "helped" {
             reflectionGoals[index].status = .completed
         }
-        weeklyReview = weeklyReviewService.latestReview(from: journalEntries, healthSummary: healthSummary, goals: reflectionGoals)
+        weeklyReview = weeklyReviewService.latestReview(from: journalEntries, profile: onboardingProfile, healthSummary: healthSummary, goals: reflectionGoals)
         saveSnapshot()
     }
 
@@ -1636,6 +1798,59 @@ final class AppViewModel: ObservableObject {
                 reflectionGoals[index].feedbackAt = Date()
             }
         }
+    }
+
+    private func archiveStaleActiveGoals(before date: Date) {
+        let cutoff = Calendar.current.startOfDay(for: date)
+        var didChange = false
+
+        for index in reflectionGoals.indices {
+            guard reflectionGoals[index].status == .active else { continue }
+            guard (reflectionGoals[index].cadence ?? .daily) == .daily else { continue }
+            guard Calendar.current.startOfDay(for: reflectionGoals[index].createdAt) < cutoff else { continue }
+            reflectionGoals[index].status = .archived
+            if reflectionGoals[index].feedback == nil {
+                reflectionGoals[index].feedback = "auto_cleared"
+                reflectionGoals[index].feedbackAt = Date()
+            }
+            didChange = true
+        }
+
+        if didChange {
+            weeklyReview = weeklyReviewService.latestReview(from: journalEntries, profile: onboardingProfile, healthSummary: healthSummary, goals: reflectionGoals)
+        }
+    }
+
+    private func dailyReviewGoalContext(includeArchived: Bool) -> [ReflectionGoal] {
+        let active = reflectionGoals.filter { $0.status == .active }
+        let completed = Array(reflectionGoals
+            .filter { $0.status == .completed }
+            .sorted { ($0.feedbackAt ?? $0.createdAt) > ($1.feedbackAt ?? $1.createdAt) }
+            .prefix(6))
+        let archived = includeArchived
+            ? Array(reflectionGoals
+                .filter { $0.status == .archived }
+                .sorted { ($0.feedbackAt ?? $0.createdAt) > ($1.feedbackAt ?? $1.createdAt) }
+                .prefix(4))
+            : []
+
+        return active + completed + archived
+    }
+
+    private func weeklyGoalTitle(from text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("Next 7 days:") {
+            return "This week's focus"
+        }
+        return "Weekly focus"
+    }
+
+    private func monthlyGoalTitle(from text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty == false {
+            return "This month's focus"
+        }
+        return "Monthly focus"
     }
 
     func refreshAIConnection() async {
@@ -1981,6 +2196,7 @@ final class AppViewModel: ObservableObject {
             affirmationIndex: normalizedIndex,
             stylePreset: widgetStylePreset,
             accentColor: widgetAccentColor,
+            fontStyle: widgetFontStyle,
             enabledCategories: Array(widgetAffirmationCategories),
             issueContext: widgetIssueContext(),
             entryCount: recentEntries.count,

@@ -371,9 +371,26 @@ struct HealthSummary: Codable, Hashable {
     var trend: HealthTrend
 }
 
+enum GoalCadence: String, Codable, Hashable, CaseIterable, Identifiable {
+    case daily
+    case weekly
+    case monthly
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .daily: "Daily"
+        case .weekly: "Weekly"
+        case .monthly: "Monthly"
+        }
+    }
+}
+
 enum ReflectionGoalStatus: String, Codable, Hashable {
     case active
     case completed
+    case archived
 }
 
 struct ReflectionGoal: Identifiable, Codable, Hashable {
@@ -383,6 +400,7 @@ struct ReflectionGoal: Identifiable, Codable, Hashable {
     var createdAt: Date
     var dueDate: Date?
     var status: ReflectionGoalStatus
+    var cadence: GoalCadence?
     var sourceConversationID: UUID?
     var checkInPrompt: String
     var feedback: String?

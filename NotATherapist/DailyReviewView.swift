@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DailyReviewView: View {
     @EnvironmentObject private var appModel: AppViewModel
+    @EnvironmentObject private var router: AppRouter
     @Environment(\.dismiss) private var dismiss
 
     let review: DailyReview
@@ -111,6 +112,35 @@ struct DailyReviewView: View {
                         symbol: InsightType.action.symbol,
                         emphasized: true
                     )
+
+                    if appModel.isPremium == false {
+                        Button {
+                            router.presentPaywall(.dailyReview)
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "lock.fill")
+                                    .font(.caption.weight(.bold))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Unlock deeper daily AI reviews")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text("Longer context, evidence strength, and a sharper next step.")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .padding(14)
+                            .background(AppSurface.fill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(AppSurface.stroke, lineWidth: 0.5)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
 
                     if appModel.isPremium, currentReview.evidenceStrength.isEmpty == false {
                         reviewCard(

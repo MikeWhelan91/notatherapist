@@ -14,6 +14,7 @@ struct OnboardingView: View {
     @State private var ageRange = ""
     @State private var focusAreas: Set<String> = []
     @State private var selectedGoal = ""
+    @State private var customGoalText = ""
     @State private var triedTherapy: Bool?
     @State private var emotionAwarenessHard: Bool?
     @State private var personalStory = ""
@@ -71,6 +72,16 @@ struct OnboardingView: View {
         ("Improve relationships", "person.2"),
         ("Support personal growth", "figure.walk"),
         ("Reduce overthinking", "text.bubble")
+    ]
+    private let longTermGoalOptions = [
+        "Feel calmer in stressful moments",
+        "Stop overthinking spirals sooner",
+        "Improve mood consistency",
+        "Build better routines",
+        "Reduce work stress",
+        "Sleep more consistently",
+        "Follow through more reliably",
+        "Feel more in control"
     ]
 
     private let introPageIndex = 0
@@ -514,7 +525,7 @@ struct OnboardingView: View {
         case goalsPageIndex:
             return !focusAreas.isEmpty
         case reasonPageIndex:
-            return !selectedGoal.isEmpty
+            return !resolvedSelectedGoal.isEmpty
         case therapyPageIndex:
             return !therapyExperience.isEmpty
         case emotionPageIndex:
@@ -601,30 +612,40 @@ struct OnboardingView: View {
 
     private var reasonPage: some View {
         OnboardingQuestionPage(
-            title: "What would feel like progress in 2 weeks?",
-            subtitle: "Choose one clear outcome to aim for first.",
+            title: "What are you working toward?",
+            subtitle: "Choose the clearest end goal to guide daily, weekly, and monthly support.",
             motionStyle: .form
         ) {
             VStack(spacing: 10) {
-                singleChoiceRow("Feel calmer in stressful moments", "circle", selected: selectedGoal == "Feel calmer in stressful moments") {
-                    selectedGoal = "Feel calmer in stressful moments"
-                    advanceAfterSingleChoice()
+                ForEach(longTermGoalOptions, id: \.self) { option in
+                    singleChoiceRow(option, "circle", selected: selectedGoal == option) {
+                        selectedGoal = option
+                        customGoalText = ""
+                        advanceAfterSingleChoice()
+                    }
                 }
-                singleChoiceRow("Have more steady energy", "circle", selected: selectedGoal == "Have more steady energy") {
-                    selectedGoal = "Have more steady energy"
-                    advanceAfterSingleChoice()
+
+                singleChoiceRow("Other", "circle", selected: isUsingCustomGoal) {
+                    selectedGoal = "__custom__"
+                    focusedField = .customGoal
+                    reactCompanion(.listening)
                 }
-                singleChoiceRow("Stop overthinking spirals sooner", "circle", selected: selectedGoal == "Stop overthinking spirals sooner") {
-                    selectedGoal = "Stop overthinking spirals sooner"
-                    advanceAfterSingleChoice()
-                }
-                singleChoiceRow("Handle relationships with less reactivity", "circle", selected: selectedGoal == "Handle relationships with less reactivity") {
-                    selectedGoal = "Handle relationships with less reactivity"
-                    advanceAfterSingleChoice()
-                }
-                singleChoiceRow("Build a consistent reflection routine", "circle", selected: selectedGoal == "Build a consistent reflection routine") {
-                    selectedGoal = "Build a consistent reflection routine"
-                    advanceAfterSingleChoice()
+
+                if isUsingCustomGoal {
+                    TextField("Type your goal", text: $customGoalText)
+                        .textInputAutocapitalization(.sentences)
+                        .focused($focusedField, equals: .customGoal)
+                        .font(.subheadline.weight(.semibold))
+                        .padding(14)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.white.opacity(0.2), lineWidth: 0.8)
+                        }
+                        .onChange(of: customGoalText) { _, value in
+                            if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                                selectedGoal = "__custom__"
+                            }
+                        }
                 }
             }
         }
@@ -1243,7 +1264,7 @@ struct OnboardingView: View {
                 if focusAreas.isEmpty == false {
                     singleRow("Focus: \(Array(focusAreas).sorted().joined(separator: ", "))", symbol: "scope")
                 }
-                singleRow("Main goal: \(selectedGoal.isEmpty ? "Support mental wellness" : selectedGoal)", symbol: "target")
+                singleRow("Main goal: \(resolvedSelectedGoal.isEmpty ? "Support mental wellness" : resolvedSelectedGoal)", symbol: "target")
                 if therapyExperience.isEmpty == false {
                     singleRow("Therapy familiarity: \(therapyExperience)", symbol: "person.2")
                 }
@@ -1284,6 +1305,17 @@ struct OnboardingView: View {
             return "No active streak yet. Your next check-in starts day 1."
         }
         return "Current streak: \(current) day\(current == 1 ? "" : "s"). Miss 2 days and it resets."
+    }
+
+    private var isUsingCustomGoal: Bool {
+        selectedGoal == "__custom__"
+    }
+
+    private var resolvedSelectedGoal: String {
+        if isUsingCustomGoal {
+            return customGoalText.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return selectedGoal.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var scoreHeadline: String {
@@ -1552,7 +1584,7 @@ struct OnboardingView: View {
         let emotionBinary = emotionAwarenessHard.map { $0 ? "yes" : "no" } ?? "unknown"
 
         let lifeContext = focus + [
-            "Main goal: \(selectedGoal)",
+            "Main goal: \(resolvedSelectedGoal)",
             "Therapy familiarity: \(therapyExperience)",
             "Emotion awareness frequency: \(emotionAwarenessLevel)",
             "Tried therapy before: \(therapyBinary)",
@@ -1566,7 +1598,7 @@ struct OnboardingView: View {
             ageRange: ageRange,
             lifeContext: lifeContext,
             focusAreas: focus,
-            reflectionGoal: selectedGoal.isEmpty ? "Build a consistent daily check-in habit" : selectedGoal,
+            reflectionGoal: resolvedSelectedGoal.isEmpty ? "Build a consistent daily check-in habit" : resolvedSelectedGoal,
             personalStory: clippedStory,
             streakGoal: streakGoal,
             assessment: assessment
@@ -1603,7 +1635,13 @@ struct OnboardingView: View {
         preferredName = profile.preferredName
         ageRange = profile.ageRange
         focusAreas = Set(profile.focusAreas)
-        selectedGoal = profile.reflectionGoal
+        if longTermGoalOptions.contains(profile.reflectionGoal) {
+            selectedGoal = profile.reflectionGoal
+            customGoalText = ""
+        } else {
+            selectedGoal = "__custom__"
+            customGoalText = profile.reflectionGoal
+        }
         personalStory = profile.personalStory
         streakGoal = profile.streakGoal > 0 ? profile.streakGoal : streakGoal
         assessmentAnswers = profile.assessment?.answers.map { min(max($0, 0), 3) } ?? assessmentAnswers
@@ -1617,8 +1655,14 @@ struct OnboardingView: View {
                 emotionAwarenessHard = value == "Often" || value == "Almost always"
             } else if let value = item.value(after: "Preferred check-in: ") {
                 checkInTime = value
-            } else if let value = item.value(after: "Main goal: "), selectedGoal.isEmpty {
-                selectedGoal = value
+            } else if let value = item.value(after: "Main goal: "), resolvedSelectedGoal.isEmpty {
+                if longTermGoalOptions.contains(value) {
+                    selectedGoal = value
+                    customGoalText = ""
+                } else {
+                    selectedGoal = "__custom__"
+                    customGoalText = value
+                }
             }
         }
 
@@ -1731,11 +1775,37 @@ struct OnboardingView: View {
     }
 
     private func firstReflectionHeroText(_ review: DailyReview) -> String {
+        let profile = appModel.onboardingProfile
+        let goal = profile.reflectionGoal.trimmingCharacters(in: .whitespacesAndNewlines)
+        let story = profile.personalStory.trimmingCharacters(in: .whitespacesAndNewlines)
+        let emotionalRead = review.insight.emotionalRead.trimmingCharacters(in: .whitespacesAndNewlines)
         let reframe = review.insight.reframe.trimmingCharacters(in: .whitespacesAndNewlines)
-        if reframe.isEmpty == false {
-            return reframe
+        let action = review.insight.action.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        var parts: [String] = []
+
+        if emotionalRead.isEmpty == false {
+            parts.append(reflectionLead(review))
         }
-        return reflectionLead(review)
+
+        if goal.isEmpty == false {
+            parts.append("Because you said you want to \(goal.lowercased()), this first check-in matters more as a starting direction than as a scorecard.")
+        }
+
+        if story.isEmpty == false {
+            parts.append("Given the context you shared, this reads like useful evidence about what support or friction is already shaping your days.")
+        }
+
+        if reframe.isEmpty == false {
+            parts.append(reframe)
+        }
+
+        if action.isEmpty == false {
+            parts.append("That gives you something concrete to build on next: \(action.prefix(90)).")
+        }
+
+        parts.append("This is a solid first read, and now the job is to keep turning that goal into smaller repeatable wins.")
+        return parts.joined(separator: " ")
     }
 
     private func singleRow(_ text: String, symbol: String) -> some View {
@@ -2058,6 +2128,7 @@ struct OnboardingView: View {
 
 private enum OnboardingField {
     case name
+    case customGoal
     case story
     case firstEntry
 }

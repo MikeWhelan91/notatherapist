@@ -120,19 +120,19 @@ struct JournalView: View {
                     }
                     .padding(.top, 18)
 
-                    if appModel.reflectionGoals.isEmpty == false {
+                    if appModel.activeReflectionGoals.isEmpty == false {
                         VStack(alignment: .leading, spacing: 8) {
                             SectionLabel(title: "Next steps")
                             ReferenceCard {
                                 VStack(spacing: 0) {
-                                    ForEach(appModel.reflectionGoals.prefix(3)) { goal in
+                                    ForEach(appModel.activeReflectionGoals.prefix(3)) { goal in
                                         JournalGoalRow(goal: goal) {
                                             withAnimation(.snappy(duration: 0.22)) {
                                                 appModel.toggleGoal(goal)
                                             }
                                         }
 
-                                        if goal.id != appModel.reflectionGoals.prefix(3).last?.id {
+                                        if goal.id != appModel.activeReflectionGoals.prefix(3).last?.id {
                                             Divider()
                                         }
                                     }
@@ -1142,8 +1142,11 @@ struct EntryTypePickerView: View {
 
 struct EntryDetailView: View {
     @EnvironmentObject private var appModel: AppViewModel
+    @Environment(\.dismiss) private var dismiss
     let entry: JournalEntry
     @State private var activeDailyReview: DailyReview?
+    @State private var editingEntry: JournalEntry?
+    @State private var confirmDelete = false
 
     var body: some View {
         ScrollView {
@@ -1200,11 +1203,40 @@ struct EntryDetailView: View {
         }
         .navigationTitle(entry.entryType.label)
         .toolbar(.hidden, for: .tabBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button("Edit") {
+                        editingEntry = entry
+                    }
+                    Button("Delete", role: .destructive) {
+                        confirmDelete = true
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+            }
+        }
         .sheet(item: $activeDailyReview) { review in
             NavigationStack {
                 DailyReviewView(review: review)
             }
             .presentationCornerRadius(28)
+        }
+        .sheet(item: $editingEntry) { current in
+            NavigationStack {
+                EntryEditorView(entry: current)
+            }
+            .presentationCornerRadius(28)
+        }
+        .alert("Delete entry?", isPresented: $confirmDelete) {
+            Button("Delete", role: .destructive) {
+                appModel.deleteEntry(id: entry.id)
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes the journal entry and clears any saved review for that day.")
         }
     }
 
@@ -1213,6 +1245,96 @@ struct EntryDetailView: View {
         let steps = entry.steps.map { "\($0.formatted()) steps" }
         let parts = [sleep, steps].compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+}
+
+struct EntryEditorView: View {
+    @EnvironmentObject private var appModel: AppViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    let entry: JournalEntry
+    @State private var date: Date
+    @State private var mood: MoodLevel
+    @State private var entryType: EntryType
+    @State private var text: String
+    @FocusState private var textFocused: Bool
+
+    init(entry: JournalEntry) {
+        self.entry = entry
+        _date = State(initialValue: entry.date)
+        _mood = State(initialValue: entry.mood)
+        _entryType = State(initialValue: entry.entryType)
+        _text = State(initialValue: entry.text)
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: AppSpacing.section) {
+                DatePicker("Date and time", selection: $date)
+                    .datePickerStyle(.compact)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Mood")
+                        .font(.subheadline.weight(.semibold))
+                    Picker("Mood", selection: $mood) {
+                        ForEach(MoodLevel.allCases) { level in
+                            Text(level.label).tag(level)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Entry type")
+                        .font(.subheadline.weight(.semibold))
+                    Picker("Entry type", selection: $entryType) {
+                        ForEach(EntryType.allCases) { type in
+                            Text(type.label).tag(type)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Entry")
+                        .font(.subheadline.weight(.semibold))
+                    TextEditor(text: $text)
+                        .focused($textFocused)
+                        .frame(minHeight: 180)
+                        .padding(10)
+                        .background(AppSurface.fill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+            }
+            .padding(AppSpacing.page)
+        }
+        .navigationTitle("Edit entry")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button("Cancel") {
+                    dismiss()
+                }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Save") {
+                    appModel.updateEntry(
+                        id: entry.id,
+                        text: text.trimmingCharacters(in: .whitespacesAndNewlines),
+                        mood: mood,
+                        type: entryType,
+                        date: date
+                    )
+                    dismiss()
+                }
+                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    textFocused = false
+                }
+            }
+        }
     }
 }
 

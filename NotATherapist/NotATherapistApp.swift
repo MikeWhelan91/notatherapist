@@ -146,6 +146,13 @@ struct MainTabView: View {
         .onChange(of: healthKitManager.summary) { _, summary in
             appModel.updateHealthSummary(summary)
         }
+        .fullScreenCover(item: $router.activePaywall, onDismiss: {
+            router.dismissPaywall()
+        }) { source in
+            PaywallView(source: source)
+                .environmentObject(appModel)
+                .environmentObject(router)
+        }
     }
 
     private func updateCompanionPresentation(for tab: MainTab) {

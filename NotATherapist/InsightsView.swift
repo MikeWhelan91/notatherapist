@@ -42,11 +42,13 @@ private struct ProfessionalInsightsDashboard: View {
     }
 
     @EnvironmentObject private var appModel: AppViewModel
+    @EnvironmentObject private var router: AppRouter
     @State private var selectedPeriod: InsightPeriod = .daily
     @State private var displayedMonthDate: Date?
     @State private var selectedCalendarDate: Date?
     @State private var weeklyNotesExpanded = false
     @State private var monthlyNotesExpanded = false
+    @State private var showingCompletedGoals = false
 
     private var entries: [JournalEntry] {
         appModel.journalEntries.sorted { $0.date < $1.date }
@@ -96,7 +98,7 @@ private struct ProfessionalInsightsDashboard: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .center, spacing: 5) {
             Text("Mood and journal stats")
                 .font(.title2.weight(.bold))
             Text(insightSummaryLine)
@@ -104,15 +106,17 @@ private struct ProfessionalInsightsDashboard: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
+                .multilineTextAlignment(.center)
         }
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 
     private var insightSummaryLine: String {
         if let latest = appModel.latestDailyReview {
-            return latest.summary
+            return readableReviewText(latest.summary)
         }
         if appModel.hasWeeklyReview, appModel.weeklyReview.suggestion.isEmpty == false {
-            return appModel.weeklyReview.suggestion
+            return readableReviewText(appModel.weeklyReview.suggestion)
         }
         return "Mood, journal, and review signals."
     }
@@ -122,7 +126,18 @@ private struct ProfessionalInsightsDashboard: View {
             insightMetric("Entries", "\(last30.count)")
             insightMetric("Logged days", "\(activeDays)")
             insightMetric("Avg mood", averageMood == 0 ? "-" : String(format: "%.1f", averageMood))
-            insightMetric("Reviews", "\(appModel.dailyReviews.count)")
+            Button {
+                showingCompletedGoals = true
+            } label: {
+                insightMetric("Completed", "\(appModel.completedReflectionGoalCount)")
+            }
+            .buttonStyle(.plain)
+        }
+        .sheet(isPresented: $showingCompletedGoals) {
+            NavigationStack {
+                CompletedNextStepsView(goals: appModel.completedReflectionGoals)
+            }
+            .presentationCornerRadius(28)
         }
     }
 
@@ -205,7 +220,9 @@ private struct ProfessionalInsightsDashboard: View {
                     title: "Monthly review",
                     detail: monthlyLockedDetail,
                     systemImage: appModel.hasMonthlyReviewAccess ? "calendar" : "lock.fill",
-                    premiumOnly: appModel.hasMonthlyReviewAccess == false
+                    premiumOnly: appModel.hasMonthlyReviewAccess == false,
+                    buttonTitle: appModel.hasMonthlyReviewAccess ? nil : "Unlock Premium",
+                    action: appModel.hasMonthlyReviewAccess ? nil : { router.presentPaywall(.monthlyReview) }
                 ) {
                     lockedMonthlyPreview
                 }
@@ -264,7 +281,7 @@ private struct ProfessionalInsightsDashboard: View {
                         insightText(title: "Goal follow-through", text: appModel.weeklyReview.goalFollowThrough)
                     }
                     if let experiment = appModel.weeklyReview.nextExperiment, experiment.isEmpty == false {
-                        insightText(title: "Next experiment", text: experiment)
+                        insightText(title: "Next focus", text: experiment)
                     }
                 }
             }
@@ -308,7 +325,7 @@ private struct ProfessionalInsightsDashboard: View {
             InsightSummaryBlock(
                 title: "Month in review",
                 value: String(format: "%.1f avg", review.averageMood),
-                detail: review.summary.isEmpty ? review.strongestPattern : review.summary,
+                detail: readableReviewText(review.summary.isEmpty ? review.strongestPattern : review.summary),
                 symbol: "calendar",
                 tint: MoodLevel.great.companionColor
             )
@@ -320,6 +337,7 @@ private struct ProfessionalInsightsDashboard: View {
                     review.progress,
                     "Next: \(review.nextExperiment)"
                 ].filter { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false } + Array(review.topThemes.prefix(3))
+                .map { $0.replacingOccurrences(of: "Next:", with: "Next focus:") }
             )
         }
     }
@@ -334,10 +352,12 @@ private struct ProfessionalInsightsDashboard: View {
                             .fill(appModel.journalCompanionTint)
                             .frame(width: 5, height: 5)
                             .padding(.top, 7)
-                        Text(item)
+                        Text(readableReviewText(item))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
+                            .textSelection(.enabled)
+                            .lineSpacing(1)
                     }
                 }
             }
@@ -347,7 +367,8 @@ private struct ProfessionalInsightsDashboard: View {
     private func insightText(title: String, text: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             sectionTitle(title)
-            Text(text)
+            Text(readableReviewText(text))
+                .textSelection(.enabled)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -515,23 +536,28 @@ private struct ProfessionalInsightsDashboard: View {
                     y: .value("Mood", entry.mood.score)
                 )
                 .interpolationMethod(.catmullRom)
-                .foregroundStyle(appModel.journalCompanionTint.opacity(0.16))
+                .foregroundStyle(appModel.journalCompanionTint.opacity(0.10))
                 PointMark(x: .value("Date", entry.date), y: .value("Mood", entry.mood.score))
                     .foregroundStyle(entry.mood.companionColor)
             }
             .chartYScale(domain: 1...5)
+            .chartXScale(range: .plotDimension(padding: 20))
             .chartYAxis {
                 AxisMarks(values: [1, 2, 3, 4, 5]) { AxisGridLine(); AxisValueLabel() }
             }
             .chartXAxis {
                 AxisMarks(values: .stride(by: .day, count: 7)) { AxisValueLabel(format: .dateTime.day().month(.abbreviated)) }
             }
-            .frame(height: 210)
+            .frame(height: 188)
         }
+        .padding(.bottom, 8)
     }
 
     private var moodBreakdown: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 14) {
+            Divider()
+                .background(AppSurface.stroke.opacity(0.65))
+                .padding(.bottom, 6)
             sectionTitle("Mood distribution")
             Chart(moodCounts, id: \.mood) { item in
                 SectorMark(angle: .value("Count", item.count), innerRadius: .ratio(0.58), angularInset: 2)
@@ -562,12 +588,12 @@ private struct ProfessionalInsightsDashboard: View {
                 weekdayBars
                 if let strongest = weekdayAveragesWithEntries.max(by: { $0.average < $1.average }),
                    let weakest = weekdayAveragesWithEntries.min(by: { $0.average < $1.average }) {
-                    if strongest.weekday == weakest.weekday {
+                if strongest.weekday == weakest.weekday {
                         Text("\(strongest.name) is your only logged weekday so far. More entries will make this meaningful.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else {
-                        Text("\(strongest.name) is currently your strongest day on average; \(weakest.name) is the lowest.")
+                        Text("\(strongest.name) currently trends strongest on average; \(weakest.name) trends lowest.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     }
@@ -599,11 +625,11 @@ private struct ProfessionalInsightsDashboard: View {
                 }
             }
             HStack {
-                Text("1")
+                Text("Lower")
                 Spacer()
                 Text("Average mood")
                 Spacer()
-                Text("5")
+                Text("Higher")
             }
             .font(.caption2.weight(.semibold))
             .foregroundStyle(.tertiary)
@@ -653,6 +679,10 @@ private struct ProfessionalInsightsDashboard: View {
             weekdayBars
                 .frame(height: 118)
         }
+    }
+
+    private func readableReviewText(_ text: String) -> String {
+        readableReviewCopy(text)
     }
 
     private var lockedMonthlyPreview: some View {
@@ -1000,6 +1030,8 @@ private struct LockedInsightPreview<Content: View>: View {
     let detail: String
     let systemImage: String
     let premiumOnly: Bool
+    var buttonTitle: String? = nil
+    var action: (() -> Void)? = nil
     @ViewBuilder var preview: Content
 
     var body: some View {
@@ -1025,6 +1057,13 @@ private struct LockedInsightPreview<Content: View>: View {
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
                         .background(.white.opacity(0.12), in: Capsule())
+                }
+                if let buttonTitle, let action {
+                    Button(buttonTitle) {
+                        action()
+                    }
+                    .buttonStyle(PrimaryCapsuleButtonStyle())
+                    .padding(.top, 4)
                 }
             }
             .padding(18)
@@ -1065,6 +1104,58 @@ private struct InsightSummaryBlock: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.vertical, 4)
+    }
+}
+
+private struct CompletedNextStepsView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let goals: [ReflectionGoal]
+
+    var body: some View {
+        List {
+            if goals.isEmpty {
+                Section {
+                    Text("No completed next steps yet.")
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Section {
+                    ForEach(goals) { goal in
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(goal.title)
+                                .font(.subheadline.weight(.semibold))
+                            Text(goal.reason)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text(completedGoalDateText(goal))
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                } header: {
+                    Text("Completed next steps")
+                }
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .background(Color.black)
+        .navigationTitle("Completed next steps")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Done") {
+                    dismiss()
+                }
+            }
+        }
+    }
+
+    private func completedGoalDateText(_ goal: ReflectionGoal) -> String {
+        let date = goal.feedbackAt ?? goal.createdAt
+        return date.formatted(.dateTime.weekday(.wide).day().month(.wide))
     }
 }
 
@@ -1138,7 +1229,7 @@ private struct InsightFeedView: View {
             output.append(.init(title: "Baseline", subtitle: baseline, symbol: "chart.line.uptrend.xyaxis", tint: .purple, kind: "Trend"))
         }
         if let experiment = appModel.weeklyReview.nextExperiment, experiment.isEmpty == false {
-            output.append(.init(title: "Next experiment", subtitle: experiment, symbol: "checkmark.seal", tint: .orange, kind: "Action"))
+            output.append(.init(title: "Next focus", subtitle: experiment, symbol: "checkmark.seal", tint: .orange, kind: "Action"))
         }
         output.append(contentsOf: appModel.insights.prefix(6).map {
             InsightStory(title: $0.title, subtitle: $0.body, symbol: $0.type.symbol, tint: .white, kind: $0.category)
@@ -1338,6 +1429,7 @@ private struct WeeklyReviewContainerView: View {
 
 struct WeeklyReviewView: View {
     @EnvironmentObject private var appModel: AppViewModel
+    @EnvironmentObject private var router: AppRouter
     let review: WeeklyReview
     var embedded = false
 
@@ -1354,7 +1446,7 @@ struct WeeklyReviewView: View {
                             body: "Weekly review compresses several days into one pattern report so the app can compare change over time.",
                             bullets: [
                                 "Free keeps this short and practical.",
-                                "Premium adds baseline comparison, goal feedback, and a 7-day experiment.",
+                                "Premium adds baseline comparison, deeper goal feedback, and a richer 7-day experiment.",
                                 "It only unlocks after enough entries to reduce guesswork."
                             ],
                             symbol: "questionmark.circle"
@@ -1381,7 +1473,7 @@ struct WeeklyReviewView: View {
                         HStack(alignment: .firstTextBaseline, spacing: 10) {
                             Image(systemName: "sparkle")
                                 .font(.caption)
-                            Text(pattern)
+                            Text(readableReviewCopy(pattern))
                                 .font(.body)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -1392,27 +1484,27 @@ struct WeeklyReviewView: View {
             Divider().background(AppSurface.stroke.opacity(0.55))
 
             if appModel.isPremium {
-                InsightSectionView(title: "Watch next", bodyText: review.risk, symbol: InsightType.risk.symbol)
+                InsightSectionView(title: "Watch next", bodyText: readableReviewCopy(review.risk), symbol: InsightType.risk.symbol)
                 Divider().background(AppSurface.stroke.opacity(0.55))
             }
             if appModel.isPremium, review.patternShift.isEmpty == false {
-                InsightSectionView(title: "What changed", bodyText: review.patternShift, symbol: "arrow.left.arrow.right")
+                InsightSectionView(title: "What changed", bodyText: readableReviewCopy(review.patternShift), symbol: "arrow.left.arrow.right")
                 Divider().background(AppSurface.stroke.opacity(0.55))
             }
             if appModel.isPremium, let primaryLoop = review.primaryLoop, primaryLoop.isEmpty == false {
-                InsightSectionView(title: "Primary loop", bodyText: primaryLoop, symbol: "point.3.connected.trianglepath.dotted")
+                InsightSectionView(title: "Primary loop", bodyText: readableReviewCopy(primaryLoop), symbol: "point.3.connected.trianglepath.dotted")
                 Divider().background(AppSurface.stroke.opacity(0.55))
             }
             if appModel.isPremium, let progressSignal = review.progressSignal, progressSignal.isEmpty == false {
-                InsightSectionView(title: "Progress", bodyText: progressSignal, symbol: "arrow.up.right.circle")
+                InsightSectionView(title: "Progress", bodyText: readableReviewCopy(progressSignal), symbol: "arrow.up.right.circle")
                 Divider().background(AppSurface.stroke.opacity(0.55))
             }
             if appModel.isPremium, review.goalFollowThrough.isEmpty == false {
-                InsightSectionView(title: "How goals went", bodyText: review.goalFollowThrough, symbol: "flag.checkered")
+                InsightSectionView(title: "How goals went", bodyText: readableReviewCopy(review.goalFollowThrough), symbol: "flag.checkered")
                 Divider().background(AppSurface.stroke.opacity(0.55))
             }
             if appModel.isPremium, let baselineComparison = review.baselineComparison, baselineComparison.isEmpty == false {
-                InsightSectionView(title: "Baseline comparison", bodyText: baselineComparison, symbol: "chart.line.uptrend.xyaxis")
+                InsightSectionView(title: "Baseline comparison", bodyText: readableReviewCopy(baselineComparison), symbol: "chart.line.uptrend.xyaxis")
                 Divider().background(AppSurface.stroke.opacity(0.55))
             }
             if appModel.isPremium, review.healthPatterns.isEmpty == false {
@@ -1423,7 +1515,7 @@ struct WeeklyReviewView: View {
                         HStack(alignment: .firstTextBaseline, spacing: 10) {
                             Image(systemName: pattern.lowercased().contains("sleep") ? "moon" : "figure.walk")
                                 .font(.caption)
-                            Text(pattern)
+                            Text(readableReviewCopy(pattern))
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
@@ -1431,14 +1523,14 @@ struct WeeklyReviewView: View {
                 }
                 Divider().background(AppSurface.stroke.opacity(0.55))
             }
-            InsightSectionView(title: "Try this", bodyText: review.nextExperiment ?? review.suggestion, symbol: InsightType.suggestion.symbol)
+            InsightSectionView(title: "Next focus", bodyText: readableReviewCopy(review.nextExperiment ?? review.suggestion), symbol: InsightType.suggestion.symbol)
             if appModel.isPremium, let suggestedTemplate = review.suggestedTemplate, suggestedTemplate.isEmpty == false {
                 Divider().background(AppSurface.stroke.opacity(0.55))
-                InsightSectionView(title: "Suggested template", bodyText: suggestedTemplate, symbol: "square.text.square")
+                InsightSectionView(title: "Suggested template", bodyText: readableReviewCopy(suggestedTemplate), symbol: "square.text.square")
             }
             if appModel.isPremium, let researchPrompt = review.researchPrompt, researchPrompt.isEmpty == false {
                 Divider().background(AppSurface.stroke.opacity(0.55))
-                InsightSectionView(title: "Learn more", bodyText: researchPrompt, symbol: "book")
+                InsightSectionView(title: "Learn more", bodyText: readableReviewCopy(researchPrompt), symbol: "book")
             }
             if appModel.isPremium == false {
                 ReferenceCard {
@@ -1452,9 +1544,14 @@ struct WeeklyReviewView: View {
                         Text("Goal follow-through summary")
                             .font(.subheadline.weight(.semibold))
                             .redacted(reason: .placeholder)
-                        Text("Unlock baseline comparison, next experiments, and a richer weekly pattern report.")
+                        Text("Unlock baseline comparison, deeper goal follow-through, and a richer weekly pattern report.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        Button("Unlock Premium") {
+                            router.presentPaywall(.weeklyReview)
+                        }
+                        .buttonStyle(PrimaryCapsuleButtonStyle())
+                        .padding(.top, 4)
                     }
                 }
             }
@@ -1462,6 +1559,33 @@ struct WeeklyReviewView: View {
         .navigationTitle(appModel.isPremium ? "Weekly review" : "Weekly insight")
         .navigationBarTitleDisplayMode(.inline)
     }
+}
+
+private func readableReviewCopy(_ text: String) -> String {
+    let pattern = #"\b(\d{4})-(\d{2})-(\d{2})\b"#
+    guard let regex = try? NSRegularExpression(pattern: pattern) else {
+        return text
+            .replacingOccurrences(of: "Next 7 days:", with: "For this week:")
+            .replacingOccurrences(of: "Next experiment", with: "Next focus")
+    }
+
+    let formatter = DateFormatter()
+    formatter.calendar = Calendar.current
+    formatter.locale = Locale.current
+    formatter.dateFormat = "yyyy-MM-dd"
+
+    let mutable = NSMutableString(string: text)
+    let baseText = String(mutable)
+    let matches = regex.matches(in: baseText, range: NSRange(location: 0, length: mutable.length)).reversed()
+    for match in matches {
+        let raw = mutable.substring(with: match.range)
+        guard let date = formatter.date(from: raw) else { continue }
+        mutable.replaceCharacters(in: match.range, with: date.longReadableDate)
+    }
+
+    return String(mutable)
+        .replacingOccurrences(of: "Next 7 days:", with: "For this week:")
+        .replacingOccurrences(of: "Next experiment", with: "Next focus")
 }
 
 private struct AnalyticsView: View {

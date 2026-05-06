@@ -535,7 +535,8 @@ struct MockAIInsightService {
         entries: [JournalEntry],
         recentEntries: [JournalEntry] = [],
         profile: OnboardingProfile = .current,
-        healthSummary: HealthSummary? = nil
+        healthSummary: HealthSummary? = nil,
+        goals: [ReflectionGoal] = []
     ) -> DailyReview? {
         guard entries.isEmpty == false else { return nil }
 
@@ -559,6 +560,16 @@ struct MockAIInsightService {
         }
         let topDomain = topAssessmentDomain(from: profile)
         let domainDefault = domainDefault(for: topDomain)
+        let recentlyCompletedGoals = goals
+            .filter { $0.status == .completed }
+            .sorted { ($0.feedbackAt ?? $0.createdAt) > ($1.feedbackAt ?? $1.createdAt) }
+            .prefix(3)
+        let activeGoalTitles = goals
+            .filter { $0.status == .active }
+            .sorted { $0.createdAt > $1.createdAt }
+            .prefix(2)
+            .map(\.title)
+        let reflectionGoal = profile.reflectionGoal.trimmingCharacters(in: .whitespacesAndNewlines)
 
         if hasUrgentSafetySignal(in: combinedText) {
             return DailyReview(
@@ -601,7 +612,7 @@ struct MockAIInsightService {
             }
         }
 
-        let emotionalRead: String
+        var emotionalRead: String
         let anxietySignal = hasAnxietySignal(in: lowerText)
         if let topIssue {
             emotionalRead = "\(topIssue.label) came up most today."
@@ -629,6 +640,21 @@ struct MockAIInsightService {
             emotionalRead = "Today does not show a clear struggle, which is useful baseline information."
         } else {
             emotionalRead = "Today has a few threads worth noticing."
+        }
+
+        if reflectionGoal.isEmpty == false {
+            if recentlyCompletedGoals.isEmpty == false {
+                emotionalRead += " That matters for your goal of \(reflectionGoal.lowercased()), because you already have proof that some steps can help."
+            } else if activeGoalTitles.isEmpty == false {
+                emotionalRead += " Keep reading this through your goal of \(reflectionGoal.lowercased()), especially around \(naturalList(activeGoalTitles.map { $0.lowercased() }))."
+            } else {
+                emotionalRead += " Read today against your goal of \(reflectionGoal.lowercased()), not as an isolated mood snapshot."
+            }
+        }
+
+        if recentlyCompletedGoals.isEmpty == false {
+            let titles = naturalList(recentlyCompletedGoals.map { $0.title.lowercased() })
+            emotionalRead += " Recently completed next steps include \(titles), which is useful evidence for what helps."
         }
 
         let pattern: String
@@ -671,7 +697,7 @@ struct MockAIInsightService {
             patternWithContext = pattern
         }
 
-        let reframe: String
+        var reframe: String
         if context.improvementSignals.isEmpty == false {
             reframe = "The useful detail is not that everything was fine; it is that something shifted: \(context.improvementSignals[0])."
         } else if sortedEntries.contains(where: { $0.entryType == .win }) {
@@ -686,6 +712,10 @@ struct MockAIInsightService {
             reframe = "This is information for your next decision, not a verdict about you."
         } else {
             reframe = "You do not need to solve the whole pattern from one day."
+        }
+
+        if reflectionGoal.isEmpty == false {
+            reframe += " The more useful question is what would move \(reflectionGoal.lowercased()) forward from here."
         }
 
         let anchors = contextAnchors(from: sortedEntries, profile: profile)
@@ -761,6 +791,16 @@ struct MockAIInsightService {
             }
         }
 
+        if reflectionGoal.isEmpty == false {
+            normalizedAction = normalizedAction.replacingOccurrences(of: "tomorrow.", with: "tomorrow so it supports \(reflectionGoal.lowercased()).")
+            if normalizedAction == action || normalizedAction.contains(reflectionGoal.lowercased()) == false {
+                normalizedAction += " Keep it tied to \(reflectionGoal.lowercased())."
+            }
+            if normalizedGoalReason.isEmpty == false && normalizedGoalReason.contains(reflectionGoal.lowercased()) == false {
+                normalizedGoalReason += " It supports \(reflectionGoal.lowercased())."
+            }
+        }
+
         return DailyReview(
             id: UUID(),
             date: date,
@@ -787,6 +827,19 @@ struct MockAIInsightService {
             createdAt: Date(),
             source: "local"
         )
+    }
+
+    private func naturalList(_ items: [String]) -> String {
+        switch items.count {
+        case 0:
+            return ""
+        case 1:
+            return items[0]
+        case 2:
+            return "\(items[0]) and \(items[1])"
+        default:
+            return "\(items.dropLast().joined(separator: ", ")), and \(items.last ?? "")"
+        }
     }
 
     private func evidenceStrength(
@@ -1088,7 +1141,7 @@ struct MockConversationService {
 }
 
 struct MockWeeklyReviewService {
-    func latestReview(from entries: [JournalEntry], healthSummary: HealthSummary? = nil, goals: [ReflectionGoal] = []) -> WeeklyReview {
+    func latestReview(from entries: [JournalEntry], profile: OnboardingProfile = .current, healthSummary: HealthSummary? = nil, goals: [ReflectionGoal] = []) -> WeeklyReview {
         guard entries.isEmpty == false else {
             return WeeklyReview(
                 id: UUID(),
@@ -1101,21 +1154,22 @@ struct MockWeeklyReviewService {
         }
 
         let sortedEntries = entries.sorted { $0.date < $1.date }
+        let reflectionGoal = profile.reflectionGoal.trimmingCharacters(in: .whitespacesAndNewlines)
         let dateRange = reviewDateRange(for: sortedEntries)
-        let generatedPatterns = patterns(from: entries)
+        let generatedPatterns = patterns(from: entries, reflectionGoal: reflectionGoal, goals: goals)
 
         return WeeklyReview(
             id: UUID(),
             dateRange: dateRange,
             patterns: generatedPatterns,
-            risk: risk(from: entries),
-            suggestion: suggestion(from: entries),
+            risk: risk(from: entries, reflectionGoal: reflectionGoal),
+            suggestion: suggestion(from: entries, reflectionGoal: reflectionGoal),
             healthPatterns: healthPatterns(from: entries, summary: healthSummary),
-            goalFollowThrough: goalFollowThrough(from: entries, goals: goals),
-            progressSignal: progressSignal(from: entries),
+            goalFollowThrough: goalFollowThrough(from: entries, goals: goals, reflectionGoal: reflectionGoal),
+            progressSignal: progressSignal(from: entries, goals: goals, reflectionGoal: reflectionGoal),
             primaryLoop: primaryLoop(from: entries),
-            nextExperiment: nextExperiment(from: entries),
-            baselineComparison: baselineComparison(from: entries),
+            nextExperiment: nextExperiment(from: entries, reflectionGoal: reflectionGoal),
+            baselineComparison: baselineComparison(from: entries, reflectionGoal: reflectionGoal),
             suggestedTemplate: suggestedTemplate(from: entries),
             researchPrompt: researchPrompt(from: entries)
         )
@@ -1129,12 +1183,38 @@ struct MockWeeklyReviewService {
         return "\(first.compactDate) - \(last.compactDate)"
     }
 
-    private func patterns(from entries: [JournalEntry]) -> [String] {
+    private func naturalList(_ items: [String]) -> String {
+        switch items.count {
+        case 0:
+            return ""
+        case 1:
+            return items[0]
+        case 2:
+            return "\(items[0]) and \(items[1])"
+        default:
+            return "\(items.dropLast().joined(separator: ", ")), and \(items.last ?? "")"
+        }
+    }
+
+    private func patterns(from entries: [JournalEntry], reflectionGoal: String, goals: [ReflectionGoal]) -> [String] {
         var patterns: [String] = []
         let themes = entries.flatMap(\.themes)
         let themeCounts = Dictionary(grouping: themes, by: { $0 }).mapValues(\.count)
         let lowMoodCount = entries.filter { $0.mood.score <= 2 }.count
         let goodMoodWithMovement = entries.filter { $0.mood.score >= 4 && $0.themes.contains("Movement") }.count
+        let completedTitles = goals
+            .filter { $0.status == .completed }
+            .sorted { ($0.feedbackAt ?? $0.createdAt) > ($1.feedbackAt ?? $1.createdAt) }
+            .prefix(2)
+            .map(\.title)
+
+        if reflectionGoal.isEmpty == false {
+            if completedTitles.isEmpty == false {
+                patterns.append("Completed steps such as \(naturalList(completedTitles.map { $0.lowercased() })) gave real evidence of movement toward \(reflectionGoal.lowercased()).")
+            } else {
+                patterns.append("The clearest weekly question is what helped or blocked progress toward \(reflectionGoal.lowercased()).")
+            }
+        }
 
         if let topTheme = themeCounts.max(by: { $0.value < $1.value }), topTheme.value >= 2 {
             patterns.append("\(topTheme.key) came up \(topTheme.value) times.")
@@ -1149,26 +1229,36 @@ struct MockWeeklyReviewService {
         return Array(patterns.prefix(3))
     }
 
-    private func risk(from entries: [JournalEntry]) -> String {
+    private func risk(from entries: [JournalEntry], reflectionGoal: String) -> String {
         let lowMoodCount = entries.filter { $0.mood.score <= 2 }.count
         if lowMoodCount >= 2 {
-            return "Low mood repeated this week. Keep the next step small."
+            return reflectionGoal.isEmpty
+                ? "Low mood repeated this week. Keep the next step small."
+                : "Low mood repeated this week, so progress toward \(reflectionGoal.lowercased()) needs a smaller and steadier plan."
         }
         if entries.flatMap(\.themes).filter({ $0 == "Work" }).count >= 2 {
-            return "Work may be taking up more attention than usual."
+            return reflectionGoal.isEmpty
+                ? "Work may be taking up more attention than usual."
+                : "Work may be taking up more attention than usual and pulling energy away from \(reflectionGoal.lowercased())."
         }
         return entries.count >= 5 ? "Keep next steps small until a repeated signal is clearer." : ""
     }
 
-    private func suggestion(from entries: [JournalEntry]) -> String {
+    private func suggestion(from entries: [JournalEntry], reflectionGoal: String) -> String {
         let themes = entries.flatMap(\.themes)
         if themes.filter({ $0 == "Work" }).count >= 2 {
-            return "Choose one work decision to finish or park."
+            return reflectionGoal.isEmpty
+                ? "Choose one work decision to finish or park."
+                : "Choose one work decision to finish or park so it stops competing with \(reflectionGoal.lowercased())."
         }
         if themes.filter({ $0 == "Sleep" }).count >= 2 {
-            return "Write down a stop point before tonight."
+            return reflectionGoal.isEmpty
+                ? "Write down a stop point before tonight."
+                : "Write down a stop point before tonight so tomorrow has more room for \(reflectionGoal.lowercased())."
         }
-        return entries.count >= 5 ? "Pick one small next step and leave the rest written down." : "Log a few more days before treating this as a weekly review."
+        return entries.count >= 5
+            ? (reflectionGoal.isEmpty ? "Pick one small next step and leave the rest written down." : "Pick one small next step that clearly supports \(reflectionGoal.lowercased()), then leave the rest written down.")
+            : "Log a few more days before treating this as a weekly review."
     }
 
     private func healthPatterns(from entries: [JournalEntry], summary: HealthSummary?) -> [String] {
@@ -1191,11 +1281,23 @@ struct MockWeeklyReviewService {
         return Array(patterns.prefix(2))
     }
 
-    private func progressSignal(from entries: [JournalEntry]) -> String {
+    private func progressSignal(from entries: [JournalEntry], goals: [ReflectionGoal], reflectionGoal: String) -> String {
+        let completedTitles = goals
+            .filter { $0.status == .completed }
+            .sorted { ($0.feedbackAt ?? $0.createdAt) > ($1.feedbackAt ?? $1.createdAt) }
+            .prefix(2)
+            .map(\.title)
+        if completedTitles.isEmpty == false {
+            return reflectionGoal.isEmpty
+                ? "Progress signal: completed steps included \(naturalList(completedTitles.map { $0.lowercased() }))."
+                : "Progress signal: completed steps such as \(naturalList(completedTitles.map { $0.lowercased() })) gave concrete evidence of movement toward \(reflectionGoal.lowercased())."
+        }
         let progressWords = ["calmer", "better", "easier", "handled", "managed", "finished", "started", "done"]
         let wins = entries.filter { $0.entryType == .win || progressWords.contains(where: $0.text.lowercased().contains) }
         if let latest = wins.sorted(by: { $0.date > $1.date }).first {
-            return "Progress signal: \(latest.entryType == .win ? "you recorded a win" : "your wording included a shift toward progress")."
+            return reflectionGoal.isEmpty
+                ? "Progress signal: \(latest.entryType == .win ? "you recorded a win" : "your wording included a shift toward progress")."
+                : "Progress signal: \(latest.entryType == .win ? "you recorded a win" : "your wording included a shift toward progress"), which may support \(reflectionGoal.lowercased())."
         }
         return entries.count >= 5 ? "Progress signal is still light. Track what helps, not only what hurts." : ""
     }
@@ -1218,30 +1320,44 @@ struct MockWeeklyReviewService {
         return entries.count >= 5 ? "Likely loop is still forming. Keep entries concrete so next week can compare better." : ""
     }
 
-    private func nextExperiment(from entries: [JournalEntry]) -> String {
+    private func nextExperiment(from entries: [JournalEntry], reflectionGoal: String) -> String {
         let themes = entries.flatMap(\.themes)
         if themes.contains("Anxiety") || themes.contains("Open loops") {
-            return "Next 7 days: use one 60-second reset before the hardest decision, then log whether it changed the next step."
+            return reflectionGoal.isEmpty
+                ? "Next 7 days: use one 60-second reset before the hardest decision, then log whether it changed the next step."
+                : "Next 7 days: use one 60-second reset before the hardest decision, then log whether it made \(reflectionGoal.lowercased()) easier to follow through on."
         }
         if themes.contains("Sleep") {
-            return "Next 7 days: set one wind-down cue and log sleep quality the next morning."
+            return reflectionGoal.isEmpty
+                ? "Next 7 days: set one wind-down cue and log sleep quality the next morning."
+                : "Next 7 days: set one wind-down cue and log whether better sleep gives more room for \(reflectionGoal.lowercased())."
         }
         if themes.contains("Work") {
-            return "Next 7 days: close or park one work loop before opening a new one."
+            return reflectionGoal.isEmpty
+                ? "Next 7 days: close or park one work loop before opening a new one."
+                : "Next 7 days: close or park one work loop before opening a new one, then note whether it helps \(reflectionGoal.lowercased())."
         }
-        return "Next 7 days: pick one small action daily and mark whether it helped."
+        return reflectionGoal.isEmpty
+            ? "Next 7 days: pick one small action daily and mark whether it helped."
+            : "Next 7 days: pick one small daily action that clearly supports \(reflectionGoal.lowercased()), then mark whether it helped."
     }
 
-    private func baselineComparison(from entries: [JournalEntry]) -> String {
+    private func baselineComparison(from entries: [JournalEntry], reflectionGoal: String) -> String {
         let low = entries.filter { $0.mood.score <= 2 }.count
         let high = entries.filter { $0.mood.score >= 4 }.count
         if high > low {
-            return "Compared with your starting baseline, this week contains more steadiness signals than strain signals."
+            return reflectionGoal.isEmpty
+                ? "Compared with your starting baseline, this week contains more steadiness signals than strain signals."
+                : "Compared with your starting baseline, this week contains more steadiness signals than strain signals, which gives \(reflectionGoal.lowercased()) more room."
         }
         if low > high {
-            return "Compared with your starting baseline, this week still needs a smaller, stabilizing plan."
+            return reflectionGoal.isEmpty
+                ? "Compared with your starting baseline, this week still needs a smaller, stabilizing plan."
+                : "Compared with your starting baseline, this week still needs a smaller, steadier plan before \(reflectionGoal.lowercased()) will feel reachable."
         }
-        return "Compared with your starting baseline, this week looks mixed rather than clearly better or worse."
+        return reflectionGoal.isEmpty
+            ? "Compared with your starting baseline, this week looks mixed rather than clearly better or worse."
+            : "Compared with your starting baseline, this week looks mixed, so progress toward \(reflectionGoal.lowercased()) is still uneven."
     }
 
     private func suggestedTemplate(from entries: [JournalEntry]) -> String {
@@ -1270,12 +1386,21 @@ struct MockWeeklyReviewService {
         return "Worth learning about: the pattern that repeats most, not every possible label."
     }
 
-    private func goalFollowThrough(from entries: [JournalEntry], goals: [ReflectionGoal]) -> String {
+    private func goalFollowThrough(from entries: [JournalEntry], goals: [ReflectionGoal], reflectionGoal: String) -> String {
         guard goals.isEmpty == false else {
-            return "No experiments were tracked this week."
+            return reflectionGoal.isEmpty
+                ? "No experiments were tracked this week."
+                : "No tracked goals showed whether this week moved \(reflectionGoal.lowercased()) forward."
         }
+        let completedTitles = goals
+            .filter { $0.status == .completed }
+            .sorted { ($0.feedbackAt ?? $0.createdAt) > ($1.feedbackAt ?? $1.createdAt) }
+            .prefix(2)
+            .map(\.title)
         if goals.contains(where: { $0.feedback == "helped" }) {
-            return "At least one experiment was marked helpful, so repeat the condition before changing the plan."
+            return reflectionGoal.isEmpty
+                ? "At least one experiment was marked helpful, so repeat the condition before changing the plan."
+                : "At least one experiment was marked helpful, so repeat that condition as part of moving \(reflectionGoal.lowercased()) forward."
         }
         if goals.contains(where: { $0.feedback == "didnt_help" }) {
             return "One experiment did not help; that is useful data for choosing a smaller or different next step."
@@ -1288,8 +1413,14 @@ struct MockWeeklyReviewService {
             progressWords.contains { entry.text.lowercased().contains($0) }
         }.count
         if goals.contains(where: { $0.status == .completed }) || progressSignals >= 2 {
-            return "Your notes show follow-through on at least one planned step."
+            return reflectionGoal.isEmpty
+                ? "Your notes show follow-through on at least one planned step."
+                : completedTitles.isEmpty == false
+                    ? "Your notes show follow-through on \(naturalList(completedTitles.map { $0.lowercased() })) as part of moving toward \(reflectionGoal.lowercased())."
+                    : "Your notes show follow-through on at least one planned step tied to \(reflectionGoal.lowercased())."
         }
-        return "Goals stayed active, but progress signals were limited this week."
+        return reflectionGoal.isEmpty
+            ? "Goals stayed active, but progress signals were limited this week."
+            : "Goals stayed active, but progress toward \(reflectionGoal.lowercased()) still looked limited this week."
     }
 }

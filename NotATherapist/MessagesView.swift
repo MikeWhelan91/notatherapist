@@ -1,11 +1,30 @@
 import SwiftUI
 
 struct MessagesView: View {
+    private enum ReviewTab: String, CaseIterable, Identifiable {
+        case weekly = "Weekly"
+        case monthly = "Monthly"
+
+        var id: String { rawValue }
+    }
+
     @EnvironmentObject private var appModel: AppViewModel
     @EnvironmentObject private var router: AppRouter
     @State private var path: [Conversation] = []
     @State private var isStartingConversation = false
     @State private var isStartingMonthlyConversation = false
+    @State private var selectedReviewTab: ReviewTab = .weekly
+
+    private var displayedConversations: [Conversation] {
+        appModel.conversations.filter { conversation in
+            switch selectedReviewTab {
+            case .weekly:
+                return conversation.reviewCadence != .monthly
+            case .monthly:
+                return conversation.reviewCadence == .monthly
+            }
+        }
+    }
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -39,136 +58,40 @@ struct MessagesView: View {
                             if appModel.hasWeeklyReview == false && appModel.hasMonthlyReviewAccess == false && appModel.conversations.isEmpty {
                                 MessagesEmptyState(progressText: appModel.weeklyUnlockProgressText)
                             } else {
-                                if let activeWeekly = appModel.activeWeeklyConversation {
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        SectionLabel(title: "Continue weekly check-in")
-                                        Button {
-                                            path.append(activeWeekly)
-                                        } label: {
-                                            ReferenceCard {
-                                                HStack(alignment: .center, spacing: 12) {
-                                                    VStack(alignment: .leading, spacing: 5) {
-                                                        Text("Your weekly check-in is still open.")
-                                                            .font(.subheadline.weight(.semibold))
-                                                            .foregroundStyle(.primary)
-                                                        Text(activeWeekly.preview)
-                                                            .font(.caption)
-                                                            .foregroundStyle(.secondary)
-                                                            .lineLimit(2)
-                                                        Text("\(activeWeekly.remainingTurns) replies left")
-                                                            .font(.caption2.weight(.semibold))
-                                                            .foregroundStyle(appModel.companionTint)
-                                                    }
-                                                    Spacer()
-                                                    Image(systemName: "arrow.up.right.circle.fill")
-                                                        .font(.title3)
-                                                        .foregroundStyle(appModel.companionTint)
-                                                }
-                                            }
+                                VStack(alignment: .leading, spacing: 14) {
+                                    Picker("Review type", selection: $selectedReviewTab) {
+                                        ForEach(ReviewTab.allCases) { tab in
+                                            Text(tab.rawValue).tag(tab)
                                         }
-                                        .buttonStyle(.plain)
+                                    }
+                                    .pickerStyle(.segmented)
+
+                                    Group {
+                                        switch selectedReviewTab {
+                                        case .weekly:
+                                            weeklyPanel
+                                        case .monthly:
+                                            monthlyPanel
+                                        }
                                     }
                                 }
 
-                                VStack(alignment: .leading, spacing: 8) {
-                                    SectionLabel(title: "Weekly check-in")
-                                    if appModel.hasWeeklyReview {
-                                        ReferenceCard {
-                                            VStack(alignment: .center, spacing: 12) {
-                                                Text("I reviewed your entries and noticed a few patterns.")
-                                                    .font(.subheadline)
-                                                    .multilineTextAlignment(.center)
-                                                Text(appModel.weeklyCheckInAvailabilityText)
-                                                    .font(.caption)
-                                                    .foregroundStyle(.secondary)
-                                                    .multilineTextAlignment(.center)
-                                                Button {
-                                                    if let activeWeekly = appModel.activeWeeklyConversation {
-                                                        path.append(activeWeekly)
-                                                    } else {
-                                                        startConversation()
-                                                    }
-                                                } label: {
-                                                    Text(
-                                                        isStartingConversation
-                                                        ? "Starting"
-                                                        : (appModel.activeWeeklyConversation != nil
-                                                           ? "Continue check-in"
-                                                           : (appModel.isWeeklyCheckInAvailableNow ? "Start check-in" : "Not available yet"))
-                                                    )
-                                                }
-                                                .buttonStyle(PrimaryCapsuleButtonStyle())
-                                                .disabled(isStartingConversation || (appModel.isWeeklyCheckInAvailableNow == false && appModel.activeWeeklyConversation == nil))
-                                            }
-                                            .frame(maxWidth: .infinity)
-                                        }
-                                    } else {
-                                        VStack(alignment: .center, spacing: 6) {
-                                            Text("Weekly check-ins appear automatically.")
-                                                .font(.headline.weight(.semibold))
-                                                .multilineTextAlignment(.center)
-                                            Text("They unlock after enough activity. \(appModel.weeklyUnlockProgressText)")
-                                                .font(.subheadline)
-                                                .foregroundStyle(.secondary)
-                                                .multilineTextAlignment(.center)
-                                        }
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 4)
-                                    }
-                                }
-
-                                VStack(alignment: .leading, spacing: 8) {
-                                    SectionLabel(title: "Monthly review")
-                                    ReferenceCard {
-                                        VStack(alignment: .center, spacing: 12) {
-                                            Text(appModel.hasMonthlyReviewAccess ? "A deeper review across your last 4 weeks." : "Monthly reviews are included with Premium.")
-                                                .font(.subheadline)
-                                                .multilineTextAlignment(.center)
-                                            Text(appModel.monthlyReviewAvailabilityText)
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                                .multilineTextAlignment(.center)
-                                            Button {
-                                                startMonthlyConversation()
-                                            } label: {
-                                                Text(isStartingMonthlyConversation ? "Starting" : (appModel.hasMonthlyReview ? "Start monthly review" : "Not available yet"))
-                                            }
-                                            .buttonStyle(PrimaryCapsuleButtonStyle())
-                                            .disabled(isStartingMonthlyConversation || appModel.hasMonthlyReview == false)
-                                        }
-                                        .frame(maxWidth: .infinity)
-                                    }
-                                }
-
-                                if appModel.conversations.isEmpty == false {
+                                if displayedConversations.isEmpty == false {
                                     VStack(alignment: .leading, spacing: 8) {
                                         SectionLabel(title: "Recent conversations")
-                                        VStack(spacing: 10) {
-                                            ForEach(appModel.conversations) { conversation in
+                                        VStack(spacing: 0) {
+                                            ForEach(displayedConversations) { conversation in
                                                 NavigationLink(value: conversation) {
-                                                    ReferenceCard {
-                                                        HStack {
-                                                            VStack(alignment: .leading, spacing: 4) {
-                                                                Text(conversation.date.compactDate)
-                                                                    .font(.caption2)
-                                                                    .foregroundStyle(.secondary)
-                                                                Text(conversation.title)
-                                                                    .font(.subheadline.weight(.semibold))
-                                                                Text(conversation.preview)
-                                                                    .font(.caption)
-                                                                    .foregroundStyle(.secondary)
-                                                                    .lineLimit(1)
-                                                            }
-                                                            Spacer()
-                                                            Image(systemName: "chevron.right")
-                                                                .font(.caption.weight(.semibold))
-                                                                .foregroundStyle(.tertiary)
-                                                        }
-                                                    }
+                                                    conversationRow(conversation)
                                                 }
                                                 .buttonStyle(.plain)
+                                                if conversation.id != displayedConversations.last?.id {
+                                                    Divider()
+                                                        .padding(.leading, 12)
+                                                }
                                             }
                                         }
+                                        .padding(.vertical, 2)
                                     }
                                 }
                             }
@@ -229,6 +152,105 @@ struct MessagesView: View {
             path.append(conversation)
             isStartingMonthlyConversation = false
         }
+    }
+
+    private var weeklyPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionLabel(title: "Weekly check-in")
+            if let activeWeekly = appModel.activeWeeklyConversation {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Your weekly check-in is still open.")
+                            .font(.subheadline.weight(.semibold))
+                        Text("\(activeWeekly.remainingTurns) replies left")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Continue") {
+                        path.append(activeWeekly)
+                    }
+                    .buttonStyle(PrimaryCapsuleButtonStyle())
+                    .frame(width: 128)
+                }
+            } else if appModel.hasWeeklyReview {
+                Text("Your weekly review is ready.")
+                    .font(.subheadline)
+                Text(appModel.weeklyCheckInAvailabilityText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Button {
+                    startConversation()
+                } label: {
+                    Text(
+                        isStartingConversation
+                        ? "Starting"
+                        : (appModel.isWeeklyCheckInAvailableNow ? "Start check-in" : "Not available yet")
+                    )
+                }
+                .buttonStyle(PrimaryCapsuleButtonStyle())
+                .disabled(isStartingConversation || appModel.isWeeklyCheckInAvailableNow == false)
+            } else {
+                Text("Weekly check-ins appear automatically once you have enough activity.")
+                    .font(.subheadline)
+                Text(appModel.weeklyUnlockProgressText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var monthlyPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionLabel(title: "Monthly review")
+            Text(appModel.hasMonthlyReviewAccess ? "A deeper review across your last 4 weeks." : "Monthly review is part of Premium.")
+                .font(.subheadline)
+            Text(appModel.monthlyReviewAvailabilityText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Button {
+                if appModel.hasMonthlyReviewAccess {
+                    startMonthlyConversation()
+                } else {
+                    router.presentPaywall(.messages)
+                }
+            } label: {
+                if appModel.hasMonthlyReviewAccess {
+                    Text(isStartingMonthlyConversation ? "Starting" : (appModel.hasMonthlyReview ? "Start monthly review" : "Not available yet"))
+                } else {
+                    Text("Unlock monthly review")
+                }
+            }
+            .buttonStyle(PrimaryCapsuleButtonStyle())
+            .disabled(appModel.hasMonthlyReviewAccess ? (isStartingMonthlyConversation || appModel.hasMonthlyReview == false) : false)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func conversationRow(_ conversation: Conversation) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(conversation.date.compactDate)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(conversation.title)
+                    .font(.subheadline.weight(.semibold))
+                    .multilineTextAlignment(.leading)
+                Text(conversation.preview)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .contentShape(Rectangle())
+        .padding(.vertical, 12)
     }
 }
 

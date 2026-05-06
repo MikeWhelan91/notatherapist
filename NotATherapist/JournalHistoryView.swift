@@ -7,6 +7,8 @@ struct JournalHistoryView: View {
     @State private var selectedMood: MoodLevel?
     @State private var selectedEntryType: EntryType?
     @State private var displayedMonthDate = Date()
+    @State private var editingEntry: JournalEntry?
+    @State private var pendingDeleteEntry: JournalEntry?
     @FocusState private var searchFocused: Bool
 
     private var selectedEntries: [JournalEntry] {
@@ -78,6 +80,23 @@ struct JournalHistoryView: View {
                                     }
                                 }
                                 .buttonStyle(.plain)
+                                .contextMenu {
+                                    Button("Edit") {
+                                        editingEntry = entry
+                                    }
+                                    Button("Delete", role: .destructive) {
+                                        pendingDeleteEntry = entry
+                                    }
+                                }
+                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                    Button("Delete", role: .destructive) {
+                                        pendingDeleteEntry = entry
+                                    }
+                                    Button("Edit") {
+                                        editingEntry = entry
+                                    }
+                                    .tint(.gray)
+                                }
                             }
                         }
                     }
@@ -110,6 +129,28 @@ struct JournalHistoryView: View {
                     searchFocused = false
                 }
             }
+        }
+        .sheet(item: $editingEntry) { entry in
+            NavigationStack {
+                EntryEditorView(entry: entry)
+            }
+            .presentationCornerRadius(28)
+        }
+        .alert("Delete entry?", isPresented: Binding(
+            get: { pendingDeleteEntry != nil },
+            set: { if $0 == false { pendingDeleteEntry = nil } }
+        )) {
+            Button("Delete", role: .destructive) {
+                if let entry = pendingDeleteEntry {
+                    appModel.deleteEntry(id: entry.id)
+                }
+                pendingDeleteEntry = nil
+            }
+            Button("Cancel", role: .cancel) {
+                pendingDeleteEntry = nil
+            }
+        } message: {
+            Text("This removes the journal entry and clears any saved review for that day.")
         }
     }
 

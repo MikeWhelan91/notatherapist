@@ -59,6 +59,22 @@ enum WidgetAccentColor: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+enum WidgetFontStyle: String, CaseIterable, Codable, Identifiable {
+    case rounded
+    case serif
+    case clean
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .rounded: "Rounded"
+        case .serif: "Serif"
+        case .clean: "Clean"
+        }
+    }
+}
+
 struct WidgetAffirmationPayload: Codable {
     var preferredName: String
     var planTier: WidgetPlanTier
@@ -69,6 +85,7 @@ struct WidgetAffirmationPayload: Codable {
     var affirmationIndex: Int
     var stylePreset: WidgetStylePreset
     var accentColor: WidgetAccentColor
+    var fontStyle: WidgetFontStyle
     var enabledCategories: [WidgetAffirmationCategory]
     var issueContext: String
     var entryCount: Int
@@ -88,6 +105,7 @@ struct WidgetAffirmationPayload: Codable {
         affirmationIndex: Int,
         stylePreset: WidgetStylePreset,
         accentColor: WidgetAccentColor,
+        fontStyle: WidgetFontStyle,
         enabledCategories: [WidgetAffirmationCategory],
         issueContext: String,
         entryCount: Int = 0,
@@ -106,6 +124,7 @@ struct WidgetAffirmationPayload: Codable {
         self.affirmationIndex = affirmationIndex
         self.stylePreset = stylePreset
         self.accentColor = accentColor
+        self.fontStyle = fontStyle
         self.enabledCategories = enabledCategories
         self.issueContext = issueContext
         self.entryCount = entryCount
@@ -126,6 +145,7 @@ struct WidgetAffirmationPayload: Codable {
         case affirmationIndex
         case stylePreset
         case accentColor
+        case fontStyle
         case enabledCategories
         case issueContext
         case entryCount
@@ -147,6 +167,7 @@ struct WidgetAffirmationPayload: Codable {
         affirmationIndex = try container.decodeIfPresent(Int.self, forKey: .affirmationIndex) ?? 0
         stylePreset = try container.decodeIfPresent(WidgetStylePreset.self, forKey: .stylePreset) ?? .minimal
         accentColor = try container.decodeIfPresent(WidgetAccentColor.self, forKey: .accentColor) ?? .green
+        fontStyle = try container.decodeIfPresent(WidgetFontStyle.self, forKey: .fontStyle) ?? .rounded
         enabledCategories = try container.decodeIfPresent([WidgetAffirmationCategory].self, forKey: .enabledCategories) ?? WidgetAffirmationCategory.allCases
         issueContext = try container.decode(String.self, forKey: .issueContext)
         entryCount = try container.decodeIfPresent(Int.self, forKey: .entryCount) ?? 0

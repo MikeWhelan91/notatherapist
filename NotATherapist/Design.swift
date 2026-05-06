@@ -220,6 +220,27 @@ extension Date {
     var compactDate: String {
         formatted(.dateTime.day().month(.abbreviated))
     }
+
+    var longReadableDate: String {
+        let calendar = Calendar.current
+        let day = calendar.component(.day, from: self)
+        let suffix: String
+        switch day {
+        case 11, 12, 13:
+            suffix = "th"
+        default:
+            switch day % 10 {
+            case 1: suffix = "st"
+            case 2: suffix = "nd"
+            case 3: suffix = "rd"
+            default: suffix = "th"
+            }
+        }
+
+        let monthYear = formatted(.dateTime.month(.wide).year())
+        let weekday = formatted(.dateTime.weekday(.wide))
+        return "\(weekday) \(day)\(suffix) \(monthYear)"
+    }
 }
 
 extension View {

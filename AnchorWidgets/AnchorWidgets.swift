@@ -36,6 +36,7 @@ struct AnchorWidgetProvider: TimelineProvider {
             affirmationIndex: 0,
             stylePreset: .minimal,
             accentColor: .green,
+            fontStyle: .rounded,
             enabledCategories: WidgetAffirmationCategory.allCases,
             issueContext: "General reflection",
             updatedAt: .now
@@ -167,7 +168,7 @@ struct AnchorAffirmationSmallView: View {
             VStack {
                 Spacer(minLength: 0)
                 Text(primaryAffirmation)
-                    .font(.system(size: affirmationSmallFontSize(for: primaryAffirmation, width: size.width), weight: .bold, design: .rounded))
+                    .font(.system(size: affirmationSmallFontSize(for: primaryAffirmation, width: size.width), weight: .bold, design: widgetFontDesign(entry.payload.fontStyle)))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
                     .lineLimit(5)
@@ -210,8 +211,8 @@ struct AnchorAffirmationMediumView: View {
             VStack(spacing: max(10, size.height * 0.05)) {
                 Spacer(minLength: 0)
                 Text(primaryAffirmation)
-                    .font(.system(size: affirmationMediumFontSize(for: primaryAffirmation, width: size.width), weight: .medium, design: .serif))
-                    .italic()
+                    .font(.system(size: affirmationMediumFontSize(for: primaryAffirmation, width: size.width), weight: widgetFontWeight(entry.payload.fontStyle), design: widgetFontDesign(entry.payload.fontStyle)))
+                    .italic(entry.payload.fontStyle == .serif)
                     .foregroundStyle(.white.opacity(0.96))
                     .multilineTextAlignment(.center)
                     .lineSpacing(5)
@@ -326,6 +327,28 @@ private func widgetAccentColor(_ accent: WidgetAccentColor) -> Color {
         return Color(red: 0.68, green: 0.55, blue: 0.94)
     case .rose:
         return Color(red: 0.90, green: 0.48, blue: 0.65)
+    }
+}
+
+private func widgetFontDesign(_ style: WidgetFontStyle) -> Font.Design {
+    switch style {
+    case .rounded:
+        return .rounded
+    case .serif:
+        return .serif
+    case .clean:
+        return .default
+    }
+}
+
+private func widgetFontWeight(_ style: WidgetFontStyle) -> Font.Weight {
+    switch style {
+    case .rounded:
+        return .medium
+    case .serif:
+        return .medium
+    case .clean:
+        return .semibold
     }
 }
 

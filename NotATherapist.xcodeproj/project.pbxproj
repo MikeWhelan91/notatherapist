@@ -18,6 +18,7 @@
 		2B9DC282FB0999E0BBE93305 /* HealthKitManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE282B22439564477927FDB4 /* HealthKitManager.swift */; };
 		317C03C49922F0EE8510B3E8 /* Confetti.json in Resources */ = {isa = PBXBuildFile; fileRef = D27EB05EFDA181C4DF39E859 /* Confetti.json */; };
 		44DFAD53D5424FC9BF7AFE18 /* MessagesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 806DEB02C67230523F0AA151 /* MessagesView.swift */; };
+		45F2B1A64F4A4C01A20C9001 /* PaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45F2B1A54F4A4C01A20C9001 /* PaywallView.swift */; };
 		46F08413653AF2DED74578DD /* MockServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = C75BC9CA126A05BF22517BEC /* MockServices.swift */; };
 		490A0CA5BBB8AA1E75CD71FB /* AppViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 468F4E2B1C96DE08C27E8932 /* AppViewModel.swift */; };
 		4A88039FEB9C25179005E169 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECEEDCC536C1CF382A1A0BC1 /* OnboardingView.swift */; };
@@ -91,6 +92,7 @@
 		79D6D423A903CEE62D528BA1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		7AA44B6C9A3D9AE9B2ECEE80 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		806DEB02C67230523F0AA151 /* MessagesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagesView.swift; sourceTree = "<group>"; };
+		45F2B1A54F4A4C01A20C9001 /* PaywallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaywallView.swift; sourceTree = "<group>"; };
 		82855229C977B660683AA568 /* LocalAppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAppStore.swift; sourceTree = "<group>"; };
 		8623EAE818E0A35718FAD110 /* CalmView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalmView.swift; sourceTree = "<group>"; };
 		8B0B142BADCE1059B06422DD /* AppAttestService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAttestService.swift; sourceTree = "<group>"; };
@@ -187,6 +189,7 @@
 				CF4164741B6CEEAF043F3B68 /* NotATherapistApp.swift */,
 				1DE6E81A3EC973E2AC9DF78C /* NotificationService.swift */,
 				ECEEDCC536C1CF382A1A0BC1 /* OnboardingView.swift */,
+				45F2B1A54F4A4C01A20C9001 /* PaywallView.swift */,
 				F8A850C4E98B449C9F2599F1 /* TodayView.swift */,
 				7951D921ECA3D863378BA5FB /* VoiceJournalRecorder.swift */,
 				67226F0879E563CCE13765F5 /* VoiceModelManager.swift */,
@@ -310,6 +313,7 @@
 				185BB7FD01E8C2197A29F58D /* NotATherapistApp.swift in Sources */,
 				77BE28E7E63CF8229DAE7C95 /* NotificationService.swift in Sources */,
 				4A88039FEB9C25179005E169 /* OnboardingView.swift in Sources */,
+				45F2B1A64F4A4C01A20C9001 /* PaywallView.swift in Sources */,
 				1EE768C413114529764E4D84 /* TodayView.swift in Sources */,
 				4AD903C2B8BA5C9BD432D316 /* VoiceJournalRecorder.swift in Sources */,
 				08BC963723BD6C33707EAADF /* VoiceModelManager.swift in Sources */,

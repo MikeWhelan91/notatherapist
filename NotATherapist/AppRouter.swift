@@ -29,6 +29,7 @@ final class AppRouter: ObservableObject {
     @Published var pendingWeeklyCheckIn = false
     @Published var pendingNewEntry = false
     @Published var pendingRunDailyReview = false
+    @Published var activePaywall: PaywallSource?
 
     private init() {}
 
@@ -57,5 +58,13 @@ final class AppRouter: ObservableObject {
 
     func consumeRunDailyReview() {
         pendingRunDailyReview = false
+    }
+
+    func presentPaywall(_ source: PaywallSource) {
+        activePaywall = source
+    }
+
+    func dismissPaywall() {
+        activePaywall = nil
     }
 }

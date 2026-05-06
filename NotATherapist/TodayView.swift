@@ -13,12 +13,14 @@ struct TodayView: View {
     @State private var isReviewingToday = false
     @State private var showingHistory = false
     @State private var showingReviewModeChoice = false
+    @State private var collapsedGoalIDs: Set<UUID> = []
     @State private var missionRevealCount = 0
     @State private var confettiTrigger = 0
     @State private var lastMissionDoneCount = 0
     @State private var lastStreakValue = 0
     @State private var companionTrigger = 0
     @State private var selectedCompanionDriver: AppViewModel.CompanionDriver?
+    @State private var selectedGoalScope: GoalCadence = .daily
 
     private enum DriverAction {
         case openCheckIn
@@ -90,6 +92,29 @@ struct TodayView: View {
         case .openWeekly: "~2 min"
         case .keepStreak: "~10 sec"
         }
+    }
+
+    private var visibleDailyGoals: [ReflectionGoal] {
+        appModel.activeGoals(for: .daily)
+            .filter { collapsedGoalIDs.contains($0.id) == false }
+            .prefix(3)
+            .map { $0 }
+    }
+
+    private var visibleWeeklyGoals: [ReflectionGoal] {
+        Array(appModel.activeGoals(for: .weekly).prefix(1))
+    }
+
+    private var visibleMonthlyGoals: [ReflectionGoal] {
+        Array(appModel.activeGoals(for: .monthly).prefix(1))
+    }
+
+    private var shouldShowGoalsSection: Bool {
+        visibleDailyGoals.isEmpty == false ||
+        visibleWeeklyGoals.isEmpty == false ||
+        visibleMonthlyGoals.isEmpty == false ||
+        appModel.suggestedWeeklyGoalText != nil ||
+        appModel.suggestedMonthlyGoalText != nil
     }
 
     var body: some View {
@@ -269,25 +294,8 @@ struct TodayView: View {
                         }
                     }
 
-                    if appModel.reflectionGoals.isEmpty == false {
-                        VStack(alignment: .leading, spacing: 8) {
-                            SectionLabel(title: "Agreed next steps")
-                            ReferenceCard {
-                                VStack(spacing: 0) {
-                                    ForEach(appModel.reflectionGoals.prefix(3)) { goal in
-                                        ReflectionGoalRow(goal: goal) {
-                                            withAnimation(.snappy(duration: 0.22)) {
-                                                appModel.toggleGoal(goal)
-                                            }
-                                        }
-
-                                        if goal.id != appModel.reflectionGoals.prefix(3).last?.id {
-                                            Divider()
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                    if shouldShowGoalsSection {
+                        nextStepsSection
                     }
 
                     if let todayReview {
@@ -641,6 +649,141 @@ struct TodayView: View {
         appModel.planTier == .premium && todayReview?.source != "openai"
     }
 
+    private var nextStepsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                SectionLabel(title: "Goals")
+                Spacer()
+                Text(appModel.longTermGoalTitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            Picker("Goal scope", selection: $selectedGoalScope) {
+                ForEach(GoalCadence.allCases) { scope in
+                    Text(scope.label).tag(scope)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            ReferenceCard {
+                goalsTabContent
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var goalsTabContent: some View {
+        switch selectedGoalScope {
+        case .daily:
+            if visibleDailyGoals.isEmpty {
+                goalEmptyState(
+                    title: "No daily next step yet",
+                    detail: "Run a daily review after writing and Anchor will suggest the smallest next move."
+                )
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(visibleDailyGoals) { goal in
+                        ReflectionGoalRow(
+                            goal: goal,
+                            action: {
+                                withAnimation(.snappy(duration: 0.22)) {
+                                    appModel.toggleGoal(goal)
+                                }
+                            },
+                            onCollapse: {
+                                withAnimation(.snappy(duration: 0.22)) {
+                                    _ = collapsedGoalIDs.insert(goal.id)
+                                }
+                            }
+                        )
+
+                        if goal.id != visibleDailyGoals.last?.id {
+                            Divider()
+                        }
+                    }
+                }
+            }
+        case .weekly:
+            if let goal = visibleWeeklyGoals.first {
+                VStack(spacing: 0) {
+                    ReflectionGoalRow(
+                        goal: goal,
+                        action: { appModel.toggleGoal(goal) },
+                        onCollapse: {},
+                        showsCollapse: false
+                    )
+                }
+            } else if let suggestion = appModel.suggestedWeeklyGoalText {
+                suggestedGoalCard(
+                    title: "This week's focus",
+                    detail: suggestion,
+                    buttonTitle: "Use weekly goal"
+                ) {
+                    _ = appModel.saveSuggestedReviewGoal(cadence: .weekly)
+                }
+            } else {
+                goalEmptyState(
+                    title: "No weekly goal yet",
+                    detail: "Weekly reviews can turn this week’s pattern into one concrete focus."
+                )
+            }
+        case .monthly:
+            if let goal = visibleMonthlyGoals.first {
+                VStack(spacing: 0) {
+                    ReflectionGoalRow(
+                        goal: goal,
+                        action: { appModel.toggleGoal(goal) },
+                        onCollapse: {},
+                        showsCollapse: false
+                    )
+                }
+            } else if let suggestion = appModel.suggestedMonthlyGoalText {
+                suggestedGoalCard(
+                    title: "This month's focus",
+                    detail: suggestion,
+                    buttonTitle: "Use monthly focus"
+                ) {
+                    _ = appModel.saveSuggestedReviewGoal(cadence: .monthly)
+                }
+            } else {
+                goalEmptyState(
+                    title: "No monthly focus yet",
+                    detail: appModel.hasMonthlyReviewAccess ? "Monthly reviews turn the wider pattern into one focus for the month." : "Monthly focus unlocks with Premium monthly reviews."
+                )
+            }
+        }
+    }
+
+    private func goalEmptyState(title: String, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 8)
+    }
+
+    private func suggestedGoalCard(title: String, detail: String, buttonTitle: String, action: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Button(buttonTitle, action: action)
+                .buttonStyle(CompactIconButtonStyle())
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 6)
+    }
+
     private func runNextAction() {
         switch nextAction.kind {
         case .writeEntry:
@@ -817,30 +960,44 @@ private struct StreakCardView: View {
 private struct ReflectionGoalRow: View {
     let goal: ReflectionGoal
     let action: () -> Void
+    let onCollapse: () -> Void
+    var showsCollapse: Bool = true
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: goal.status == .completed ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
-                    .foregroundStyle(.primary)
+        HStack(spacing: 12) {
+            Button(action: action) {
+                HStack(spacing: 12) {
+                    Image(systemName: goal.status == .completed ? "checkmark.circle.fill" : "circle")
+                        .font(.title3)
+                        .foregroundStyle(.primary)
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(goal.title)
-                        .font(.subheadline.weight(.semibold))
-                        .strikethrough(goal.status == .completed)
-                    Text(goal.status == .completed ? "Logged as done" : goal.reason)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(goal.title)
+                            .font(.subheadline.weight(.semibold))
+                            .strikethrough(goal.status == .completed)
+                        Text(goal.status == .completed ? "Logged as done" : goal.reason)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
                 }
-
-                Spacer()
+                .contentShape(Rectangle())
             }
-            .padding(.vertical, 9)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            if showsCollapse {
+                Button(action: onCollapse) {
+                    Image(systemName: "chevron.up")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.plain)
+            }
         }
-        .buttonStyle(.plain)
+        .padding(.vertical, 9)
     }
 }
 
@@ -849,7 +1006,6 @@ struct SettingsView: View {
     @EnvironmentObject private var appModel: AppViewModel
     @EnvironmentObject private var healthKitManager: HealthKitManager
     @EnvironmentObject private var notificationService: NotificationService
-    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = true
     @StateObject private var voiceModelManager = VoiceModelManager.shared
     @State private var exportURL: URL?
     @State private var showingDeleteConfirmation = false
@@ -858,135 +1014,75 @@ struct SettingsView: View {
         NavigationStack {
             List {
                 Section {
-                    TextField(
-                        "Name or nickname",
-                        text: Binding(
-                            get: { appModel.onboardingProfile.preferredName },
-                            set: { appModel.updatePreferredName($0) }
+                    NavigationLink {
+                        ProfileSettingsPage()
+                    } label: {
+                        SettingsNavigationRow(
+                            title: "Profile",
+                            detail: profileSummary,
+                            symbol: "person.crop.circle"
                         )
-                    )
-                    .textInputAutocapitalization(.words)
-
-                    HStack {
-                        Text("Age range")
-                        Spacer()
-                        Text(appModel.onboardingProfile.ageRange.isEmpty ? "Not set" : appModel.onboardingProfile.ageRange)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Button(appModel.isBaselineReassessmentDue ? "Retake 2-week baseline" : "Review onboarding answers") {
-                        UserDefaults.standard.set(appModel.isBaselineReassessmentDue == false, forKey: "openOnboardingReview")
-                        UserDefaults.standard.set(appModel.isBaselineReassessmentDue, forKey: "retakeOnboardingAssessment")
-                        hasCompletedOnboarding = false
-                        dismiss()
                     }
                 } header: {
-                    Text("Your profile")
-                } footer: {
-                    Text(appModel.baselineReassessmentStatusText)
+                    Text("Personal")
                 }
 
                 Section {
-                    Toggle(
-                        "Premium",
-                        isOn: Binding(
-                            get: { appModel.isPremium },
-                            set: { appModel.isPremium = $0 }
+                    NavigationLink {
+                        PlanSettingsPage()
+                    } label: {
+                        SettingsNavigationRow(
+                            title: "Plan",
+                            detail: appModel.planTier == .premium ? "Premium active" : "Free plan",
+                            symbol: "sparkles.rectangle.stack"
                         )
-                    )
-
-                    LabeledContent("Current plan", value: appModel.planTier.label)
-
-                    Text(appModel.isPremium
-                         ? "Premium enables deeper daily reviews, richer weekly reports, baseline comparison, and longer context."
-                         : "Free includes local daily reflection, weekly summaries, journaling, widgets, and reminders.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    }
                 } header: {
                     Text("Plan")
                 }
 
                 Section {
-                    HStack {
-                        Text("Voice journaling")
-                        Spacer()
-                        Text(voiceModelManager.statusLabel)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    switch voiceModelManager.status {
-                    case .downloading(let progress):
-                        ProgressView(value: progress)
-                    case .failed(let message):
-                        Text(message)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    default:
-                        EmptyView()
-                    }
-
-                    Button {
-                        Task { await voiceModelManager.downloadTinyModel() }
+                    NavigationLink {
+                        VoiceSettingsPage()
                     } label: {
-                        Label(voiceModelManager.isVoiceEnabled ? "Voice model downloaded" : "Download voice model", systemImage: voiceModelManager.isVoiceEnabled ? "checkmark.circle.fill" : "arrow.down.circle")
+                        SettingsNavigationRow(
+                            title: "Voice journaling",
+                            detail: voiceModelManager.statusLabel,
+                            symbol: "mic"
+                        )
                     }
-                    .disabled(voiceModelManager.isVoiceEnabled || isVoiceModelDownloading)
 
-                    if voiceModelManager.isVoiceEnabled {
-                        Button("Disable voice journaling", role: .destructive) {
-                            voiceModelManager.disableVoice()
-                        }
+                    NavigationLink {
+                        WidgetSettingsPage()
+                    } label: {
+                        SettingsNavigationRow(
+                            title: "Widgets",
+                            detail: "\(appModel.widgetAccentColor.label) accent, \(appModel.widgetFontStyle.label) font",
+                            symbol: "square.grid.2x2"
+                        )
+                    }
+
+                    NavigationLink {
+                        ReminderSettingsPage()
+                    } label: {
+                        SettingsNavigationRow(
+                            title: "Reminders",
+                            detail: notificationService.isDailyReminderEnabled || notificationService.isWeeklyReminderEnabled ? "Configured" : "Off",
+                            symbol: "bell"
+                        )
+                    }
+
+                    NavigationLink {
+                        HealthSettingsPage()
+                    } label: {
+                        SettingsNavigationRow(
+                            title: "Apple Health",
+                            detail: healthKitManager.summary == nil ? "Not connected" : "Connected",
+                            symbol: "heart.text.square"
+                        )
                     }
                 } header: {
-                    Text("Voice")
-                } footer: {
-                    Text("Voice is optional. The Whisper model downloads once and stays on this device.")
-                }
-
-                Section {
-                    Picker(
-                        "Widget style",
-                        selection: Binding(
-                            get: { appModel.widgetStylePreset },
-                            set: { appModel.updateWidgetStylePreset($0) }
-                        )
-                    ) {
-                        ForEach(WidgetStylePreset.allCases, id: \.rawValue) { style in
-                            Text(style.label).tag(style)
-                        }
-                    }
-
-                    Picker(
-                        "Widget accent",
-                        selection: Binding(
-                            get: { appModel.widgetAccentColor },
-                            set: { appModel.updateWidgetAccentColor($0) }
-                        )
-                    ) {
-                        ForEach(WidgetAccentColor.allCases) { color in
-                            Text(color.label).tag(color)
-                        }
-                    }
-
-                    ForEach(WidgetAffirmationCategory.allCases) { category in
-                        Toggle(
-                            category.label,
-                            isOn: Binding(
-                                get: { appModel.widgetAffirmationCategories.contains(category) },
-                                set: { appModel.setWidgetAffirmationCategory(category, enabled: $0) }
-                            )
-                        )
-                    }
-
-                    Button {
-                        appModel.cycleWidgetAffirmation()
-                    } label: {
-                        Label("Next affirmation now", systemImage: "arrow.triangle.2.circlepath")
-                    }
-                } header: {
-                    Text("Widget personalization")
-                } footer: {
-                    Text("These settings affect both Home Screen and Lock Screen widget text and style.")
+                    Text("Features")
                 }
 
                 Section {
@@ -997,29 +1093,8 @@ struct SettingsView: View {
                             set: { appModel.setDemoDataEnabled($0) }
                         )
                     )
-                } header: {
-                    Text("Demo data")
                 } footer: {
                     Text("Temporarily swaps in sample entries and restores your real data when turned off.")
-                }
-
-                Section("Apple Health") {
-                    LabeledContent("Status", value: healthKitManager.summary == nil ? "Off" : "Connected")
-
-                    if let summary = healthKitManager.summary {
-                        LabeledContent("Context", value: "\(summary.lastNightSleep.cleanHours) sleep · \(summary.averageSteps.formatted()) avg steps")
-                            .font(.subheadline)
-                        Text("Used only to add extra context to your summaries.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Button(healthKitManager.summary == nil ? "Connect Apple Health" : "Refresh Health context") {
-                        Task {
-                            await healthKitManager.requestPermissionsAndRefresh()
-                            appModel.updateHealthSummary(healthKitManager.summary)
-                        }
-                    }
                 }
 
                 Section("iCloud sync") {
@@ -1038,91 +1113,13 @@ struct SettingsView: View {
                             }
                         )
                     )
+                    .tint(.green)
 
                     LabeledContent("Status", value: appModel.iCloudSyncState.label)
 
                     Text("Uses your Apple Account and the app's private iCloud database. No app account is created.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                }
-
-                Section("Reminders") {
-                    Toggle(
-                        "Daily mood reminder",
-                        isOn: Binding(
-                            get: { notificationService.isDailyReminderEnabled },
-                            set: { enabled in
-                                Task {
-                                    await notificationService.setDailyReminderEnabled(enabled)
-                                }
-                            }
-                        )
-                    )
-
-                    DatePicker(
-                        "Daily time",
-                        selection: Binding(
-                            get: { notificationService.dailyReminderTime },
-                            set: { time in
-                                Task {
-                                    await notificationService.updateDailyReminderTime(time)
-                                }
-                            }
-                        ),
-                        displayedComponents: .hourAndMinute
-                    )
-                    .disabled(notificationService.isDailyReminderEnabled == false)
-
-                    Toggle(
-                        "Notify when review is ready",
-                        isOn: Binding(
-                            get: { notificationService.isWeeklyReminderEnabled },
-                            set: { enabled in
-                                Task {
-                                    await notificationService.setWeeklyReminderEnabled(enabled)
-                                }
-                            }
-                        )
-                    )
-
-                    Picker(
-                        "Day",
-                        selection: Binding(
-                            get: { notificationService.weeklyReminderWeekday },
-                            set: { weekday in
-                                Task {
-                                    await notificationService.updateWeeklyReminderWeekday(weekday)
-                                }
-                            }
-                        )
-                    ) {
-                        ForEach(ReminderWeekday.allCases) { weekday in
-                            Text(weekday.label).tag(weekday.rawValue)
-                        }
-                    }
-                    .disabled(notificationService.isWeeklyReminderEnabled == false)
-
-                    DatePicker(
-                        "Time",
-                        selection: Binding(
-                            get: { notificationService.weeklyReminderTime },
-                            set: { time in
-                                Task {
-                                    await notificationService.updateWeeklyReminderTime(time)
-                                }
-                            }
-                        ),
-                        displayedComponents: .hourAndMinute
-                    )
-                    .disabled(notificationService.isWeeklyReminderEnabled == false)
-
-                    LabeledContent("Permission", value: notificationService.authorizationLabel)
-
-                    if notificationService.authorizationStatus == .denied {
-                        Button("Open iOS Settings") {
-                            notificationService.openAppSettings()
-                        }
-                    }
                 }
 
                 Section("Privacy") {
@@ -1157,19 +1154,15 @@ struct SettingsView: View {
                         Label("Terms of Use", systemImage: "doc.text")
                     }
                 }
-
-                Section("Scope") {
-                    Text("Anchor is a reflection tool. It is not therapy, and it does not diagnose, treat, cure, or replace professional help.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
             }
-            .tint(AppTheme.accent)
+            .tint(.green)
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .task {
                 await notificationService.refreshAuthorizationStatus()
                 await appModel.refreshICloudStatus()
+                await healthKitManager.refreshIfPossible()
+                appModel.updateHealthSummary(healthKitManager.summary)
             }
             .sheet(isPresented: $showingDeleteConfirmation) {
                 VStack(alignment: .leading, spacing: 16) {
@@ -1212,6 +1205,409 @@ struct SettingsView: View {
     private var isVoiceModelDownloading: Bool {
         if case .downloading = voiceModelManager.status { return true }
         return false
+    }
+
+    private var profileSummary: String {
+        let name = appModel.onboardingProfile.preferredName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let age = appModel.onboardingProfile.ageRange.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch (name.isEmpty, age.isEmpty) {
+        case (false, false):
+            return "\(name) · \(age)"
+        case (false, true):
+            return name
+        case (true, false):
+            return age
+        case (true, true):
+            return "Name and age range"
+        }
+    }
+}
+
+private struct SettingsNavigationRow: View {
+    let title: String
+    let detail: String
+    let symbol: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 24)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .foregroundStyle(.primary)
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+private struct ProfileSettingsPage: View {
+    @EnvironmentObject private var appModel: AppViewModel
+
+    private let ageRanges = [
+        "Under 18", "18-24", "25-34", "35-44", "45-54", "55-64", "65+", "Prefer not to say"
+    ]
+
+    var body: some View {
+        List {
+            Section {
+                TextField(
+                    "Name or nickname",
+                    text: Binding(
+                        get: { appModel.onboardingProfile.preferredName },
+                        set: { appModel.updatePreferredName($0) }
+                    )
+                )
+                .textInputAutocapitalization(.words)
+
+                Picker(
+                    "Age range",
+                    selection: Binding(
+                        get: { appModel.onboardingProfile.ageRange.isEmpty ? "Prefer not to say" : appModel.onboardingProfile.ageRange },
+                        set: { appModel.updateAgeRange($0 == "Prefer not to say" ? "" : $0) }
+                    )
+                ) {
+                    ForEach(ageRanges, id: \.self) { range in
+                        Text(range).tag(range)
+                    }
+                }
+
+                TextField(
+                    "Main goal",
+                    text: Binding(
+                        get: { appModel.onboardingProfile.reflectionGoal },
+                        set: { appModel.updateReflectionGoal($0) }
+                    ),
+                    axis: .vertical
+                )
+            } header: {
+                Text("Personal details")
+            } footer: {
+                Text("These details are used to tailor examples, pacing, and the goals Anchor suggests.")
+            }
+        }
+        .tint(.green)
+        .navigationTitle("Profile")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct PlanSettingsPage: View {
+    @EnvironmentObject private var appModel: AppViewModel
+    @EnvironmentObject private var router: AppRouter
+
+    var body: some View {
+        List {
+            planStatusSection
+            planDetailsSection
+        }
+        .tint(.green)
+        .navigationTitle("Plan")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var planStatusSection: some View {
+        Section {
+            LabeledContent("Current plan", value: appModel.isPremium ? "Premium" : "Free")
+            LabeledContent("Billing", value: billingLabel)
+
+            Button(appModel.isPremium ? "Manage premium" : "See premium plans") {
+                router.presentPaywall(.settings)
+            }
+        } header: {
+            Text("Subscription")
+        } footer: {
+            Text("StoreKit products are placeholders for now. This screen is already wired to the app's Premium state.")
+        }
+    }
+
+    private var planDetailsSection: some View {
+        Section("Included in Premium") {
+            planRow("Deep daily AI review", "Free daily review stays local. Premium adds one deeper AI review per day.")
+            planRow("Expanded weekly AI report", "Weekly AI review is included for everyone. Premium adds baseline comparison, richer goal follow-through, and more context.")
+            planRow("Monthly review", "A 4-week review plus monthly AI conversation.")
+            planRow("Health-aware patterns", "Sleep and step trends folded into the review when helpful.")
+        }
+    }
+
+    private var billingLabel: String {
+        guard appModel.isPremium else { return "Not subscribed" }
+        switch appModel.premiumBillingCycle {
+        case .weekly:
+            return "Weekly"
+        case .monthly:
+            return "Monthly"
+        case .annual:
+            return "Yearly"
+        }
+    }
+
+    private func planRow(_ title: String, _ detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+private struct VoiceSettingsPage: View {
+    @StateObject private var voiceModelManager = VoiceModelManager.shared
+
+    var body: some View {
+        List {
+            Section {
+                LabeledContent("Status", value: voiceModelManager.statusLabel)
+
+                switch voiceModelManager.status {
+                case .downloading(let progress):
+                    ProgressView(value: progress)
+                case .failed(let message):
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                default:
+                    EmptyView()
+                }
+
+                Button {
+                    Task { await voiceModelManager.downloadTinyModel() }
+                } label: {
+                    Label(voiceModelManager.isVoiceEnabled ? "Voice model downloaded" : "Download voice model", systemImage: voiceModelManager.isVoiceEnabled ? "checkmark.circle.fill" : "arrow.down.circle")
+                }
+                .disabled(voiceModelManager.isVoiceEnabled || isVoiceModelDownloading)
+
+                if voiceModelManager.isVoiceEnabled {
+                    Button("Disable voice journaling", role: .destructive) {
+                        voiceModelManager.disableVoice()
+                    }
+                }
+            } header: {
+                Text("Voice journaling")
+            } footer: {
+                Text("Voice is optional. The model downloads once and stays on this device.")
+            }
+        }
+        .tint(.green)
+        .navigationTitle("Voice")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var isVoiceModelDownloading: Bool {
+        if case .downloading = voiceModelManager.status { return true }
+        return false
+    }
+}
+
+private struct WidgetSettingsPage: View {
+    @EnvironmentObject private var appModel: AppViewModel
+
+    var body: some View {
+        List {
+            Section("Appearance") {
+                Picker(
+                    "Accent",
+                    selection: Binding(
+                        get: { appModel.widgetAccentColor },
+                        set: { appModel.updateWidgetAccentColor($0) }
+                    )
+                ) {
+                    ForEach(WidgetAccentColor.allCases) { color in
+                        Text(color.label).tag(color)
+                    }
+                }
+
+                Picker(
+                    "Affirmation font",
+                    selection: Binding(
+                        get: { appModel.widgetFontStyle },
+                        set: { appModel.updateWidgetFontStyle($0) }
+                    )
+                ) {
+                    ForEach(WidgetFontStyle.allCases) { font in
+                        Text(font.label).tag(font)
+                    }
+                }
+            }
+
+            Section {
+                ForEach(WidgetAffirmationCategory.allCases) { category in
+                    Toggle(
+                        category.label,
+                        isOn: Binding(
+                            get: { appModel.widgetAffirmationCategories.contains(category) },
+                            set: { appModel.setWidgetAffirmationCategory(category, enabled: $0) }
+                        )
+                    )
+                    .tint(.green)
+                }
+            } header: {
+                Text("Affirmation topics")
+            } footer: {
+                Text("These topics influence which affirmation lines are shown.")
+            }
+
+            Section {
+                Button {
+                    appModel.cycleWidgetAffirmation()
+                } label: {
+                    Label("Next affirmation now", systemImage: "arrow.triangle.2.circlepath")
+                }
+            }
+        }
+        .tint(.green)
+        .navigationTitle("Widgets")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct ReminderSettingsPage: View {
+    @EnvironmentObject private var notificationService: NotificationService
+
+    var body: some View {
+        List {
+            Section {
+                Toggle(
+                    "Daily mood reminder",
+                    isOn: Binding(
+                        get: { notificationService.isDailyReminderEnabled },
+                        set: { enabled in
+                            Task { await notificationService.setDailyReminderEnabled(enabled) }
+                        }
+                    )
+                )
+                .tint(.green)
+
+                DatePicker(
+                    "Time",
+                    selection: Binding(
+                        get: { notificationService.dailyReminderTime },
+                        set: { time in
+                            Task { await notificationService.updateDailyReminderTime(time) }
+                        }
+                    ),
+                    displayedComponents: .hourAndMinute
+                )
+                .disabled(notificationService.isDailyReminderEnabled == false)
+            } header: {
+                Text("Daily reminder")
+            }
+
+            Section {
+                Toggle(
+                    "Notify when review is ready",
+                    isOn: Binding(
+                        get: { notificationService.isWeeklyReminderEnabled },
+                        set: { enabled in
+                            Task { await notificationService.setWeeklyReminderEnabled(enabled) }
+                        }
+                    )
+                )
+                .tint(.green)
+
+                Picker(
+                    "Day",
+                    selection: Binding(
+                        get: { notificationService.weeklyReminderWeekday },
+                        set: { weekday in
+                            Task { await notificationService.updateWeeklyReminderWeekday(weekday) }
+                        }
+                    )
+                ) {
+                    ForEach(ReminderWeekday.allCases) { weekday in
+                        Text(weekday.label).tag(weekday.rawValue)
+                    }
+                }
+                .disabled(notificationService.isWeeklyReminderEnabled == false)
+
+                DatePicker(
+                    "Time",
+                    selection: Binding(
+                        get: { notificationService.weeklyReminderTime },
+                        set: { time in
+                            Task { await notificationService.updateWeeklyReminderTime(time) }
+                        }
+                    ),
+                    displayedComponents: .hourAndMinute
+                )
+                .disabled(notificationService.isWeeklyReminderEnabled == false)
+            } header: {
+                Text("Weekly check-in reminder")
+            }
+
+            Section {
+                LabeledContent("Status", value: notificationService.authorizationLabel)
+                if notificationService.authorizationStatus == .denied {
+                    Button("Open iOS Settings") {
+                        notificationService.openAppSettings()
+                    }
+                }
+            } header: {
+                Text("Permission")
+            }
+        }
+        .tint(.green)
+        .navigationTitle("Reminders")
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            await notificationService.refreshAuthorizationStatus()
+        }
+    }
+}
+
+private struct HealthSettingsPage: View {
+    @EnvironmentObject private var appModel: AppViewModel
+    @EnvironmentObject private var healthKitManager: HealthKitManager
+
+    var body: some View {
+        List {
+            Section {
+                LabeledContent("Status", value: healthKitManager.summary == nil ? "Not connected" : "Connected")
+                LabeledContent("Data window", value: "Last 14 days")
+
+                if let summary = healthKitManager.summary {
+                    LabeledContent("Last night sleep", value: summary.lastNightSleep.cleanHours)
+                    LabeledContent("Average sleep", value: summary.averageSleep.cleanHours)
+                    LabeledContent("Average steps", value: summary.averageSteps.formatted())
+                    LabeledContent("Step trend", value: summary.trend.rawValue.capitalized)
+                }
+
+                Button(healthKitManager.summary == nil ? "Connect Apple Health" : "Refresh Apple Health") {
+                    Task {
+                        await healthKitManager.requestPermissionsAndRefresh()
+                        appModel.updateHealthSummary(healthKitManager.summary)
+                    }
+                }
+            } header: {
+                Text("Apple Health")
+            } footer: {
+                Text(healthFooterText)
+            }
+        }
+        .tint(.green)
+        .navigationTitle("Apple Health")
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            await healthKitManager.refreshIfPossible()
+            appModel.updateHealthSummary(healthKitManager.summary)
+        }
+    }
+
+    private var healthFooterText: String {
+        #if targetEnvironment(simulator)
+        return "Simulator builds use sample Health data. On device, this page reads sleep and steps from the last 14 days."
+        #else
+        return "This page reads sleep and steps from the last 14 days to add context to reviews and insights."
+        #endif
     }
 }
 
