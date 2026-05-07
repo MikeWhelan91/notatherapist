@@ -35,18 +35,24 @@ struct NotATherapistApp: App {
             .onAppear {
                 repairOnboardingGateIfNeeded()
                 consumePendingCommandIfNeeded()
+                if hasCompletedOnboarding == false {
+                    AnalyticsService.logScreen("Onboarding", screenClass: "OnboardingView")
+                }
             }
             .onChange(of: scenePhase) { _, phase in
                 guard phase == .active else { return }
                 repairOnboardingGateIfNeeded()
                 consumePendingCommandIfNeeded()
             }
+            .task {
+                await appModel.prepareSubscriptions()
+            }
         }
     }
 
     private func repairOnboardingGateIfNeeded() {
         guard hasCompletedOnboarding == false else { return }
-        guard appModel.hasExistingUserState else { return }
+        guard UserDefaults.standard.object(forKey: "onboardingCompletedAt") != nil else { return }
         hasCompletedOnboarding = true
     }
 
@@ -132,9 +138,11 @@ struct MainTabView: View {
         .onAppear {
             updateCompanionPresentation(for: router.selectedTab)
             previousTab = router.selectedTab
+            logAnalyticsScreen(for: router.selectedTab)
         }
         .onChange(of: router.selectedTab) { _, tab in
             runCompanionTabTransition(from: previousTab, to: tab)
+            logAnalyticsScreen(for: tab)
             previousTab = tab
         }
         .task {
@@ -164,7 +172,7 @@ struct MainTabView: View {
         case .messages:
             router.companionPresentation = .hidden
         case .calm:
-            router.companionPresentation = .calm
+            router.companionPresentation = .hidden
         }
     }
 
@@ -209,7 +217,20 @@ struct MainTabView: View {
         case .journal: .journal
         case .insights: .hidden
         case .messages: .hidden
-        case .calm: .calm
+        case .calm: .hidden
+        }
+    }
+
+    private func logAnalyticsScreen(for tab: MainTab) {
+        switch tab {
+        case .journal:
+            AnalyticsService.logScreen("Today", screenClass: "JournalView")
+        case .insights:
+            AnalyticsService.logScreen("Insights", screenClass: "InsightsView")
+        case .messages:
+            AnalyticsService.logScreen("Messages", screenClass: "MessagesView")
+        case .calm:
+            AnalyticsService.logScreen("Calm", screenClass: "CalmView")
         }
     }
 }

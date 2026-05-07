@@ -3,6 +3,7 @@ const { verifyProtectedRequest } = require("../lib/api/appAttest");
 const { handleEndpoint, readJSON, sendJSON } = require("../lib/api/response");
 const {
   normalizeEntries,
+  normalizeCalmSessions,
   normalizeGoals,
   normalizeHealthSummary,
   normalizeProfile
@@ -17,6 +18,7 @@ module.exports = (req, res) => handleEndpoint(req, res, ["POST"], async () => {
     profile: normalizeProfile(body.profile),
     healthSummary: normalizeHealthSummary(body.healthSummary),
     goals: normalizeGoals(body.goals),
+    calmSessions: normalizeCalmSessions(body.calmSessions),
     planTier: normalizePlanTier(body.planTier)
   });
 

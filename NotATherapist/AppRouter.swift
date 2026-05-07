@@ -29,6 +29,8 @@ final class AppRouter: ObservableObject {
     @Published var pendingWeeklyCheckIn = false
     @Published var pendingNewEntry = false
     @Published var pendingRunDailyReview = false
+    @Published var pendingCalmPathway: CalmPathway?
+    @Published var pendingCalmAutostart = false
     @Published var activePaywall: PaywallSource?
 
     private init() {}
@@ -58,6 +60,19 @@ final class AppRouter: ObservableObject {
 
     func consumeRunDailyReview() {
         pendingRunDailyReview = false
+    }
+
+    func openCalm(pathway: CalmPathway? = nil, autoStart: Bool = false) {
+        selectedTab = .calm
+        pendingCalmPathway = pathway
+        pendingCalmAutostart = autoStart
+    }
+
+    func consumeCalmLaunch() -> (pathway: CalmPathway?, autoStart: Bool) {
+        let launch = (pendingCalmPathway, pendingCalmAutostart)
+        pendingCalmPathway = nil
+        pendingCalmAutostart = false
+        return launch
     }
 
     func presentPaywall(_ source: PaywallSource) {

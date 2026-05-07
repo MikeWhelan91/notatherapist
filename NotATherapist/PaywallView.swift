@@ -17,6 +17,19 @@ enum PremiumBillingCycle: String, CaseIterable, Codable, Identifiable {
 
     var id: String { rawValue }
 
+    init?(productID: String) {
+        switch productID {
+        case "anchor_weekly":
+            self = .weekly
+        case "anchor_monthly":
+            self = .monthly
+        case "anchor_yearly":
+            self = .annual
+        default:
+            return nil
+        }
+    }
+
     var title: String {
         switch self {
         case .weekly: "Weekly"
@@ -24,60 +37,35 @@ enum PremiumBillingCycle: String, CaseIterable, Codable, Identifiable {
         case .annual: "Yearly"
         }
     }
+
+    var productID: String {
+        switch self {
+        case .weekly: "anchor_weekly"
+        case .monthly: "anchor_monthly"
+        case .annual: "anchor_yearly"
+        }
+    }
 }
 
 struct PremiumPlanOption: Identifiable, Hashable {
     let id: String
     let cycle: PremiumBillingCycle
-    let price: String
-    let monthlyEquivalent: String?
     let badge: String?
-
-    var ctaTitle: String {
-        switch cycle {
-        case .weekly:
-            "Start weekly"
-        case .monthly:
-            "Start monthly"
-        case .annual:
-            "Get Anchor+ yearly"
-        }
-    }
-
-    var billingCopy: String {
-        switch cycle {
-        case .weekly:
-            return "\(price) billed weekly."
-        case .monthly:
-            return "\(price) billed monthly."
-        case .annual:
-            if let monthlyEquivalent {
-                return "\(monthlyEquivalent) per month billed yearly."
-            }
-            return "\(price) billed yearly."
-        }
-    }
 
     static let all: [PremiumPlanOption] = [
         .init(
-            id: "anchor.premium.annual",
+            id: PremiumBillingCycle.annual.productID,
             cycle: .annual,
-            price: "$39.99",
-            monthlyEquivalent: "$3.33",
             badge: "Best value"
         ),
         .init(
-            id: "anchor.premium.monthly",
+            id: PremiumBillingCycle.monthly.productID,
             cycle: .monthly,
-            price: "$7.99",
-            monthlyEquivalent: nil,
             badge: nil
         ),
         .init(
-            id: "anchor.premium.weekly",
+            id: PremiumBillingCycle.weekly.productID,
             cycle: .weekly,
-            price: "$3.99",
-            monthlyEquivalent: nil,
             badge: nil
         )
     ]
@@ -91,24 +79,29 @@ struct PremiumFeature: Identifiable, Hashable {
 }
 
 private let premiumFeatures: [PremiumFeature] = [
-    .init(symbol: "sparkles", title: "Deeper AI daily review", detail: "Free daily review stays local. Premium adds one deeper AI review for each day you log."),
-    .init(symbol: "calendar.badge.clock", title: "Expanded weekly AI report", detail: "Weekly AI review is included for everyone. Premium adds baseline comparison, progress tracking, and richer goal follow-through."),
-    .init(symbol: "bubble.left.and.bubble.right", title: "Longer review conversations", detail: "Go deeper with weekly and monthly follow-up check-ins."),
+    .init(symbol: "sparkles", title: "Deeper AI daily review", detail: "Free daily review stays local. Premium adds one stronger AI read for each day you log."),
+    .init(symbol: "calendar.badge.clock", title: "Expanded weekly AI report", detail: "Weekly AI review is included for everyone. Premium adds progress tracking, completed-goal references, and baseline comparison."),
     .init(symbol: "calendar", title: "Monthly review", detail: "A 4-week pattern read with a deeper AI conversation."),
+    .init(symbol: "bubble.left.and.bubble.right", title: "Longer review conversations", detail: "Go deeper with weekly and monthly follow-up check-ins."),
     .init(symbol: "heart.text.square", title: "Health-aware insights", detail: "Sleep and steps pulled into the review when the data helps."),
-    .init(symbol: "chart.line.uptrend.xyaxis", title: "Baseline comparison and progress tracking", detail: "See what changed week to week instead of reading each day in isolation.")
+    .init(symbol: "square.and.arrow.up", title: "Structured wellbeing report export", detail: "Share a cleaner summary of entries, reviews, goals, and recurring signals.")
 ]
 
 struct PaywallView: View {
     @EnvironmentObject private var appModel: AppViewModel
     @EnvironmentObject private var router: AppRouter
+    @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
 
     let source: PaywallSource
     @State private var selectedPlan = PremiumPlanOption.all[0]
+    @State private var showAllFeatures = false
+
+    private let contentWidth: CGFloat = 360
 
     var body: some View {
         GeometryReader { geo in
+            let columnWidth = max(0, min(contentWidth, geo.size.width - 40))
             NavigationStack {
                 VStack(spacing: 0) {
                     header
@@ -117,14 +110,13 @@ struct PaywallView: View {
                         VStack(spacing: 18) {
                             titleBlock
                             featuresCard
-                            planPicker(availableWidth: geo.size.width - 44)
+                            planPicker(availableWidth: columnWidth)
                             pricingCopy
                             ctaButton
                             footerLinks
                         }
-                        .frame(maxWidth: 520)
+                        .frame(width: columnWidth)
                         .frame(maxWidth: .infinity)
-                        .padding(.horizontal, 22)
                         .padding(.top, 22)
                         .padding(.bottom, max(26, geo.safeAreaInsets.bottom + 6))
                     }
@@ -136,6 +128,12 @@ struct PaywallView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .task {
+            await appModel.prepareSubscriptions()
+            if let matched = PremiumPlanOption.all.first(where: { $0.cycle == appModel.premiumBillingCycle }) {
+                selectedPlan = matched
+            }
+        }
     }
 
     private var header: some View {
@@ -179,18 +177,18 @@ struct PaywallView: View {
                 .font(.subheadline)
                 .foregroundStyle(.white.opacity(0.66))
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: 320)
+                .frame(maxWidth: 300)
         }
         .padding(.top, 4)
     }
 
     private var featuresCard: some View {
         VStack(spacing: 0) {
-            ForEach(Array(premiumFeatures.enumerated()), id: \.offset) { index, feature in
+            ForEach(Array(visibleFeatures.enumerated()), id: \.offset) { index, feature in
                 HStack(alignment: .top, spacing: 12) {
                     Image(systemName: feature.symbol)
-                        .font(.system(size: 17, weight: .semibold))
-                        .frame(width: 24, height: 24)
+                        .font(.system(size: 16, weight: .semibold))
+                        .frame(width: 22, height: 22)
                         .foregroundStyle(.white)
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -206,17 +204,41 @@ struct PaywallView: View {
                     Spacer()
 
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(.white)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 15)
+                .padding(.horizontal, 15)
+                .padding(.vertical, 14)
 
-                if index < premiumFeatures.count - 1 {
+                if index < visibleFeatures.count - 1 {
                     Divider()
                         .overlay(Color.white.opacity(0.06))
-                        .padding(.leading, 52)
+                        .padding(.leading, 49)
                 }
+            }
+
+            if premiumFeatures.count > visibleFeatures.count {
+                Divider()
+                    .overlay(Color.white.opacity(0.06))
+                    .padding(.leading, 49)
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        showAllFeatures = true
+                    }
+                } label: {
+                    HStack {
+                        Text("More features")
+                            .font(.caption.weight(.semibold))
+                        Spacer()
+                        Image(systemName: "chevron.down")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .foregroundStyle(.white.opacity(0.72))
+                    .padding(.horizontal, 15)
+                    .padding(.vertical, 13)
+                }
+                .buttonStyle(.plain)
             }
         }
         .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -228,15 +250,16 @@ struct PaywallView: View {
 
     private func planPicker(availableWidth: CGFloat) -> some View {
         let spacing: CGFloat = 8
-        let usableWidth = min(availableWidth, 520)
-        let cardWidth = max(84, floor((usableWidth - (spacing * 2)) / 3))
+        let usableWidth = max(300, availableWidth)
+        let cardWidth = max(88, floor((usableWidth - (spacing * 2)) / 3))
+        let rowWidth = max(0, (cardWidth * 3) + (spacing * 2))
 
         return HStack(spacing: 8) {
             ForEach(PremiumPlanOption.all) { plan in
                 Button {
                     selectedPlan = plan
                 } label: {
-                    VStack(spacing: 6) {
+                    VStack(spacing: 4) {
                         ZStack(alignment: .top) {
                             if let badge = plan.badge {
                                 Text(badge)
@@ -256,8 +279,8 @@ struct PaywallView: View {
                             .multilineTextAlignment(.center)
                             .lineLimit(1)
 
-                        Text(plan.price)
-                            .font(.title3.weight(.bold))
+                        Text(displayPrice(for: plan))
+                            .font(.system(size: 22, weight: .bold, design: .rounded))
                             .foregroundStyle(selectedTextColor(for: plan))
                             .multilineTextAlignment(.center)
 
@@ -266,11 +289,11 @@ struct PaywallView: View {
                             .foregroundStyle(selectedSecondaryTextColor(for: plan))
                             .multilineTextAlignment(.center)
                             .lineLimit(2)
-                            .minimumScaleFactor(0.86)
+                            .minimumScaleFactor(0.82)
                     }
-                    .frame(width: cardWidth, height: 110, alignment: .center)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 10)
+                    .frame(width: cardWidth, height: 96, alignment: .center)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 8)
                     .background(planBackground(for: plan), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -280,13 +303,13 @@ struct PaywallView: View {
                 .buttonStyle(.plain)
             }
         }
-        .frame(width: (cardWidth * 3) + (spacing * 2))
+        .frame(width: rowWidth)
         .frame(maxWidth: .infinity)
     }
 
     private var pricingCopy: some View {
         VStack(spacing: 4) {
-            Text(selectedPlan.billingCopy)
+            Text(billingCopy(for: selectedPlan))
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.82))
                 .multilineTextAlignment(.center)
@@ -294,32 +317,62 @@ struct PaywallView: View {
                 .font(.caption)
                 .foregroundStyle(.white.opacity(0.52))
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: 310)
+                .frame(maxWidth: 290)
+
+            if let message = appModel.subscriptionErrorMessage, message.isEmpty == false {
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(Color.red.opacity(0.9))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 300)
+            }
         }
     }
 
     private var ctaButton: some View {
         Button {
-            appModel.activatePremium(plan: selectedPlan)
-            dismiss()
+            if appModel.isPremium {
+                openManageSubscriptions()
+            } else {
+                Task {
+                    let purchased = await appModel.purchasePremium(selectedPlan.cycle)
+                    if purchased {
+                        dismiss()
+                    }
+                }
+            }
         } label: {
-            Text(appModel.isPremium ? "Premium active" : selectedPlan.ctaTitle)
-                .font(.headline.weight(.semibold))
-                .frame(maxWidth: .infinity)
-                .frame(height: 56)
-                .background(Color.white, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .foregroundStyle(Color.black)
+            Group {
+                if appModel.purchaseInFlightCycle == selectedPlan.cycle {
+                    ProgressView()
+                        .tint(.black)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 56)
+                } else {
+                    Text(appModel.isPremium ? "Manage subscription" : ctaTitle(for: selectedPlan))
+                        .font(.headline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 56)
+                }
+            }
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .foregroundStyle(Color.black)
         }
         .buttonStyle(.plain)
-        .disabled(appModel.isPremium)
-        .opacity(appModel.isPremium ? 0.6 : 1)
+        .disabled(appModel.purchaseInFlightCycle != nil || (appModel.isPremium == false && appModel.subscriptionProduct(for: selectedPlan.cycle) == nil))
+        .opacity((appModel.purchaseInFlightCycle != nil || (appModel.isPremium == false && appModel.subscriptionProduct(for: selectedPlan.cycle) == nil)) ? 0.6 : 1)
     }
 
     private var footerLinks: some View {
         HStack(spacing: 18) {
-            Button("Terms of service") {}
-            Button("Privacy policy") {}
-            Button("Restore purchase") {}
+            Link("Terms of service", destination: URL(string: "https://getsolutions.app/terms")!)
+            Link("Privacy policy", destination: URL(string: "https://getsolutions.app/privacy")!)
+            Button(appModel.restoreInFlight ? "Restoring..." : "Restore purchase") {
+                Task {
+                    await appModel.restorePurchases()
+                }
+            }
+            .disabled(appModel.restoreInFlight)
         }
         .buttonStyle(.plain)
         .font(.caption)
@@ -342,6 +395,10 @@ struct PaywallView: View {
         }
     }
 
+    private var visibleFeatures: [PremiumFeature] {
+        showAllFeatures ? premiumFeatures : Array(premiumFeatures.prefix(4))
+    }
+
     private func perMonthLine(for plan: PremiumPlanOption) -> String {
         switch plan.cycle {
         case .weekly:
@@ -349,14 +406,14 @@ struct PaywallView: View {
         case .monthly:
             return "Month to month"
         case .annual:
-            return plan.monthlyEquivalent.map { "\($0) per month" } ?? ""
+            return "Billed yearly"
         }
     }
 
     private func planSubtitle(for plan: PremiumPlanOption) -> String {
         switch plan.cycle {
         case .annual:
-            return "$3.33\nper month"
+            return "Billed\nyearly"
         case .monthly:
             return "Month\nto month"
         case .weekly:
@@ -381,5 +438,48 @@ struct PaywallView: View {
 
     private func selectedSecondaryTextColor(for plan: PremiumPlanOption) -> Color {
         selectedPlan.id == plan.id ? .black.opacity(0.74) : .white.opacity(0.58)
+    }
+
+    private func displayPrice(for plan: PremiumPlanOption) -> String {
+        appModel.subscriptionProduct(for: plan.cycle)?.displayPrice ?? fallbackPrice(for: plan.cycle)
+    }
+
+    private func billingCopy(for plan: PremiumPlanOption) -> String {
+        let price = displayPrice(for: plan)
+        switch plan.cycle {
+        case .weekly:
+            return "\(price) billed weekly."
+        case .monthly:
+            return "\(price) billed monthly."
+        case .annual:
+            return "\(price) billed yearly."
+        }
+    }
+
+    private func ctaTitle(for plan: PremiumPlanOption) -> String {
+        switch plan.cycle {
+        case .weekly:
+            return "Start weekly"
+        case .monthly:
+            return "Start monthly"
+        case .annual:
+            return "Get Anchor+ yearly"
+        }
+    }
+
+    private func fallbackPrice(for cycle: PremiumBillingCycle) -> String {
+        switch cycle {
+        case .weekly:
+            return "$3.99"
+        case .monthly:
+            return "$7.99"
+        case .annual:
+            return "$39.99"
+        }
+    }
+
+    private func openManageSubscriptions() {
+        guard let url = appModel.manageSubscriptionsURL else { return }
+        openURL(url)
     }
 }

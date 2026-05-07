@@ -44,7 +44,7 @@ struct MessagesView: View {
                             Spacer()
                             AICircleView(
                                 state: appModel.companionCircleState,
-                                size: 110,
+                                size: 122,
                                 strokeWidth: 3,
                                 tint: appModel.journalCompanionTint,
                                 personality: appModel.companionPersonality
@@ -371,14 +371,6 @@ struct ConversationView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") {
-                    composerFocused = false
-                }
-            }
-        }
         .onAppear {
             circleState = conversation.status == .ended ? .settled : .idle
         }

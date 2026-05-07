@@ -536,7 +536,8 @@ struct MockAIInsightService {
         recentEntries: [JournalEntry] = [],
         profile: OnboardingProfile = .current,
         healthSummary: HealthSummary? = nil,
-        goals: [ReflectionGoal] = []
+        goals: [ReflectionGoal] = [],
+        calmSessions: [CalmSessionLog] = []
     ) -> DailyReview? {
         guard entries.isEmpty == false else { return nil }
 
@@ -655,6 +656,14 @@ struct MockAIInsightService {
         if recentlyCompletedGoals.isEmpty == false {
             let titles = naturalList(recentlyCompletedGoals.map { $0.title.lowercased() })
             emotionalRead += " Recently completed next steps include \(titles), which is useful evidence for what helps."
+        }
+        let recentHelpfulCalm = calmSessions
+            .filter {
+                Calendar.current.dateComponents([.day], from: $0.endedAt, to: date).day ?? 99 <= 7 &&
+                ($0.helpfulness == .yes || $0.helpfulness == .aBit)
+            }
+        if recentHelpfulCalm.isEmpty == false {
+            emotionalRead += " Calm sessions have also been helping you settle recently."
         }
 
         let pattern: String

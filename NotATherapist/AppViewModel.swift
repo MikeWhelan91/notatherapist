@@ -1,10 +1,19 @@
 import Foundation
+import StoreKit
 import SwiftUI
 import UIKit
 import WidgetKit
 
 @MainActor
 final class AppViewModel: ObservableObject {
+    private enum SubscriptionVerificationError: LocalizedError {
+        case failed
+
+        var errorDescription: String? {
+            "The App Store could not verify this purchase."
+        }
+    }
+
     enum CompanionTrend {
         case improving
         case stable
@@ -41,8 +50,10 @@ final class AppViewModel: ObservableObject {
     @Published var insights: [Insight]
     @Published var conversations: [Conversation] = []
     @Published var weeklyReview: WeeklyReview
+    @Published var weeklyReviewHistory: [WeeklyReview] = []
     @Published var monthlyReview: MonthlyReview?
     @Published var sounds: [CalmSound] = MockData.sounds
+    @Published var calmSessions: [CalmSessionLog] = []
     @Published var selectedJournalDate: Date = Date()
     @Published var onboardingProfile: OnboardingProfile = .current
     @Published var healthSummary: HealthSummary?
@@ -57,6 +68,11 @@ final class AppViewModel: ObservableObject {
     @Published var widgetFontStyle: WidgetFontStyle
     @Published var widgetAffirmationCategories: Set<WidgetAffirmationCategory>
     @Published var premiumBillingCycle: PremiumBillingCycle
+    @Published private(set) var subscriptionProducts: [PremiumBillingCycle: Product] = [:]
+    @Published private(set) var subscriptionsReady = false
+    @Published private(set) var purchaseInFlightCycle: PremiumBillingCycle?
+    @Published private(set) var restoreInFlight = false
+    @Published var subscriptionErrorMessage: String?
 
     private let insightService = MockAIInsightService()
     private let weeklyReviewService = MockWeeklyReviewService()
@@ -81,7 +97,8 @@ final class AppViewModel: ObservableObject {
     private let weeklyReminderMinuteKey = "weeklyReviewReminderMinute"
     private let lastWeeklyCheckInAtKey = "lastWeeklyCheckInAt"
     private let calmSessionDatesKey = "calmSessionDatesV1"
-    private var calmSessionDates: [Date] = []
+    private var subscriptionsPrepared = false
+    private var subscriptionUpdatesTask: Task<Void, Never>?
 
     init(seedWithMockData: Bool = false) {
         let defaults = UserDefaults.standard
@@ -99,7 +116,7 @@ final class AppViewModel: ObservableObject {
         _widgetAffirmationCategories = Published(initialValue: storedCategories.isEmpty ? Set(WidgetAffirmationCategory.allCases) : storedCategories)
 
         if seedWithMockData || demoEnabled {
-            let demo = localStore.load() ?? Self.buildDemoSnapshot(using: weeklyReviewService)
+            let demo = Self.buildDemoSnapshot(using: weeklyReviewService)
             selectedMood = demo.selectedMood
             journalEntries = demo.journalEntries
             insights = demo.insights
@@ -109,6 +126,10 @@ final class AppViewModel: ObservableObject {
             healthSummary = demo.healthSummary
             reflectionGoals = demo.reflectionGoals
             dailyReviews = demo.dailyReviews
+            calmSessions = demo.calmSessions
+            if demoEnabled {
+                localStore.save(demo)
+            }
         } else if let snapshot = localStore.load() {
             selectedMood = snapshot.selectedMood
             journalEntries = snapshot.journalEntries
@@ -119,6 +140,7 @@ final class AppViewModel: ObservableObject {
             healthSummary = snapshot.healthSummary
             reflectionGoals = snapshot.reflectionGoals
             dailyReviews = snapshot.dailyReviews
+            calmSessions = snapshot.calmSessions
 
             if defaults.bool(forKey: midnightTimestampMigrationKey) == false {
                 let didMigrate = migrateMidnightEntryTimestamps()
@@ -133,9 +155,29 @@ final class AppViewModel: ObservableObject {
             weeklyReview = weeklyReviewService.latestReview(from: [])
         }
         if let stored = defaults.array(forKey: calmSessionDatesKey) as? [TimeInterval] {
-            calmSessionDates = stored.map(Date.init(timeIntervalSince1970:))
+            let migrated = stored.map { timestamp in
+                CalmSessionLog(
+                    id: UUID(),
+                    pathway: .slowDown,
+                    breathingMode: BreathingMode.box.rawValue,
+                    startedAt: Date(timeIntervalSince1970: timestamp),
+                    endedAt: Date(timeIntervalSince1970: timestamp + 60),
+                    duration: 60,
+                    startingMood: selectedMood,
+                    targetMood: selectedMood.calmerCompanionMood,
+                    helpfulness: nil
+                )
+            }
+            if migrated.isEmpty == false, calmSessions.isEmpty {
+                calmSessions = migrated
+                saveSnapshot()
+            }
         }
         refreshWidgetPayload()
+    }
+
+    deinit {
+        subscriptionUpdatesTask?.cancel()
     }
 
     var latestInsight: Insight? {
@@ -180,9 +222,7 @@ final class AppViewModel: ObservableObject {
     var isPremium: Bool {
         get { planTier == .premium }
         set {
-            planTier = newValue ? .premium : .free
-            UserDefaults.standard.set(planTier.rawValue, forKey: planTierKey)
-            refreshWidgetPayload()
+            applySubscriptionEntitlement(newValue ? premiumBillingCycle : nil)
         }
     }
 
@@ -194,10 +234,71 @@ final class AppViewModel: ObservableObject {
         refreshWidgetPayload()
     }
 
-    func activatePremium(plan: PremiumPlanOption) {
-        premiumBillingCycle = plan.cycle
-        UserDefaults.standard.set(plan.cycle.rawValue, forKey: premiumBillingCycleKey)
-        isPremium = true
+    func prepareSubscriptions() async {
+        if subscriptionsPrepared == false {
+            subscriptionsPrepared = true
+            subscriptionUpdatesTask = Task { [weak self] in
+                for await result in Transaction.updates {
+                    guard let self else { return }
+                    await self.handle(transactionUpdate: result)
+                }
+            }
+        }
+
+        await loadSubscriptionProducts()
+        await refreshSubscriptionEntitlements()
+    }
+
+    func purchasePremium(_ cycle: PremiumBillingCycle) async -> Bool {
+        await prepareSubscriptions()
+        guard let product = subscriptionProducts[cycle] else {
+            subscriptionErrorMessage = "Subscription options are not available right now. Please try again in a moment."
+            return false
+        }
+
+        purchaseInFlightCycle = cycle
+        subscriptionErrorMessage = nil
+        defer { purchaseInFlightCycle = nil }
+
+        do {
+            let result = try await product.purchase()
+            switch result {
+            case .success(let verification):
+                let transaction = try checkVerified(verification)
+                applySubscriptionEntitlement(cycle)
+                await transaction.finish()
+                await refreshSubscriptionEntitlements()
+                return true
+            case .userCancelled, .pending:
+                return false
+            @unknown default:
+                return false
+            }
+        } catch {
+            subscriptionErrorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    func restorePurchases() async {
+        restoreInFlight = true
+        subscriptionErrorMessage = nil
+        defer { restoreInFlight = false }
+
+        do {
+            try await AppStore.sync()
+            await refreshSubscriptionEntitlements()
+        } catch {
+            subscriptionErrorMessage = error.localizedDescription
+        }
+    }
+
+    func subscriptionProduct(for cycle: PremiumBillingCycle) -> Product? {
+        subscriptionProducts[cycle]
+    }
+
+    var manageSubscriptionsURL: URL? {
+        URL(string: "https://apps.apple.com/account/subscriptions")
     }
 
     func updateAgeRange(_ ageRange: String) {
@@ -214,6 +315,73 @@ final class AppViewModel: ObservableObject {
         profile.reflectionGoal = goal
         persistOnboardingProfile(profile)
         saveSnapshot()
+    }
+
+    private func loadSubscriptionProducts() async {
+        do {
+            let products = try await Product.products(for: PremiumBillingCycle.allCases.map(\.productID))
+            var mapped: [PremiumBillingCycle: Product] = [:]
+            for product in products {
+                guard let cycle = PremiumBillingCycle(productID: product.id) else { continue }
+                mapped[cycle] = product
+            }
+            subscriptionProducts = mapped
+            subscriptionsReady = true
+            subscriptionErrorMessage = nil
+        } catch {
+            subscriptionsReady = true
+            subscriptionErrorMessage = error.localizedDescription
+        }
+    }
+
+    private func refreshSubscriptionEntitlements() async {
+        var activeCycles = Set<PremiumBillingCycle>()
+
+        for await result in Transaction.currentEntitlements {
+            guard
+                case .verified(let transaction) = result,
+                transaction.productType == .autoRenewable,
+                transaction.revocationDate == nil,
+                transaction.expirationDate.map({ $0 > Date() }) ?? true,
+                let cycle = PremiumBillingCycle(productID: transaction.productID)
+            else {
+                continue
+            }
+
+            activeCycles.insert(cycle)
+        }
+
+        let resolvedCycle = PremiumBillingCycle.allCases.first(where: activeCycles.contains)
+        applySubscriptionEntitlement(resolvedCycle)
+    }
+
+    private func handle(transactionUpdate result: VerificationResult<StoreKit.Transaction>) async {
+        guard case .verified(let transaction) = result else { return }
+        guard transaction.productType == .autoRenewable else { return }
+        await refreshSubscriptionEntitlements()
+        await transaction.finish()
+    }
+
+    private func applySubscriptionEntitlement(_ cycle: PremiumBillingCycle?) {
+        let defaults = UserDefaults.standard
+        if let cycle {
+            planTier = .premium
+            premiumBillingCycle = cycle
+            defaults.set(cycle.rawValue, forKey: premiumBillingCycleKey)
+        } else {
+            planTier = .free
+        }
+        defaults.set(planTier.rawValue, forKey: planTierKey)
+        refreshWidgetPayload()
+    }
+
+    private func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {
+        switch result {
+        case .verified(let safe):
+            return safe
+        case .unverified:
+            throw SubscriptionVerificationError.failed
+        }
     }
 
     func updateWidgetStylePreset(_ style: WidgetStylePreset) {
@@ -235,11 +403,11 @@ final class AppViewModel: ObservableObject {
     }
 
     func setDemoDataEnabled(_ enabled: Bool) {
-        guard enabled != isDemoDataEnabled else { return }
-
         let defaults = UserDefaults.standard
         if enabled {
-            localStore.saveBackup(snapshot)
+            if isDemoDataEnabled == false {
+                localStore.saveBackup(snapshot)
+            }
             let demo = demoSnapshot
             isDemoDataEnabled = true
             defaults.set(true, forKey: demoDataEnabledKey)
@@ -248,6 +416,8 @@ final class AppViewModel: ObservableObject {
             refreshWidgetPayload()
             return
         }
+
+        guard enabled != isDemoDataEnabled else { return }
 
         let restored = localStore.loadBackup() ?? emptySnapshot
         isDemoDataEnabled = false
@@ -287,6 +457,8 @@ final class AppViewModel: ObservableObject {
             router.runDailyReview()
         case .startWeeklyCheckIn:
             router.openWeeklyCheckIn()
+        case .startCalmSession:
+            router.openCalm(pathway: .slowDown, autoStart: true)
         case .nextAffirmation:
             cycleWidgetAffirmation()
         }
@@ -617,6 +789,24 @@ final class AppViewModel: ObservableObject {
         completedReflectionGoals.count
     }
 
+    func completedGoals(in interval: DateInterval, cadence: GoalCadence? = nil) -> [ReflectionGoal] {
+        completedReflectionGoals.filter { goal in
+            guard let completedAt = goal.feedbackAt else { return false }
+            guard interval.contains(completedAt) else { return false }
+            if let cadence {
+                return (goal.cadence ?? .daily) == cadence
+            }
+            return true
+        }
+    }
+
+    func completedGoalsLast(days: Int, cadence: GoalCadence? = nil, from endDate: Date = Date()) -> [ReflectionGoal] {
+        let calendar = Calendar.current
+        let end = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: endDate) ?? endDate
+        let start = calendar.date(byAdding: .day, value: -max(0, days - 1), to: calendar.startOfDay(for: endDate)) ?? endDate
+        return completedGoals(in: DateInterval(start: start, end: end), cadence: cadence)
+    }
+
     func searchEntries(query: String, mood: MoodLevel?, entryType: EntryType?) -> [JournalEntry] {
         let cleanQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return journalEntries
@@ -841,7 +1031,7 @@ final class AppViewModel: ObservableObject {
         let cal = Calendar.current
         let today = cal.startOfDay(for: date)
         let last7 = (-6...0).compactMap { cal.date(byAdding: .day, value: $0, to: today) }
-        let unique = Set(calmSessionDates.map { cal.startOfDay(for: $0) })
+        let unique = Set(calmSessions.map { cal.startOfDay(for: $0.endedAt) })
         let activeDays = last7.filter { unique.contains($0) }.count
         return clamp01(Double(activeDays) / 5.0)
     }
@@ -928,14 +1118,74 @@ final class AppViewModel: ObservableObject {
         )
     }
 
-    func completeCalmSession(mode: BreathingMode, duration: TimeInterval) {
-        guard duration >= 45 else { return }
-        calmSessionDates.append(Date())
+    func completeCalmSession(pathway: CalmPathway, mode: BreathingMode, duration: TimeInterval, startingMood: MoodLevel, targetMood: MoodLevel) -> CalmSessionLog? {
+        guard duration >= 45 else { return nil }
+        let endedAt = Date()
+        let session = CalmSessionLog(
+            id: UUID(),
+            pathway: pathway,
+            breathingMode: mode.rawValue,
+            startedAt: endedAt.addingTimeInterval(-duration),
+            endedAt: endedAt,
+            duration: duration,
+            startingMood: startingMood,
+            targetMood: targetMood,
+            helpfulness: nil
+        )
+        calmSessions.insert(session, at: 0)
         let cutoff = Date().addingTimeInterval(-(21 * 24 * 60 * 60))
-        calmSessionDates.removeAll { $0 < cutoff }
-        let raw = calmSessionDates.map(\.timeIntervalSince1970)
+        calmSessions.removeAll { $0.endedAt < cutoff }
+        let raw = calmSessions.map { $0.endedAt.timeIntervalSince1970 }
         UserDefaults.standard.set(raw, forKey: calmSessionDatesKey)
+        let calmEntry = JournalEntry(
+            id: UUID(),
+            date: endedAt,
+            mood: targetMood,
+            entryType: .quickThought,
+            text: calmJournalText(for: session),
+            aiInsight: StructuredInsight(emotionalRead: "", pattern: "", reframe: "", action: ""),
+            themes: insightService.themes(for: calmJournalText(for: session), entryType: .quickThought),
+            sleepHours: healthSummary?.lastNightSleep,
+            steps: healthSummary?.averageSteps
+        )
+        journalEntries.insert(calmEntry, at: 0)
+
+        checkForGoalProgress(in: calmEntry)
+        weeklyReview = weeklyReviewService.latestReview(from: journalEntries, profile: onboardingProfile, healthSummary: healthSummary, goals: reflectionGoals)
+        applyAdaptiveAssessmentAdjustment(reason: "entry_update")
+        selectedMood = targetMood
         saveSnapshot()
+        return session
+    }
+
+    func setCalmSessionHelpfulness(_ sessionID: UUID, helpfulness: CalmHelpfulness) {
+        guard let index = calmSessions.firstIndex(where: { $0.id == sessionID }) else { return }
+        calmSessions[index].helpfulness = helpfulness
+        saveSnapshot()
+    }
+
+    var recentCalmSessions: [CalmSessionLog] {
+        calmSessions
+            .sorted { $0.endedAt > $1.endedAt }
+            .prefix(12)
+            .map { $0 }
+    }
+
+    private func calmJournalText(for session: CalmSessionLog) -> String {
+        "Completed a Calm reset: \(session.pathway.title) for \(calmDurationLabel(for: session.duration))."
+    }
+
+    private func calmDurationLabel(for duration: TimeInterval) -> String {
+        let seconds = Int(duration.rounded())
+        if seconds >= 60 {
+            let minutes = seconds / 60
+            let remainder = seconds % 60
+            if remainder == 0 {
+                return "\(minutes) min"
+            }
+            return "\(minutes)m \(remainder)s"
+        }
+        return "\(seconds)s"
     }
 
     func checkInCountThisWeek() -> Int {
@@ -1141,11 +1391,18 @@ final class AppViewModel: ObservableObject {
         let recentEntries = dailyContextEntries(for: date)
         let existingDayReview = dailyReviews.first { Calendar.current.isDate($0.date, inSameDayAs: date) }
         let hasUsedAIDailyReview = existingDayReview?.source == "openai"
+        let currentEntryIDs = Set(dayEntries.map(\.id))
+        let existingEntryIDs = Set(existingDayReview?.entryIDs ?? [])
+        let existingAIReviewMatchesEntries = hasUsedAIDailyReview && currentEntryIDs == existingEntryIDs
         let premiumGoalContext = dailyReviewGoalContext(includeArchived: true)
         let freeGoalContext = dailyReviewGoalContext(includeArchived: false)
+        let calmContext = recentCalmSessions
 
         let review: DailyReview
-        if planTier == .premium && hasUsedAIDailyReview == false && preferLocal == false {
+        if planTier == .premium && existingAIReviewMatchesEntries && preferLocal == false, let existingDayReview {
+            review = existingDayReview
+            aiConnection = .connected(model: "openai")
+        } else if planTier == .premium && preferLocal == false {
             var apiReview: DailyReview?
             let maxAttempts = 3
             for attempt in 1...maxAttempts {
@@ -1156,7 +1413,8 @@ final class AppViewModel: ObservableObject {
                         recentEntries: recentEntries,
                         profile: onboardingProfile,
                         healthSummary: healthSummary,
-                        goals: premiumGoalContext
+                        goals: premiumGoalContext,
+                        calmSessions: calmContext
                     )
                     if candidate.source == "openai" {
                         apiReview = candidate
@@ -1183,7 +1441,8 @@ final class AppViewModel: ObservableObject {
                 recentEntries: recentEntries,
                 profile: onboardingProfile,
                 healthSummary: healthSummary,
-                goals: premiumGoalContext
+                goals: premiumGoalContext,
+                calmSessions: calmContext
             ) else { return nil }
             aiConnection = .connected(model: "openai")
             var localReview = local
@@ -1196,7 +1455,8 @@ final class AppViewModel: ObservableObject {
                 recentEntries: recentEntries,
                 profile: onboardingProfile,
                 healthSummary: healthSummary,
-                goals: freeGoalContext
+                goals: freeGoalContext,
+                calmSessions: calmContext
             ) else { return nil }
             var localReview = local
             localReview.source = "local"
@@ -1239,7 +1499,8 @@ final class AppViewModel: ObservableObject {
                     recentEntries: recentEntries,
                     profile: onboardingProfile,
                     healthSummary: healthSummary,
-                    goals: reflectionGoals
+                    goals: reflectionGoals,
+                    calmSessions: recentCalmSessions
                 )
                 break
             } catch {
@@ -1345,6 +1606,7 @@ final class AppViewModel: ObservableObject {
         let scopedEntries = weeklyContextEntries()
         guard hasWeeklyReview else {
             weeklyReview = weeklyReviewService.latestReview(from: scopedEntries, profile: onboardingProfile, healthSummary: healthSummary, goals: reflectionGoals)
+            syncWeeklyReviewHistoryWithCurrent()
             return
         }
 
@@ -1355,13 +1617,16 @@ final class AppViewModel: ObservableObject {
                 profile: onboardingProfile,
                 healthSummary: healthSummary,
                 goals: reflectionGoals,
+                calmSessions: recentCalmSessions,
                 planTier: planTier
             ) {
                 weeklyReview = review
+                syncWeeklyReviewHistoryWithCurrent()
                 aiConnection = .connected(model: "openai")
             }
         } catch {
             weeklyReview = weeklyReviewService.latestReview(from: scopedEntries, profile: onboardingProfile, healthSummary: healthSummary, goals: reflectionGoals)
+            syncWeeklyReviewHistoryWithCurrent()
             aiConnection = .unavailable
         }
         applyAdaptiveAssessmentAdjustment(reason: "weekly_review")
@@ -1380,10 +1645,11 @@ final class AppViewModel: ObservableObject {
         do {
             if let review = try await apiService.monthlyReview(
                 entries: monthlyReviewContextEntries,
-                weeklyReviews: [weeklyReview],
+                weeklyReviews: monthlyWeeklyReviewContext(),
                 profile: onboardingProfile,
                 healthSummary: healthSummary,
                 goals: reflectionGoals,
+                calmSessions: recentCalmSessions,
                 planTier: planTier
             ) {
                 monthlyReview = review
@@ -1517,28 +1783,13 @@ final class AppViewModel: ObservableObject {
         guard updated.status == .active, updated.remainingTurns > 0 else { return updated }
 
         if action == "Save suggested step", let suggestion = latestSuggestedGoal(from: updated) {
-            guard hasGoalAgreement(in: updated) else {
-                updated.messages.append(
-                    ConversationMessage(
-                        id: UUID(),
-                        sender: .ai,
-                        text: "Before I save it, I want your agreement. Does this feel realistic for 7 days, or what should I adjust?",
-                        date: Date()
-                    )
-                )
-                updated.preview = "Waiting for goal agreement"
-                conversations[index] = updated
-                saveSnapshot()
-                return updated
-            }
-
-            let synthesized = synthesizeWeeklyGoal(from: updated, suggestion: suggestion)
             let isMonthly = updated.reviewCadence == .monthly
             let goal = addReflectionGoal(
-                title: synthesized.title,
-                reason: synthesized.reason,
+                title: suggestion.title,
+                reason: suggestion.reason,
                 sourceConversationID: updated.id,
-                durationDays: isMonthly ? 30 : 7
+                durationDays: isMonthly ? 30 : 7,
+                cadence: isMonthly ? .monthly : .weekly
             )
             updated.contextHints.removeAll { $0.hasPrefix("suggested_goal::") }
             updated.messages.append(
@@ -1634,35 +1885,6 @@ final class AppViewModel: ObservableObject {
         let parts = raw.components(separatedBy: "::")
         guard parts.count >= 3 else { return nil }
         return (parts[1], parts[2])
-    }
-
-    private func synthesizeWeeklyGoal(from conversation: Conversation, suggestion: (title: String, reason: String)) -> (title: String, reason: String) {
-        let userText = conversation.messages
-            .filter { $0.sender == .user }
-            .map { $0.text.lowercased() }
-            .joined(separator: " ")
-
-        let title: String
-        let reason: String
-
-        if userText.contains("sleep") || userText.contains("tired") || userText.contains("night") {
-            title = "7-day sleep consistency plan"
-            reason = "Agreed plan: for the next 7 days, keep one fixed wake time (±30 min), start wind-down 45 minutes before bed, and log the result each day."
-        } else if userText.contains("anxiety") || userText.contains("panic") || userText.contains("worry") {
-            title = "7-day anxiety reset plan"
-            reason = "Agreed plan: for the next 7 days, run one 60-second reset before your hardest moment and write one line on what changed."
-        } else if userText.contains("work") || userText.contains("deadline") || userText.contains("meeting") {
-            title = "7-day work pressure plan"
-            reason = "Agreed plan: for the next 7 days, close or park one unresolved work loop daily and set a next step before ending your day."
-        } else if userText.contains("driving") || userText.contains("drive") {
-            title = "7-day calmer driving plan"
-            reason = "Agreed plan: for the next 7 days, do one pre-drive calming step before each key drive and track your anxiety before/after."
-        } else {
-            title = suggestion.title.hasPrefix("7-day") ? suggestion.title : "7-day focus plan"
-            reason = "Agreed plan for the next 7 days: \(suggestion.reason)"
-        }
-
-        return (title, reason)
     }
 
     private func hasGoalAgreement(in conversation: Conversation) -> Bool {
@@ -1838,19 +2060,48 @@ final class AppViewModel: ObservableObject {
     }
 
     private func weeklyGoalTitle(from text: String) -> String {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.hasPrefix("Next 7 days:") {
-            return "This week's focus"
-        }
-        return "Weekly focus"
+        conciseGoalTitle(from: text, removingPrefixes: [
+            "Next 7 days:",
+            "For the next 7 days:"
+        ], fallback: "Weekly focus")
     }
 
     private func monthlyGoalTitle(from text: String) -> String {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty == false {
-            return "This month's focus"
+        conciseGoalTitle(from: text, removingPrefixes: [
+            "For the next 30 days:",
+            "Next 30 days:"
+        ], fallback: "Monthly focus")
+    }
+
+    private func conciseGoalTitle(from text: String, removingPrefixes prefixes: [String], fallback: String) -> String {
+        var trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else { return fallback }
+
+        for prefix in prefixes where trimmed.localizedCaseInsensitiveHasPrefix(prefix) {
+            trimmed = String(trimmed.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            break
         }
-        return "Monthly focus"
+
+        let separators = [", then ", ", and ", " so ", ". Then ", ". And ", ". Review ", ";", "."]
+        for separator in separators {
+            if let range = trimmed.range(of: separator, options: .caseInsensitive) {
+                trimmed = String(trimmed[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+                break
+            }
+        }
+
+        trimmed = trimmed.trimmingCharacters(in: CharacterSet(charactersIn: "\"' "))
+        if trimmed.isEmpty {
+            return fallback
+        }
+        if trimmed.count <= 56 {
+            return trimmed
+        }
+        let shortened = trimmed.prefix(55)
+        if let lastSpace = shortened.lastIndex(of: " ") {
+            return String(shortened[..<lastSpace]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return String(shortened).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     func refreshAIConnection() async {
@@ -2098,16 +2349,19 @@ final class AppViewModel: ObservableObject {
     }
 
     private var snapshot: AppSnapshot {
+        syncWeeklyReviewHistoryWithCurrent()
         AppSnapshot(
             selectedMood: selectedMood,
             journalEntries: journalEntries,
             insights: insights,
             conversations: conversations,
             weeklyReview: weeklyReview,
+            weeklyReviewHistory: weeklyReviewHistory,
             monthlyReview: monthlyReview,
             healthSummary: healthSummary,
             reflectionGoals: reflectionGoals,
-            dailyReviews: dailyReviews
+            dailyReviews: dailyReviews,
+            calmSessions: calmSessions
         )
     }
 
@@ -2122,10 +2376,12 @@ final class AppViewModel: ObservableObject {
             insights: [],
             conversations: [],
             weeklyReview: weeklyReviewService.latestReview(from: [], goals: reflectionGoals),
+            weeklyReviewHistory: [],
             monthlyReview: nil,
             healthSummary: nil,
             reflectionGoals: [],
-            dailyReviews: []
+            dailyReviews: [],
+            calmSessions: []
         )
     }
 
@@ -2136,11 +2392,13 @@ final class AppViewModel: ObservableObject {
             journalEntries: entries,
             insights: MockData.insights,
             conversations: [],
-            weeklyReview: weeklyReviewService.latestReview(from: entries),
-            monthlyReview: nil,
-            healthSummary: nil,
-            reflectionGoals: [],
-            dailyReviews: []
+            weeklyReview: weeklyReviewService.latestReview(from: entries, profile: .current, healthSummary: MockData.healthSummary, goals: MockData.reflectionGoals),
+            weeklyReviewHistory: [weeklyReviewService.latestReview(from: entries, profile: .current, healthSummary: MockData.healthSummary, goals: MockData.reflectionGoals)],
+            monthlyReview: MockData.monthlyReview,
+            healthSummary: MockData.healthSummary,
+            reflectionGoals: MockData.reflectionGoals,
+            dailyReviews: MockData.dailyReviews,
+            calmSessions: MockData.calmSessions
         )
     }
 
@@ -2160,10 +2418,29 @@ final class AppViewModel: ObservableObject {
         insights = snapshot.insights
         conversations = snapshot.conversations
         weeklyReview = snapshot.weeklyReview
+        weeklyReviewHistory = snapshot.weeklyReviewHistory
         monthlyReview = snapshot.monthlyReview
         healthSummary = snapshot.healthSummary
         reflectionGoals = snapshot.reflectionGoals
         dailyReviews = snapshot.dailyReviews
+        calmSessions = snapshot.calmSessions
+        syncWeeklyReviewHistoryWithCurrent()
+    }
+
+    private func syncWeeklyReviewHistoryWithCurrent() {
+        let trimmedRange = weeklyReview.dateRange.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedRange.isEmpty == false else { return }
+
+        weeklyReviewHistory.removeAll { $0.dateRange.caseInsensitiveCompare(trimmedRange) == .orderedSame }
+        weeklyReviewHistory.insert(weeklyReview, at: 0)
+        if weeklyReviewHistory.count > 12 {
+            weeklyReviewHistory = Array(weeklyReviewHistory.prefix(12))
+        }
+    }
+
+    private func monthlyWeeklyReviewContext() -> [WeeklyReview] {
+        syncWeeklyReviewHistoryWithCurrent()
+        return Array(weeklyReviewHistory.prefix(4).reversed())
     }
 
     private func replaceInsights(for review: DailyReview) {

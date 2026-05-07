@@ -15,23 +15,23 @@ struct NotATherapistAPIService {
         self.appAttestService = appAttestService
     }
 
-    func dailyReview(date: Date, entries: [JournalEntry], recentEntries: [JournalEntry], profile: OnboardingProfile, healthSummary: HealthSummary?) async throws -> DailyReview {
-        let request = DailyReviewRequest(date: date, entries: entries, recentEntries: recentEntries, profile: profile, healthSummary: healthSummary, goals: [], context: nil)
+    func dailyReview(date: Date, entries: [JournalEntry], recentEntries: [JournalEntry], profile: OnboardingProfile, healthSummary: HealthSummary?, calmSessions: [CalmSessionLog] = []) async throws -> DailyReview {
+        let request = DailyReviewRequest(date: date, entries: entries, recentEntries: recentEntries, profile: profile, healthSummary: healthSummary, goals: [], calmSessions: calmSessions, context: nil)
         let response: DailyReviewResponse = try await post("/api/daily-review", body: request)
         var review = response.review
         review.source = response.source
         return review
     }
 
-    func dailyReview(date: Date, entries: [JournalEntry], recentEntries: [JournalEntry], profile: OnboardingProfile, healthSummary: HealthSummary?, goals: [ReflectionGoal]) async throws -> DailyReview {
-        let request = DailyReviewRequest(date: date, entries: entries, recentEntries: recentEntries, profile: profile, healthSummary: healthSummary, goals: goals, context: nil)
+    func dailyReview(date: Date, entries: [JournalEntry], recentEntries: [JournalEntry], profile: OnboardingProfile, healthSummary: HealthSummary?, goals: [ReflectionGoal], calmSessions: [CalmSessionLog] = []) async throws -> DailyReview {
+        let request = DailyReviewRequest(date: date, entries: entries, recentEntries: recentEntries, profile: profile, healthSummary: healthSummary, goals: goals, calmSessions: calmSessions, context: nil)
         let response: DailyReviewResponse = try await post("/api/daily-review", body: request)
         var review = response.review
         review.source = response.source
         return review
     }
 
-    func onboardingDailyReview(date: Date, entries: [JournalEntry], recentEntries: [JournalEntry], profile: OnboardingProfile, healthSummary: HealthSummary?, goals: [ReflectionGoal]) async throws -> DailyReview {
+    func onboardingDailyReview(date: Date, entries: [JournalEntry], recentEntries: [JournalEntry], profile: OnboardingProfile, healthSummary: HealthSummary?, goals: [ReflectionGoal], calmSessions: [CalmSessionLog] = []) async throws -> DailyReview {
         let request = DailyReviewRequest(
             date: date,
             entries: entries,
@@ -39,6 +39,7 @@ struct NotATherapistAPIService {
             profile: profile,
             healthSummary: healthSummary,
             goals: goals,
+            calmSessions: calmSessions,
             context: DailyReviewRequestContext(onboardingFirstCheckIn: true)
         )
         let response: DailyReviewResponse = try await post("/api/daily-review", body: request)
@@ -47,14 +48,14 @@ struct NotATherapistAPIService {
         return review
     }
 
-    func weeklyReview(entries: [JournalEntry], profile: OnboardingProfile, healthSummary: HealthSummary?, goals: [ReflectionGoal], planTier: AppPlanTier) async throws -> WeeklyReview? {
-        let request = WeeklyReviewRequest(entries: entries, profile: profile, healthSummary: healthSummary, goals: goals, planTier: planTier.rawValue)
+    func weeklyReview(entries: [JournalEntry], profile: OnboardingProfile, healthSummary: HealthSummary?, goals: [ReflectionGoal], calmSessions: [CalmSessionLog] = [], planTier: AppPlanTier) async throws -> WeeklyReview? {
+        let request = WeeklyReviewRequest(entries: entries, profile: profile, healthSummary: healthSummary, goals: goals, calmSessions: calmSessions, planTier: planTier.rawValue)
         let response: WeeklyReviewResponse = try await post("/api/weekly-review", body: request)
         return response.weeklyReview
     }
 
-    func monthlyReview(entries: [JournalEntry], weeklyReviews: [WeeklyReview], profile: OnboardingProfile, healthSummary: HealthSummary?, goals: [ReflectionGoal], planTier: AppPlanTier) async throws -> MonthlyReview? {
-        let request = MonthlyReviewRequest(entries: entries, weeklyReviews: weeklyReviews, profile: profile, healthSummary: healthSummary, goals: goals, planTier: planTier.rawValue)
+    func monthlyReview(entries: [JournalEntry], weeklyReviews: [WeeklyReview], profile: OnboardingProfile, healthSummary: HealthSummary?, goals: [ReflectionGoal], calmSessions: [CalmSessionLog] = [], planTier: AppPlanTier) async throws -> MonthlyReview? {
+        let request = MonthlyReviewRequest(entries: entries, weeklyReviews: weeklyReviews, profile: profile, healthSummary: healthSummary, goals: goals, calmSessions: calmSessions, planTier: planTier.rawValue)
         let response: MonthlyReviewResponse = try await post("/api/monthly-review", body: request)
         return response.monthlyReview
     }
@@ -163,6 +164,7 @@ private struct DailyReviewRequest: Encodable {
     let profile: OnboardingProfile
     let healthSummary: HealthSummary?
     let goals: [ReflectionGoal]
+    let calmSessions: [CalmSessionLog]
     let context: DailyReviewRequestContext?
 }
 
@@ -181,6 +183,7 @@ private struct WeeklyReviewRequest: Encodable {
     let profile: OnboardingProfile
     let healthSummary: HealthSummary?
     let goals: [ReflectionGoal]
+    let calmSessions: [CalmSessionLog]
     let planTier: String
 }
 
@@ -190,6 +193,7 @@ private struct MonthlyReviewRequest: Encodable {
     let profile: OnboardingProfile
     let healthSummary: HealthSummary?
     let goals: [ReflectionGoal]
+    let calmSessions: [CalmSessionLog]
     let planTier: String
 }
 

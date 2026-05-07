@@ -15,6 +15,22 @@ struct JournalView: View {
     @State private var companionBusy = false
     @State private var companionTrigger = 0
     @State private var companionHiddenForComposer = false
+    @State private var selectedSurfaceTab: SurfaceTab = .journal
+    @State private var selectedGoalScope: GoalCadence = .daily
+
+    private enum SurfaceTab: String, CaseIterable, Identifiable {
+        case journal
+        case goals
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .journal: "Journal"
+            case .goals: "Goals"
+            }
+        }
+    }
 
     private var todayDate: Date { Date() }
 
@@ -33,6 +49,52 @@ struct JournalView: View {
     private var todayTitle: String {
         let dateText = todayDate.formatted(.dateTime.day().month(.wide))
         return "Today, \(dateText)"
+    }
+
+    private var visibleDailyGoals: [ReflectionGoal] {
+        displayGoals(for: .daily, limit: 3)
+    }
+
+    private var visibleWeeklyGoals: [ReflectionGoal] {
+        displayGoals(for: .weekly, limit: 1)
+    }
+
+    private var visibleMonthlyGoals: [ReflectionGoal] {
+        displayGoals(for: .monthly, limit: 1)
+    }
+
+    private var shouldShowGoalsSurface: Bool {
+        visibleDailyGoals.isEmpty == false ||
+        visibleWeeklyGoals.isEmpty == false ||
+        visibleMonthlyGoals.isEmpty == false ||
+        appModel.suggestedWeeklyGoalText != nil ||
+        appModel.suggestedMonthlyGoalText != nil
+    }
+
+    private func displayGoals(for cadence: GoalCadence, limit: Int) -> [ReflectionGoal] {
+        let active = appModel.activeGoals(for: cadence)
+        let recentCompleted = appModel.completedGoals(for: cadence)
+            .filter { goal in
+                guard let completedAt = goal.feedbackAt else { return false }
+                switch cadence {
+                case .daily:
+                    return Calendar.current.isDate(completedAt, inSameDayAs: Date())
+                case .weekly:
+                    if let week = Calendar.current.dateInterval(of: .weekOfYear, for: Date()) {
+                        return week.contains(completedAt)
+                    }
+                    return false
+                case .monthly:
+                    if let month = Calendar.current.dateInterval(of: .month, for: Date()) {
+                        return month.contains(completedAt)
+                    }
+                    return false
+                }
+            }
+
+        let seen = Set(active.map(\.id))
+        let merged = active + recentCompleted.filter { seen.contains($0.id) == false }
+        return Array(merged.prefix(limit))
     }
 
     var body: some View {
@@ -70,10 +132,12 @@ struct JournalView: View {
                         Text(greetingTitle)
                             .font(.largeTitle.weight(.bold))
                             .multilineTextAlignment(.center)
-                        Text("Log today, then review when you're done.")
+                        Text(appModel.longTermGoalTitle)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
+                            .lineLimit(3)
+                            .minimumScaleFactor(0.9)
                     }
                     .frame(maxWidth: .infinity)
 
@@ -120,56 +184,46 @@ struct JournalView: View {
                     }
                     .padding(.top, 18)
 
-                    if appModel.activeReflectionGoals.isEmpty == false {
+                    Picker("Today section", selection: $selectedSurfaceTab) {
+                        ForEach(SurfaceTab.allCases) { tab in
+                            Text(tab.title).tag(tab)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    if selectedSurfaceTab == .goals {
+                        goalsSurface
+                    } else {
                         VStack(alignment: .leading, spacing: 8) {
-                            SectionLabel(title: "Next steps")
-                            ReferenceCard {
-                                VStack(spacing: 0) {
-                                    ForEach(appModel.activeReflectionGoals.prefix(3)) { goal in
-                                        JournalGoalRow(goal: goal) {
-                                            withAnimation(.snappy(duration: 0.22)) {
-                                                appModel.toggleGoal(goal)
+                            SectionLabel(title: "Entries")
+                            if todayEntries.isEmpty {
+                                ReferenceCard {
+                                    VStack(alignment: .leading, spacing: 12) {
+                                        Text("Start with one note today.")
+                                            .font(.headline)
+                                        Text("A short check-in is enough. The review appears after you write.")
+                                            .font(.subheadline)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            } else {
+                                VStack(spacing: 10) {
+                                    ForEach(todayEntries) { entry in
+                                        NavigationLink {
+                                            EntryDetailView(entry: entry)
+                                        } label: {
+                                            ReferenceCard {
+                                                EntryRowView(entry: entry)
                                             }
                                         }
-
-                                        if goal.id != appModel.activeReflectionGoals.prefix(3).last?.id {
-                                            Divider()
-                                        }
+                                        .buttonStyle(.plain)
                                     }
                                 }
                             }
                         }
-                    }
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        SectionLabel(title: "Entries")
-                        if todayEntries.isEmpty {
-                            ReferenceCard {
-                                VStack(alignment: .leading, spacing: 12) {
-                                    Text("Start with one note today.")
-                                        .font(.headline)
-                                    Text("A short check-in is enough. The review appears after you write.")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        } else {
-                            VStack(spacing: 10) {
-                                ForEach(todayEntries) { entry in
-                                    NavigationLink {
-                                        EntryDetailView(entry: entry)
-                                    } label: {
-                                        ReferenceCard {
-                                            EntryRowView(entry: entry)
-                                        }
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                        }
+                        dayReviewSection
                     }
-
-                    dayReviewSection
                 }
                     .padding(AppSpacing.page)
                     .padding(.bottom, 110)
@@ -397,6 +451,181 @@ struct JournalView: View {
         }
     }
 
+    private var goalsSurface: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                SectionLabel(title: "Goal focus")
+                Spacer()
+                Text(selectedGoalScopeTitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Picker("Goal scope", selection: $selectedGoalScope) {
+                ForEach(GoalCadence.allCases) { scope in
+                    Text(scope.label).tag(scope)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            ReferenceCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(selectedGoalScopeTitle)
+                            .font(.subheadline.weight(.semibold))
+                        Text(selectedGoalScopeDetail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    goalsTabContent
+                }
+            }
+        }
+    }
+
+    private var selectedGoalScopeTitle: String {
+        switch selectedGoalScope {
+        case .daily:
+            "Daily next steps"
+        case .weekly:
+            "Weekly focus"
+        case .monthly:
+            "Monthly focus"
+        }
+    }
+
+    private var selectedGoalScopeDetail: String {
+        switch selectedGoalScope {
+        case .daily:
+            return "Small actions you can finish today."
+        case .weekly:
+            return "The one focus this week is built around."
+        case .monthly:
+            return "The broader direction this month is working toward."
+        }
+    }
+
+    @ViewBuilder
+    private var goalsTabContent: some View {
+        switch selectedGoalScope {
+        case .daily:
+            if visibleDailyGoals.isEmpty {
+                goalEmptyState(
+                    title: "No daily next step yet",
+                    detail: "Run a daily review after writing and Anchor will suggest the smallest next move."
+                )
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(visibleDailyGoals) { goal in
+                        JournalGoalRow(
+                            goal: goal,
+                            scopeTitle: "Daily"
+                        ) {
+                            withAnimation(.snappy(duration: 0.22)) {
+                                appModel.toggleGoal(goal)
+                            }
+                        }
+
+                        if goal.id != visibleDailyGoals.last?.id {
+                            Divider()
+                        }
+                    }
+                }
+            }
+        case .weekly:
+            if let goal = visibleWeeklyGoals.first {
+                JournalGoalRow(goal: goal, scopeTitle: "Weekly") {
+                    withAnimation(.snappy(duration: 0.22)) {
+                        appModel.toggleGoal(goal)
+                    }
+                }
+            } else if let suggestion = appModel.suggestedWeeklyGoalText {
+                suggestedGoalCard(
+                    scopeTitle: "Weekly",
+                    title: "This week's focus",
+                    detail: suggestion,
+                    buttonTitle: "Use weekly goal"
+                ) {
+                    _ = appModel.saveSuggestedReviewGoal(cadence: .weekly)
+                }
+            } else {
+                goalEmptyState(
+                    title: "No weekly goal yet",
+                    detail: "Weekly reviews can turn this week's pattern into one concrete focus."
+                )
+            }
+        case .monthly:
+            if let goal = visibleMonthlyGoals.first {
+                JournalGoalRow(goal: goal, scopeTitle: "Monthly") {
+                    withAnimation(.snappy(duration: 0.22)) {
+                        appModel.toggleGoal(goal)
+                    }
+                }
+            } else if let suggestion = appModel.suggestedMonthlyGoalText {
+                suggestedGoalCard(
+                    scopeTitle: "Monthly",
+                    title: "This month's focus",
+                    detail: suggestion,
+                    buttonTitle: "Use monthly focus"
+                ) {
+                    _ = appModel.saveSuggestedReviewGoal(cadence: .monthly)
+                }
+            } else {
+                goalEmptyState(
+                    title: "No monthly focus yet",
+                    detail: appModel.hasMonthlyReviewAccess ? "Monthly reviews turn the wider pattern into one focus for the month." : "Monthly focus unlocks with Premium monthly reviews."
+                )
+            }
+        }
+    }
+
+    private func goalEmptyState(title: String, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 4)
+    }
+
+    private func suggestedGoalCard(
+        scopeTitle: String,
+        title: String,
+        detail: String,
+        buttonTitle: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(scopeTitle)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(AppSurface.fill, in: Capsule())
+                .overlay {
+                    Capsule().stroke(AppSurface.stroke, lineWidth: 0.5)
+                }
+
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button(buttonTitle, action: action)
+                .buttonStyle(.borderedProminent)
+                .tint(.primary)
+                .foregroundStyle(Color(.systemBackground))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 4)
+    }
+
     private func runReview(for date: Date) {
         guard Calendar.current.isDate(date, inSameDayAs: Date()) else { return }
         isReviewingDay = true
@@ -442,6 +671,7 @@ struct JournalView: View {
 
 private struct JournalGoalRow: View {
     let goal: ReflectionGoal
+    let scopeTitle: String
     let action: () -> Void
 
     var body: some View {
@@ -452,6 +682,16 @@ private struct JournalGoalRow: View {
                     .foregroundStyle(.primary)
 
                 VStack(alignment: .leading, spacing: 3) {
+                    Text(scopeTitle)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(AppSurface.fill, in: Capsule())
+                        .overlay {
+                            Capsule()
+                                .stroke(AppSurface.stroke, lineWidth: 0.5)
+                        }
                     Text(goal.title)
                         .font(.subheadline.weight(.semibold))
                         .strikethrough(goal.status == .completed)

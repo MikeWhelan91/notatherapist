@@ -1,6 +1,48 @@
 import CloudKit
 import Foundation
 
+private struct CloudAppSnapshot: Codable {
+    var selectedMood: MoodLevel
+    var journalEntries: [JournalEntry]
+    var insights: [Insight]
+    var conversations: [Conversation]
+    var weeklyReview: WeeklyReview
+    var weeklyReviewHistory: [WeeklyReview]
+    var monthlyReview: MonthlyReview?
+    var reflectionGoals: [ReflectionGoal]
+    var dailyReviews: [DailyReview]
+    var calmSessions: [CalmSessionLog]
+
+    init(snapshot: AppSnapshot) {
+        selectedMood = snapshot.selectedMood
+        journalEntries = snapshot.journalEntries
+        insights = snapshot.insights
+        conversations = snapshot.conversations
+        weeklyReview = snapshot.weeklyReview
+        weeklyReviewHistory = snapshot.weeklyReviewHistory
+        monthlyReview = snapshot.monthlyReview
+        reflectionGoals = snapshot.reflectionGoals
+        dailyReviews = snapshot.dailyReviews
+        calmSessions = snapshot.calmSessions
+    }
+
+    func appSnapshot() -> AppSnapshot {
+        AppSnapshot(
+            selectedMood: selectedMood,
+            journalEntries: journalEntries,
+            insights: insights,
+            conversations: conversations,
+            weeklyReview: weeklyReview,
+            weeklyReviewHistory: weeklyReviewHistory,
+            monthlyReview: monthlyReview,
+            healthSummary: nil,
+            reflectionGoals: reflectionGoals,
+            dailyReviews: dailyReviews,
+            calmSessions: calmSessions
+        )
+    }
+}
+
 final class ICloudSyncService {
     static let shared = ICloudSyncService()
 
@@ -29,7 +71,7 @@ final class ICloudSyncService {
     func push(_ snapshot: AppSnapshot) async throws -> Date {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        let data = try encoder.encode(snapshot)
+        let data = try encoder.encode(CloudAppSnapshot(snapshot: snapshot))
 
         let database = container.privateCloudDatabase
         let record: CKRecord
@@ -60,6 +102,15 @@ final class ICloudSyncService {
 
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode(AppSnapshot.self, from: data)
+        if let cloudSnapshot = try? decoder.decode(CloudAppSnapshot.self, from: data) {
+            return cloudSnapshot.appSnapshot()
+        }
+
+        // Backward compatibility: restore older cloud records without reintroducing synced HealthKit data.
+        if let legacySnapshot = try? decoder.decode(AppSnapshot.self, from: data) {
+            return CloudAppSnapshot(snapshot: legacySnapshot).appSnapshot()
+        }
+
+        return nil
     }
 }

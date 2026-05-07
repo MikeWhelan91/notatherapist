@@ -15,6 +15,12 @@ targets:
       - Shared
     dependencies:
       - package: Lottie
+      - package: Charts
+        product: DGCharts
+      - package: Firebase
+        product: FirebaseCore
+      - package: Firebase
+        product: FirebaseAnalytics
       - package: ArgmaxOSS
         product: WhisperKit
       - target: AnchorWidgets
@@ -28,12 +34,15 @@ targets:
         CODE_SIGN_ENTITLEMENTS: NotATherapist/NotATherapist.entitlements
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Anchor
+        INFOPLIST_KEY_FirebaseAppDelegateProxyEnabled: NO
+        INFOPLIST_KEY_FirebaseAutomaticScreenReportingEnabled: NO
         INFOPLIST_KEY_NSHealthShareUsageDescription: Optional Apple Health access helps spot simple patterns between sleep, steps, mood, and journal entries.
         INFOPLIST_KEY_NSMicrophoneUsageDescription: Voice journaling uses the microphone only while you record an entry.
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
         IPHONEOS_DEPLOYMENT_TARGET: "18.0"
+        OTHER_LDFLAGS: "$(inherited) -ObjC"
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
@@ -59,6 +68,12 @@ targets:
         SKIP_INSTALL: YES
         APPLICATION_EXTENSION_API_ONLY: YES
 packages:
+  Charts:
+    url: https://github.com/ChartsOrg/Charts
+    from: 5.1.0
+  Firebase:
+    url: https://github.com/firebase/firebase-ios-sdk
+    from: 11.15.0
   Lottie:
     url: https://github.com/airbnb/lottie-ios
     from: 4.5.0

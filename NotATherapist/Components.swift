@@ -12,6 +12,13 @@ enum CompanionPersonality {
     case analytic
 }
 
+enum AICircleBreathPhase {
+    case neutral
+    case inhale
+    case hold
+    case exhale
+}
+
 struct AICircleView: View {
     let state: AICircleState
     var size: CGFloat = 64
@@ -23,6 +30,8 @@ struct AICircleView: View {
     var trigger: Int = 0
     var centerLabel: String? = nil
     var ringRotationDegrees: Double = 0
+    var breathPhase: AICircleBreathPhase = .neutral
+    var breathProgress: CGFloat = 0
 
     @State private var animationStart = Date()
     @State private var responseKick = false
@@ -34,23 +43,33 @@ struct AICircleView: View {
     @State private var lensTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    private var breathProfile: BreathVisualProfile {
+        BreathVisualProfile(
+            phase: breathPhase,
+            progress: breathProgress,
+            isReduceMotion: reduceMotion
+        )
+    }
+
     var body: some View {
         let profile = AICircleProfile(state: state)
-        let personality = CompanionPersonalityProfile(kind: personality)
+        let personalityProfile = CompanionPersonalityProfile(kind: personality)
         let brushWidth = max(strokeWidth * 2.2, size * 0.093)
         let hairlineWidth = max(strokeWidth * 0.5, size * 0.018)
+        let breath = breathProfile
         TimelineView(.animation) { timeline in
             let time = timeline.date.timeIntervalSinceReferenceDate
             let elapsed = timeline.date.timeIntervalSince(animationStart)
-            let basePulse = (sin((time / (profile.breatheDuration * personality.breatheSpeed)) * .pi * 2) + 1) / 2
-            let pulse = min(1, basePulse * personality.pulseMultiplier * 0.58)
+            let basePulse = (sin((time / (profile.breatheDuration * personalityProfile.breatheSpeed)) * .pi * 2) + 1) / 2
+            let pulse = min(1, basePulse * personalityProfile.pulseMultiplier * 0.58)
             let introProgress = min(max(elapsed / 18, 0), 1)
             let easedIntroProgress = introProgress * introProgress * (3 - 2 * introProgress)
             let drift = motionStyle == .intro ? easedIntroProgress * 88 : (elapsed / profile.motionDuration) * profile.motionOffset
             let lineMotion = motionStyle == .intro ? easedIntroProgress * 420 : (elapsed / profile.lineDuration) * profile.lineTravel
             let orbitActivity = reduceMotion ? 0 : profile.orbitActivity(at: time)
-            let maxScale = motionStyle == .intro ? CGFloat(1.006) : profile.maxScale + personality.extraScale
-            let ringRotation = ringRotationDegrees + (reduceMotion ? 0 : sin(time * personality.swaySpeed) * personality.swayAmount)
+            let maxScale = motionStyle == .intro ? CGFloat(1.006) : profile.maxScale + personalityProfile.extraScale
+            let ringRotation = ringRotationDegrees + (reduceMotion ? 0 : sin(time * personalityProfile.swaySpeed) * personalityProfile.swayAmount)
+            let shouldRenderGlyph = resolvedCenterLabel == nil
 
             ZStack {
                 Circle()
@@ -67,17 +86,17 @@ struct AICircleView: View {
                         )
                     )
                     .blur(radius: profile.mistBlur)
-                    .scaleEffect(profile.mistScale + (CGFloat(pulse) * 0.016))
+                    .scaleEffect((profile.mistScale + (CGFloat(pulse) * 0.016)) * breath.mistScale)
 
                 Circle()
-                    .stroke(tint.opacity(profile.glowOpacity), style: StrokeStyle(lineWidth: brushWidth * 1.15, lineCap: .round, lineJoin: .round))
-                    .blur(radius: profile.glowRadius)
+                    .stroke(tint.opacity(profile.glowOpacity * breath.glowOpacityMultiplier), style: StrokeStyle(lineWidth: brushWidth * 1.15, lineCap: .round, lineJoin: .round))
+                    .blur(radius: profile.glowRadius * breath.glowBlurMultiplier)
                     .scaleEffect(1.015)
 
                 Circle()
-                    .stroke(tint.opacity(profile.innerGlowOpacity), style: StrokeStyle(lineWidth: brushWidth * 1.55, lineCap: .round, lineJoin: .round))
-                    .blur(radius: profile.innerGlowRadius)
-                    .scaleEffect(0.84)
+                    .stroke(tint.opacity(profile.innerGlowOpacity * breath.innerGlowOpacityMultiplier), style: StrokeStyle(lineWidth: brushWidth * 1.55, lineCap: .round, lineJoin: .round))
+                    .blur(radius: profile.innerGlowRadius * breath.innerGlowBlurMultiplier)
+                    .scaleEffect(0.84 * breath.innerGlowScale)
 
                 Circle()
                     .fill(tint.opacity(profile.coreGlowOpacity))
@@ -165,14 +184,14 @@ struct AICircleView: View {
                 }
 
                 if state == .responding || state == .checkIn || state == .typing || state == .thinking || state == .listening {
-                    ForEach(0..<personality.orbitDots, id: \.self) { index in
+                    ForEach(0..<personalityProfile.orbitDots, id: \.self) { index in
                         let phase = (Double(index) / 6.0) * .pi * 2
-                        let orbit = size * (state == .responding || state == .thinking ? 0.62 : 0.56) * personality.orbitRadius
-                        let x = cos((time * personality.orbitSpeed) + phase) * orbit
-                        let y = sin((time * personality.orbitSpeed) + phase) * orbit
+                        let orbit = size * (state == .responding || state == .thinking ? 0.62 : 0.56) * personalityProfile.orbitRadius * breath.orbitRadiusMultiplier
+                        let x = cos((time * personalityProfile.orbitSpeed) + phase) * orbit
+                        let y = sin((time * personalityProfile.orbitSpeed) + phase) * orbit
                         Circle()
-                            .fill(tint.opacity((state == .responding || state == .thinking ? personality.respondingOpacity : personality.idleOrbitOpacity) * orbitActivity))
-                            .frame(width: max(2, size * personality.dotSize), height: max(2, size * personality.dotSize))
+                            .fill(tint.opacity((state == .responding || state == .thinking ? personalityProfile.respondingOpacity : personalityProfile.idleOrbitOpacity) * orbitActivity * breath.orbitOpacityMultiplier))
+                            .frame(width: max(2, size * personalityProfile.dotSize) * breath.orbitDotScale, height: max(2, size * personalityProfile.dotSize) * breath.orbitDotScale)
                             .offset(x: x, y: y)
                             .blur(radius: state == .responding || state == .thinking ? 0.75 : 0.25)
                     }
@@ -207,19 +226,21 @@ struct AICircleView: View {
                         .scaleEffect(0.86 * lensScale)
                 }
 
-                CompanionGlyphView(
-                    state: state,
-                    tint: tint,
-                    size: size,
-                    pulse: CGFloat(pulse),
-                    time: time,
-                    drift: drift,
-                    personality: personality.kind,
-                    lensFocusActive: lensFocusActive,
-                    responseKick: responseKick,
-                    reduceMotion: reduceMotion
-                )
-                .rotationEffect(.degrees(-ringRotation))
+                if shouldRenderGlyph {
+                    CompanionGlyphView(
+                        state: state,
+                        tint: tint,
+                        size: size,
+                        pulse: CGFloat(pulse),
+                        time: time,
+                        drift: drift,
+                        personality: personalityProfile.kind,
+                        lensFocusActive: lensFocusActive,
+                        responseKick: responseKick,
+                        reduceMotion: reduceMotion
+                    )
+                    .rotationEffect(.degrees(-ringRotation))
+                }
 
                 if let label = resolvedCenterLabel {
                     Text(label)
@@ -244,7 +265,7 @@ struct AICircleView: View {
             }
             .frame(width: size, height: size)
             .rotationEffect(.degrees(ringRotation))
-            .scaleEffect((responseKick ? 1.024 : 1.0) * (1 + (maxScale - 1) * CGFloat(pulse)))
+            .scaleEffect((responseKick ? 1.024 : 1.0) * breath.baseScale * (1 + (maxScale - 1) * CGFloat(pulse) * breath.pulseAmountMultiplier))
             .opacity(profile.totalOpacity)
         }
         .animation(.easeOut(duration: 0.26), value: responseKick)
@@ -371,6 +392,166 @@ struct AICircleView: View {
     }
 }
 
+private struct BreathVisualProfile {
+    let baseScale: CGFloat
+    let mistScale: CGFloat
+    let innerGlowScale: CGFloat
+    let glowOpacityMultiplier: Double
+    let innerGlowOpacityMultiplier: Double
+    let glowBlurMultiplier: CGFloat
+    let innerGlowBlurMultiplier: CGFloat
+    let orbitRadiusMultiplier: CGFloat
+    let orbitOpacityMultiplier: Double
+    let orbitDotScale: CGFloat
+    let pulseAmountMultiplier: CGFloat
+    init(phase: AICircleBreathPhase, progress: CGFloat, isReduceMotion: Bool) {
+        let t = isReduceMotion ? 1 : min(max(progress, 0), 1)
+        let neutral = BreathVisualProfile.snapshot(
+            baseScale: 1,
+            mistScale: 1,
+            innerGlowScale: 1,
+            glowOpacityMultiplier: 1,
+            innerGlowOpacityMultiplier: 1,
+            glowBlurMultiplier: 1,
+            innerGlowBlurMultiplier: 1,
+            orbitRadiusMultiplier: 1,
+            orbitOpacityMultiplier: 1,
+            orbitDotScale: 1,
+            pulseAmountMultiplier: 1
+        )
+        let inhalePeak = BreathVisualProfile.snapshot(
+            baseScale: 1.08,
+            mistScale: 1.08,
+            innerGlowScale: 1.06,
+            glowOpacityMultiplier: 1.18,
+            innerGlowOpacityMultiplier: 1.2,
+            glowBlurMultiplier: 1.08,
+            innerGlowBlurMultiplier: 1.06,
+            orbitRadiusMultiplier: 1.06,
+            orbitOpacityMultiplier: 1.08,
+            orbitDotScale: 1.08,
+            pulseAmountMultiplier: 1.08
+        )
+        let holdPeak = BreathVisualProfile.snapshot(
+            baseScale: 1.1,
+            mistScale: 1.1,
+            innerGlowScale: 1.08,
+            glowOpacityMultiplier: 1.1,
+            innerGlowOpacityMultiplier: 1.08,
+            glowBlurMultiplier: 1.04,
+            innerGlowBlurMultiplier: 1.02,
+            orbitRadiusMultiplier: 1.02,
+            orbitOpacityMultiplier: 0.82,
+            orbitDotScale: 0.94,
+            pulseAmountMultiplier: 0.28
+        )
+        let exhaleEnd = BreathVisualProfile.snapshot(
+            baseScale: 0.9,
+            mistScale: 0.94,
+            innerGlowScale: 0.92,
+            glowOpacityMultiplier: 0.78,
+            innerGlowOpacityMultiplier: 0.72,
+            glowBlurMultiplier: 0.94,
+            innerGlowBlurMultiplier: 0.92,
+            orbitRadiusMultiplier: 0.92,
+            orbitOpacityMultiplier: 0.76,
+            orbitDotScale: 0.88,
+            pulseAmountMultiplier: 0.42
+        )
+
+        let resolved: BreathSnapshot
+        switch phase {
+        case .neutral:
+            resolved = neutral
+        case .inhale:
+            resolved = BreathSnapshot.interpolate(from: neutral, to: inhalePeak, progress: t)
+        case .hold:
+            resolved = BreathSnapshot.interpolate(from: inhalePeak, to: holdPeak, progress: t)
+        case .exhale:
+            resolved = BreathSnapshot.interpolate(from: holdPeak, to: exhaleEnd, progress: t)
+        }
+
+        baseScale = resolved.baseScale
+        mistScale = resolved.mistScale
+        innerGlowScale = resolved.innerGlowScale
+        glowOpacityMultiplier = resolved.glowOpacityMultiplier
+        innerGlowOpacityMultiplier = resolved.innerGlowOpacityMultiplier
+        glowBlurMultiplier = resolved.glowBlurMultiplier
+        innerGlowBlurMultiplier = resolved.innerGlowBlurMultiplier
+        orbitRadiusMultiplier = resolved.orbitRadiusMultiplier
+        orbitOpacityMultiplier = resolved.orbitOpacityMultiplier
+        orbitDotScale = resolved.orbitDotScale
+        pulseAmountMultiplier = resolved.pulseAmountMultiplier
+    }
+
+    private static func snapshot(
+        baseScale: CGFloat,
+        mistScale: CGFloat,
+        innerGlowScale: CGFloat,
+        glowOpacityMultiplier: Double,
+        innerGlowOpacityMultiplier: Double,
+        glowBlurMultiplier: CGFloat,
+        innerGlowBlurMultiplier: CGFloat,
+        orbitRadiusMultiplier: CGFloat,
+        orbitOpacityMultiplier: Double,
+        orbitDotScale: CGFloat,
+        pulseAmountMultiplier: CGFloat
+    ) -> BreathSnapshot {
+        BreathSnapshot(
+            baseScale: baseScale,
+            mistScale: mistScale,
+            innerGlowScale: innerGlowScale,
+            glowOpacityMultiplier: glowOpacityMultiplier,
+            innerGlowOpacityMultiplier: innerGlowOpacityMultiplier,
+            glowBlurMultiplier: glowBlurMultiplier,
+            innerGlowBlurMultiplier: innerGlowBlurMultiplier,
+            orbitRadiusMultiplier: orbitRadiusMultiplier,
+            orbitOpacityMultiplier: orbitOpacityMultiplier,
+            orbitDotScale: orbitDotScale,
+            pulseAmountMultiplier: pulseAmountMultiplier
+        )
+    }
+}
+
+private struct BreathSnapshot {
+    let baseScale: CGFloat
+    let mistScale: CGFloat
+    let innerGlowScale: CGFloat
+    let glowOpacityMultiplier: Double
+    let innerGlowOpacityMultiplier: Double
+    let glowBlurMultiplier: CGFloat
+    let innerGlowBlurMultiplier: CGFloat
+    let orbitRadiusMultiplier: CGFloat
+    let orbitOpacityMultiplier: Double
+    let orbitDotScale: CGFloat
+    let pulseAmountMultiplier: CGFloat
+
+    static func interpolate(from: BreathSnapshot, to: BreathSnapshot, progress: CGFloat) -> BreathSnapshot {
+        let t = min(max(progress, 0), 1)
+        return BreathSnapshot(
+            baseScale: lerp(from.baseScale, to.baseScale, t),
+            mistScale: lerp(from.mistScale, to.mistScale, t),
+            innerGlowScale: lerp(from.innerGlowScale, to.innerGlowScale, t),
+            glowOpacityMultiplier: lerp(from.glowOpacityMultiplier, to.glowOpacityMultiplier, Double(t)),
+            innerGlowOpacityMultiplier: lerp(from.innerGlowOpacityMultiplier, to.innerGlowOpacityMultiplier, Double(t)),
+            glowBlurMultiplier: lerp(from.glowBlurMultiplier, to.glowBlurMultiplier, t),
+            innerGlowBlurMultiplier: lerp(from.innerGlowBlurMultiplier, to.innerGlowBlurMultiplier, t),
+            orbitRadiusMultiplier: lerp(from.orbitRadiusMultiplier, to.orbitRadiusMultiplier, t),
+            orbitOpacityMultiplier: lerp(from.orbitOpacityMultiplier, to.orbitOpacityMultiplier, Double(t)),
+            orbitDotScale: lerp(from.orbitDotScale, to.orbitDotScale, t),
+            pulseAmountMultiplier: lerp(from.pulseAmountMultiplier, to.pulseAmountMultiplier, t)
+        )
+    }
+
+    private static func lerp(_ a: CGFloat, _ b: CGFloat, _ t: CGFloat) -> CGFloat {
+        a + ((b - a) * t)
+    }
+
+    private static func lerp(_ a: Double, _ b: Double, _ t: Double) -> Double {
+        a + ((b - a) * t)
+    }
+}
+
 struct CompanionTabHeader: View {
     let title: String
     let state: AICircleState
@@ -387,18 +568,15 @@ struct CompanionTabHeader: View {
             .padding(.horizontal, AppSpacing.page)
             .padding(.top, 8)
 
-            HStack {
-                Spacer()
-                if showsCircle {
+            if showsCircle {
+                HStack {
+                    Spacer()
                     AICircleView(state: state, size: 122, strokeWidth: 3.1, tint: tint)
-                } else {
-                    Color.clear
-                        .frame(width: 122, height: 122)
+                    Spacer()
                 }
-                Spacer()
+                .padding(.top, 6)
+                .padding(.bottom, 10)
             }
-            .padding(.top, 6)
-            .padding(.bottom, 10)
         }
     }
 }

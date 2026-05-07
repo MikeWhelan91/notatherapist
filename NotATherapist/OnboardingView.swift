@@ -2,10 +2,35 @@ import SwiftUI
 import UIKit
 
 struct OnboardingView: View {
+    private struct OnboardingDraft: Codable {
+        var page: Int
+        var preferredName: String
+        var ageRange: String
+        var focusAreas: [String]
+        var selectedGoal: String
+        var customGoalText: String
+        var triedTherapy: Bool?
+        var emotionAwarenessHard: Bool?
+        var personalStory: String
+        var streakGoal: Int
+        var checkInTime: String
+        var therapyExperience: String
+        var emotionAwarenessLevel: String
+        var assessmentIndex: Int
+        var assessmentAnswers: [Int?]
+        var selectedMoodRaw: String
+        var firstCheckInTypeRaw: String
+        var firstCheckInBody: String
+        var firstCheckInGenerated: Bool
+        var firstCheckInEntryCreated: Bool
+        var iCloudSyncEnabled: Bool
+    }
+
     @EnvironmentObject private var appModel: AppViewModel
     @EnvironmentObject private var router: AppRouter
     @EnvironmentObject private var notificationService: NotificationService
     @EnvironmentObject private var healthKitManager: HealthKitManager
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @StateObject private var voiceModelManager = VoiceModelManager.shared
 
@@ -35,6 +60,7 @@ struct OnboardingView: View {
     @State private var firstCheckInErrorMessage = ""
     @State private var firstCheckInGenerated = false
     @State private var firstCheckInEntryCreated = false
+    @State private var iCloudSyncEnabled = false
 
     @State private var scoreReveal = false
     @State private var isRequestingNotificationPermission = false
@@ -64,7 +90,7 @@ struct OnboardingView: View {
     @State private var shouldOpenReviewSummary = false
     @FocusState private var focusedField: OnboardingField?
 
-    private let pageCount = 18
+    private let pageCount = 19
     private let focusOptions: [(title: String, symbol: String)] = [
         ("Relieve anxiety", "wind"),
         ("Boost mood", "sun.max"),
@@ -97,16 +123,65 @@ struct OnboardingView: View {
     private let streakPageIndex = 10
     private let reminderPageIndex = 11
     private let healthPageIndex = 12
-    private let storyPageIndex = 13
-    private let firstCheckInPageIndex = 14
-    private let firstReflectionPageIndex = 15
-    private let voicePageIndex = 16
-    private let completionPageIndex = 17
+    private let iCloudPageIndex = 13
+    private let storyPageIndex = 14
+    private let firstCheckInPageIndex = 15
+    private let firstReflectionPageIndex = 16
+    private let voicePageIndex = 17
+    private let completionPageIndex = 18
     private let openOnboardingReviewKey = "openOnboardingReview"
     private let retakeOnboardingAssessmentKey = "retakeOnboardingAssessment"
     private let onboardingCompletedAtKey = "onboardingCompletedAt"
+    private let onboardingDraftKey = "onboardingDraftV1"
 
     var body: some View {
+        onboardingRoot
+    }
+
+    private var onboardingRoot: some View {
+        onboardingContent
+            .background(onboardingBackground)
+            .fontDesign(.rounded)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { focusedField = nil }
+                }
+            }
+            .overlay {
+                ConfettiOverlayView(trigger: onboardingConfettiTrigger)
+            }
+            .onAppear(perform: handleOnAppear)
+            .onChange(of: preferredName) { oldValue, newValue in
+                handlePreferredNameChange(oldValue: oldValue, newValue: newValue)
+            }
+            .onChange(of: personalStory) { oldValue, newValue in
+                handlePersonalStoryChange(oldValue: oldValue, newValue: newValue)
+            }
+            .onChange(of: firstCheckInBody) { oldValue, newValue in
+                handleFirstCheckInBodyChange(oldValue: oldValue, newValue: newValue)
+            }
+            .onChange(of: page) { oldPage, newPage in
+                handlePageChange(oldPage: oldPage, newPage: newPage)
+            }
+            .onChange(of: assessmentIndex) { oldIndex, newIndex in
+                handleAssessmentIndexChange(oldIndex: oldIndex, newIndex: newIndex)
+            }
+            .onChange(of: firstCheckInGenerated) { _, _ in
+                saveDraft()
+            }
+            .onChange(of: firstCheckInEntryCreated) { _, _ in
+                saveDraft()
+            }
+            .onChange(of: scenePhase) { oldPhase, newPhase in
+                handleScenePhaseChange(oldPhase: oldPhase, newPhase: newPhase)
+            }
+            .task(id: page) {
+                await runAmbientCircleLoop(for: page)
+            }
+    }
+
+    private var onboardingContent: some View {
         VStack(spacing: 0) {
             stepCounter
                 .padding(.horizontal, AppSpacing.page)
@@ -133,6 +208,7 @@ struct OnboardingView: View {
                 streakPage.tag(streakPageIndex)
                 reminderPage.tag(reminderPageIndex)
                 healthPage.tag(healthPageIndex)
+                iCloudPage.tag(iCloudPageIndex)
                 storyPage.tag(storyPageIndex)
                 firstCheckInPage.tag(firstCheckInPageIndex)
                 firstReflectionPage.tag(firstReflectionPageIndex)
@@ -151,62 +227,68 @@ struct OnboardingView: View {
                     .padding(.bottom, 24)
             }
         }
-        .background(onboardingBackground)
-        .fontDesign(.rounded)
-        .onChange(of: preferredName) { _, value in
-            guard page == introPageIndex else { return }
-            if value.count % 3 == 0, value.isEmpty == false { reactCompanion(.typing) }
-        }
-        .onChange(of: personalStory) { _, value in
-            guard page == storyPageIndex else { return }
-            if value.count % 24 == 0, value.isEmpty == false { reactCompanion(.typing) }
-        }
-        .onChange(of: firstCheckInBody) { _, value in
-            guard page == firstCheckInPageIndex else { return }
-            scheduleFirstCheckInTypingReaction(for: value)
-        }
-        .onChange(of: page) { oldPage, newPage in
-            focusedField = nil
-            enforcePageRules(from: oldPage, to: newPage)
-            triggerCircleTransition(from: oldPage, to: newPage)
-            triggerPageAccentTransition(for: newPage)
-        }
-        .onChange(of: assessmentIndex) { oldIndex, newIndex in
-            guard page == assessmentPageIndex, oldIndex != newIndex else { return }
-            triggerCircleMicroTransitionForAssessment()
-        }
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") { focusedField = nil }
+    }
+
+    private func handleOnAppear() {
+        iCloudSyncEnabled = appModel.isICloudSyncEnabled
+        shouldOpenReviewSummary = UserDefaults.standard.bool(forKey: openOnboardingReviewKey)
+        loadExistingProfileForReviewIfNeeded()
+        restoreDraftIfNeeded()
+    }
+
+    private func handlePreferredNameChange(oldValue: String, newValue: String) {
+        guard page == introPageIndex else { return }
+        if newValue.count % 3 == 0, newValue.isEmpty == false { reactCompanion(.typing) }
+    }
+
+    private func handlePersonalStoryChange(oldValue: String, newValue: String) {
+        guard page == storyPageIndex else { return }
+        if newValue.count % 24 == 0, newValue.isEmpty == false { reactCompanion(.typing) }
+    }
+
+    private func handleFirstCheckInBodyChange(oldValue: String, newValue: String) {
+        guard page == firstCheckInPageIndex else { return }
+        scheduleFirstCheckInTypingReaction(for: newValue)
+    }
+
+    private func handlePageChange(oldPage: Int, newPage: Int) {
+        focusedField = nil
+        enforcePageRules(from: oldPage, to: newPage)
+        triggerCircleTransition(from: oldPage, to: newPage)
+        triggerPageAccentTransition(for: newPage)
+        saveDraft()
+    }
+
+    private func handleAssessmentIndexChange(oldIndex: Int, newIndex: Int) {
+        guard page == assessmentPageIndex, oldIndex != newIndex else { return }
+        triggerCircleMicroTransitionForAssessment()
+    }
+
+    private func handleScenePhaseChange(oldPhase: ScenePhase, newPhase: ScenePhase) {
+        guard newPhase == .background || newPhase == .inactive else { return }
+        saveDraft()
+    }
+
+    private func runAmbientCircleLoop(for currentPage: Int) async {
+        lensFocusActive = false
+        while !Task.isCancelled {
+            let wait = UInt64(Int.random(in: 3_600_000_000...5_800_000_000))
+            try? await Task.sleep(nanoseconds: wait)
+            guard page == currentPage else { return }
+            guard page != firstCheckInPageIndex else { continue }
+            guard page != scoreLoadingPageIndex else { continue }
+            guard transientCircleState == nil else { continue }
+            let nextState = randomAmbientCircleState(for: page)
+            transientCircleState = nextState
+            if Bool.random() {
+                lensFocusActive = true
             }
-        }
-        .overlay {
-            ConfettiOverlayView(trigger: onboardingConfettiTrigger)
-        }
-        .onAppear {
-            shouldOpenReviewSummary = UserDefaults.standard.bool(forKey: openOnboardingReviewKey)
-            loadExistingProfileForReviewIfNeeded()
-        }
-        .task(id: page) {
+            let activeDuration = UInt64(Int.random(in: 1_600_000_000...2_700_000_000))
+            try? await Task.sleep(nanoseconds: activeDuration)
+            if Task.isCancelled { return }
+            guard page == currentPage else { return }
             lensFocusActive = false
-            while !Task.isCancelled {
-                let wait = UInt64(Int.random(in: 3_600_000_000...5_800_000_000))
-                try? await Task.sleep(nanoseconds: wait)
-                guard page != firstCheckInPageIndex else { continue }
-                guard page != scoreLoadingPageIndex else { continue }
-                guard transientCircleState == nil else { continue }
-                let nextState = randomAmbientCircleState(for: page)
-                transientCircleState = nextState
-                if Bool.random() {
-                    lensFocusActive = true
-                }
-                let activeDuration = UInt64(Int.random(in: 1_600_000_000...2_700_000_000))
-                try? await Task.sleep(nanoseconds: activeDuration)
-                if Task.isCancelled { return }
-                lensFocusActive = false
-                transientCircleState = nil
-            }
+            transientCircleState = nil
         }
     }
 
@@ -442,7 +524,7 @@ struct OnboardingView: View {
 
     private var shouldShowBottomControls: Bool {
         if page == assessmentPageIndex || page == firstCheckInPageIndex { return false }
-        if page == reasonPageIndex || page == therapyPageIndex || page == emotionPageIndex { return false }
+        if page == therapyPageIndex || page == emotionPageIndex { return false }
         return focusedField == nil
     }
 
@@ -621,7 +703,7 @@ struct OnboardingView: View {
                     singleChoiceRow(option, "circle", selected: selectedGoal == option) {
                         selectedGoal = option
                         customGoalText = ""
-                        advanceAfterSingleChoice()
+                        reactCompanion(.checkIn)
                     }
                 }
 
@@ -632,11 +714,14 @@ struct OnboardingView: View {
                 }
 
                 if isUsingCustomGoal {
-                    TextField("Type your goal", text: $customGoalText)
+                    TextField("Type your goal", text: $customGoalText, axis: .vertical)
                         .textInputAutocapitalization(.sentences)
                         .focused($focusedField, equals: .customGoal)
                         .font(.subheadline.weight(.semibold))
                         .padding(14)
+                        .lineLimit(3...6)
+                        .frame(minHeight: 92, alignment: .topLeading)
+                        .multilineTextAlignment(.leading)
                         .overlay {
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
                                 .stroke(Color.white.opacity(0.2), lineWidth: 0.8)
@@ -1012,7 +1097,8 @@ struct OnboardingView: View {
             VStack(spacing: 10) {
                 singleRow("Sleep context for calmer planning", symbol: "moon")
                 singleRow("Step trends for energy pattern signals", symbol: "figure.walk")
-                singleRow("You can skip this and connect later in Settings", symbol: "lock.shield")
+                singleRow("Health data stays on this device", symbol: "lock.shield")
+                singleRow("You can skip this and connect later in Settings", symbol: "gearshape")
 
                 Button {
                     Task {
@@ -1045,6 +1131,41 @@ struct OnboardingView: View {
         }
     }
 
+    private var iCloudPage: some View {
+        OnboardingQuestionPage(
+            title: "Keep your journal backed up",
+            subtitle: "Optional. Turn on iCloud sync if you want journal data restored after reinstall or available on your other devices.",
+            motionStyle: .form
+        ) {
+            VStack(spacing: 10) {
+                singleRow("Journal data can restore after reinstall", symbol: "arrow.trianglehead.2.clockwise.rotate.90.icloud")
+                singleRow("Uses your Apple Account and private iCloud database", symbol: "icloud")
+                singleRow("Health data is not synced", symbol: "lock.shield")
+
+                Toggle(isOn: $iCloudSyncEnabled) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Sync journal data with iCloud")
+                            .font(.subheadline.weight(.semibold))
+                        Text("You can change this later in Settings.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .tint(onboardingCompanionTint)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(Color.white.opacity(0.06))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                )
+            }
+        }
+    }
+
     private var firstCheckInPage: some View {
         OnboardingQuestionPage(
             title: "First check-in",
@@ -1065,11 +1186,12 @@ struct OnboardingView: View {
                     TextEditor(text: $firstCheckInBody)
                         .focused($focusedField, equals: .firstEntry)
                         .font(.body)
-                        .foregroundStyle(.primary)
+                        .foregroundColor(.primary)
+                        .textInputAutocapitalization(.sentences)
                         .scrollContentBackground(.hidden)
-                        .background(Color.clear)
-                        .padding(8)
-                        .frame(minHeight: 230)
+                        .background(AppSurface.fill)
+                        .frame(height: 230)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .id("first-check-in-editor")
                     if firstCheckInBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Text("Write what happened, what you felt, and why it mattered.")
@@ -1079,6 +1201,7 @@ struct OnboardingView: View {
                             .padding(.vertical, 16)
                     }
                 }
+                .background(AppSurface.fill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .stroke(Color.white.opacity(0.2), lineWidth: 0.8)
@@ -1125,29 +1248,34 @@ struct OnboardingView: View {
         ) {
             VStack(spacing: 20) {
                 if let review = firstCheckInReview {
-                    Text(firstReflectionHeroText(review))
-                        .font(.title2.weight(.bold))
+                    Text(onboardingPrimaryHeadline(for: review))
+                        .font(.largeTitle.weight(.bold))
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.bottom, 4)
 
-                    reflectionSection(
-                        title: "Noticed",
-                        body: review.insight.pattern,
-                        emphasized: false
-                    )
-
-                    reflectionSection(
-                        title: "Reframe",
-                        body: review.insight.reframe,
-                        emphasized: true
-                    )
+                    if onboardingSupportingRead(for: review).isEmpty == false {
+                        reflectionSection(
+                            title: "What this points to",
+                            body: onboardingSupportingRead(for: review),
+                            emphasized: false
+                        )
+                    }
 
                     reflectionSection(
                         title: "Try next",
                         body: review.insight.action,
-                        emphasized: false
+                        emphasized: true
                     )
+
+                    if appModel.isPremium, review.evidenceStrength.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                        reflectionSection(
+                            title: "Why this seems likely",
+                            body: review.evidenceStrength,
+                            emphasized: false
+                        )
+                    }
                 } else {
                     Text("No reflection yet. Go back and generate one.")
                         .font(.subheadline)
@@ -1199,16 +1327,52 @@ struct OnboardingView: View {
         .padding(.horizontal, 2)
     }
 
+    private func onboardingPrimaryHeadline(for review: DailyReview) -> String {
+        let candidates = [
+            review.suggestedGoalTitle,
+            review.insight.reframe,
+            review.insight.pattern,
+            review.summary
+        ]
+
+        for candidate in candidates {
+            let cleaned = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+            if cleaned.isEmpty == false {
+                return cleaned
+            }
+        }
+
+        return "A clearer next step is starting to show up."
+    }
+
+    private func onboardingSupportingRead(for review: DailyReview) -> String {
+        let primaryHeadline = onboardingPrimaryHeadline(for: review)
+        let candidates = [
+            review.insight.pattern,
+            review.insight.emotionalRead,
+            review.summary
+        ]
+
+        for candidate in candidates {
+            let cleaned = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+            if cleaned.isEmpty == false, cleaned != primaryHeadline {
+                return cleaned
+            }
+        }
+
+        return ""
+    }
+
     private var voicePage: some View {
         OnboardingQuestionPage(
             title: "Voice journaling",
-            subtitle: "Voice is optional. If you want it, Anchor downloads an on-device Whisper model now.",
+            subtitle: "Optional. Add voice now or keep typing and turn it on later.",
             motionStyle: .form
         ) {
             VStack(spacing: 14) {
-                singleRow("Text journaling works either way", symbol: "keyboard")
-                singleRow("Voice transcription runs on device after setup", symbol: "mic")
-                singleRow("The tiny model downloads once and stays local", symbol: "arrow.down.circle")
+                singleRow("Typing still works either way", symbol: "keyboard")
+                singleRow("Voice runs on device after setup", symbol: "mic")
+                singleRow("Downloads once and stays local", symbol: "arrow.down.circle")
 
                 switch voiceModelManager.status {
                 case .downloading(let progress):
@@ -1235,12 +1399,16 @@ struct OnboardingView: View {
                         .frame(maxWidth: .infinity)
                         .frame(height: 52)
                 }
-                .foregroundStyle(Color(.systemBackground))
-                .background(Color.primary, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .foregroundStyle(.primary)
+                .background(AppSurface.fill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(AppSurface.stroke, lineWidth: 0.5)
+                }
                 .buttonStyle(.plain)
                 .disabled(voiceModelManager.isVoiceEnabled || isVoiceModelDownloading)
 
-                Text("Skip this step if you prefer typing. You can enable voice later in Settings.")
+                Text("You can skip this and enable voice later in Settings.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -1604,6 +1772,14 @@ struct OnboardingView: View {
             assessment: assessment
         )
 
+        appModel.isICloudSyncEnabled = iCloudSyncEnabled
+        if iCloudSyncEnabled {
+            Task {
+                await appModel.refreshICloudStatus()
+                await appModel.pushToICloud()
+            }
+        }
+
         completeOnboardingWithCompanionHandoff()
     }
 
@@ -1672,9 +1848,97 @@ struct OnboardingView: View {
         page = completionPageIndex
     }
 
+    private func saveDraft() {
+        guard loadedExistingProfileForReview == false else { return }
+        guard hasCompletedOnboarding == false else { return }
+        let hasMeaningfulDraft =
+            page > 0 ||
+            preferredName.isEmpty == false ||
+            ageRange.isEmpty == false ||
+            focusAreas.isEmpty == false ||
+            resolvedSelectedGoal.isEmpty == false ||
+            personalStory.isEmpty == false ||
+            firstCheckInBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ||
+            firstCheckInGenerated ||
+            assessmentAnswers.contains(where: { $0 != nil })
+
+        guard hasMeaningfulDraft else {
+            UserDefaults.standard.removeObject(forKey: onboardingDraftKey)
+            return
+        }
+
+        let draft = OnboardingDraft(
+            page: min(page, completionPageIndex - 1),
+            preferredName: preferredName,
+            ageRange: ageRange,
+            focusAreas: Array(focusAreas).sorted(),
+            selectedGoal: selectedGoal,
+            customGoalText: customGoalText,
+            triedTherapy: triedTherapy,
+            emotionAwarenessHard: emotionAwarenessHard,
+            personalStory: personalStory,
+            streakGoal: streakGoal,
+            checkInTime: checkInTime,
+            therapyExperience: therapyExperience,
+            emotionAwarenessLevel: emotionAwarenessLevel,
+            assessmentIndex: assessmentIndex,
+            assessmentAnswers: assessmentAnswers,
+            selectedMoodRaw: selectedMood.rawValue,
+            firstCheckInTypeRaw: firstCheckInType.rawValue,
+            firstCheckInBody: firstCheckInBody,
+            firstCheckInGenerated: firstCheckInGenerated,
+            firstCheckInEntryCreated: firstCheckInEntryCreated,
+            iCloudSyncEnabled: iCloudSyncEnabled
+        )
+
+        if let data = try? JSONEncoder().encode(draft) {
+            UserDefaults.standard.set(data, forKey: onboardingDraftKey)
+        }
+    }
+
+    private func restoreDraftIfNeeded() {
+        guard loadedExistingProfileForReview == false else { return }
+        guard hasCompletedOnboarding == false else { return }
+        guard UserDefaults.standard.object(forKey: onboardingCompletedAtKey) == nil else { return }
+        guard let data = UserDefaults.standard.data(forKey: onboardingDraftKey) else { return }
+        guard let draft = try? JSONDecoder().decode(OnboardingDraft.self, from: data) else { return }
+
+        preferredName = draft.preferredName
+        ageRange = draft.ageRange
+        focusAreas = Set(draft.focusAreas)
+        selectedGoal = draft.selectedGoal
+        customGoalText = draft.customGoalText
+        triedTherapy = draft.triedTherapy
+        emotionAwarenessHard = draft.emotionAwarenessHard
+        personalStory = draft.personalStory
+        streakGoal = draft.streakGoal
+        checkInTime = draft.checkInTime
+        therapyExperience = draft.therapyExperience
+        emotionAwarenessLevel = draft.emotionAwarenessLevel
+        assessmentIndex = min(max(draft.assessmentIndex, 0), max(0, OnboardingAssessment.items.count - 1))
+        assessmentAnswers = draft.assessmentAnswers.count == OnboardingAssessment.items.count
+            ? draft.assessmentAnswers
+            : Array(draft.assessmentAnswers.prefix(OnboardingAssessment.items.count)) + Array(repeating: nil, count: max(0, OnboardingAssessment.items.count - draft.assessmentAnswers.count))
+        selectedMood = MoodLevel(rawValue: draft.selectedMoodRaw) ?? .okay
+        firstCheckInType = EntryType(rawValue: draft.firstCheckInTypeRaw) ?? .reflection
+        firstCheckInBody = draft.firstCheckInBody
+        firstCheckInGenerated = draft.firstCheckInGenerated
+        firstCheckInEntryCreated = draft.firstCheckInEntryCreated
+        iCloudSyncEnabled = draft.iCloudSyncEnabled
+        page = min(max(draft.page, 0), completionPageIndex - 1)
+        if firstCheckInGenerated {
+            firstCheckInReview = appModel.dailyReview(on: Date())
+        }
+    }
+
+    private func clearDraft() {
+        UserDefaults.standard.removeObject(forKey: onboardingDraftKey)
+    }
+
     private func completeOnboardingWithCompanionHandoff() {
         guard !isCompletingOnboarding else { return }
         isCompletingOnboarding = true
+        clearDraft()
         router.selectedTab = .journal
         router.companionPresentation = .journal
         router.companionTabTransitioning = true
@@ -1766,46 +2030,6 @@ struct OnboardingView: View {
                 reactCompanion(.typing)
             }
         }
-    }
-
-    private func reflectionLead(_ review: DailyReview) -> String {
-        let name = appModel.onboardingProfile.preferredName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let prefix = name.isEmpty ? "" : "\(name), "
-        return "\(prefix)\(review.insight.emotionalRead)"
-    }
-
-    private func firstReflectionHeroText(_ review: DailyReview) -> String {
-        let profile = appModel.onboardingProfile
-        let goal = profile.reflectionGoal.trimmingCharacters(in: .whitespacesAndNewlines)
-        let story = profile.personalStory.trimmingCharacters(in: .whitespacesAndNewlines)
-        let emotionalRead = review.insight.emotionalRead.trimmingCharacters(in: .whitespacesAndNewlines)
-        let reframe = review.insight.reframe.trimmingCharacters(in: .whitespacesAndNewlines)
-        let action = review.insight.action.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        var parts: [String] = []
-
-        if emotionalRead.isEmpty == false {
-            parts.append(reflectionLead(review))
-        }
-
-        if goal.isEmpty == false {
-            parts.append("Because you said you want to \(goal.lowercased()), this first check-in matters more as a starting direction than as a scorecard.")
-        }
-
-        if story.isEmpty == false {
-            parts.append("Given the context you shared, this reads like useful evidence about what support or friction is already shaping your days.")
-        }
-
-        if reframe.isEmpty == false {
-            parts.append(reframe)
-        }
-
-        if action.isEmpty == false {
-            parts.append("That gives you something concrete to build on next: \(action.prefix(90)).")
-        }
-
-        parts.append("This is a solid first read, and now the job is to keep turning that goal into smaller repeatable wins.")
-        return parts.joined(separator: " ")
     }
 
     private func singleRow(_ text: String, symbol: String) -> some View {

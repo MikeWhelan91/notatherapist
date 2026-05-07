@@ -1,4 +1,5 @@
 import Charts
+import DGCharts
 import SwiftUI
 
 struct InsightsView: View {
@@ -73,6 +74,22 @@ private struct ProfessionalInsightsDashboard: View {
 
     private var latestMonthDate: Date {
         entries.last?.date ?? Date()
+    }
+
+    private var last7DayInterval: DateInterval {
+        let calendar = Calendar.current
+        let endDate = latestMonthDate
+        let start = calendar.date(byAdding: .day, value: -6, to: calendar.startOfDay(for: endDate)) ?? endDate
+        let end = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: endDate) ?? endDate
+        return DateInterval(start: start, end: end)
+    }
+
+    private var currentWeekInterval: DateInterval {
+        Calendar.current.dateInterval(of: .weekOfYear, for: latestMonthDate) ?? last7DayInterval
+    }
+
+    private var currentMonthInterval: DateInterval {
+        Calendar.current.dateInterval(of: .month, for: calendarMonthDate) ?? last7DayInterval
     }
 
     var body: some View {
@@ -185,6 +202,8 @@ private struct ProfessionalInsightsDashboard: View {
     private var dailyInsights: some View {
         VStack(alignment: .leading, spacing: 22) {
             dailyReviewSummary
+            dailyGoalInsights
+            dailyCalmInsights
             moodCalendar
             moodTrend
             moodBreakdown
@@ -290,6 +309,8 @@ private struct ProfessionalInsightsDashboard: View {
 
     private var weeklyOverview: some View {
         VStack(alignment: .leading, spacing: 18) {
+            weeklyGoalInsights
+            weeklyCalmInsights
             ReviewSignalStrip(items: [
                 ReviewSignal(label: "Entries", value: "\(last30.count)"),
                 ReviewSignal(label: "Days", value: "\(activeDays)"),
@@ -306,6 +327,8 @@ private struct ProfessionalInsightsDashboard: View {
 
     private func monthlyOverview(_ review: MonthlyReview) -> some View {
         VStack(alignment: .leading, spacing: 18) {
+            monthlyGoalInsights(review)
+            monthlyCalmInsights
             ReviewSignalStrip(items: [
                 ReviewSignal(label: "Entries", value: "\(review.entryCount)"),
                 ReviewSignal(label: "Days", value: "\(review.activeDays)"),
@@ -320,8 +343,185 @@ private struct ProfessionalInsightsDashboard: View {
         }
     }
 
+    private var dailyGoalInsights: some View {
+        let momentum = dailyGoalMomentumPoints
+        let outcome = goalOutcomeSummary(in: last7DayInterval)
+        return VStack(alignment: .leading, spacing: 12) {
+            sectionTitle("Goal momentum")
+            Text(dailyGoalLeadText(completed: outcome.completed, active: outcome.active, cleared: outcome.cleared))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            ReferenceCard {
+                VStack(alignment: .leading, spacing: 14) {
+                    if momentum.reduce(0, { $0 + $1.completed }) > 0 {
+                        DGGoalMomentumChart(points: momentum)
+                            .frame(height: 168)
+                    } else {
+                        Text("Complete a suggested next step and Anchor will start charting your daily goal follow-through.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    GoalOutcomeLegend(summary: outcome)
+                }
+            }
+        }
+    }
+
+    private var dailyCalmInsights: some View {
+        calmInsightsSection(
+            title: "Calm response",
+            interval: last7DayInterval,
+            leadingText: calmLeadText(in: last7DayInterval, timeframe: "the last 7 days"),
+            emptyText: "Run a Calm reset and Anchor will start showing which ones help you settle fastest."
+        )
+    }
+
+    private var weeklyGoalInsights: some View {
+        let cadenceMetrics = goalCadenceMetrics(in: currentWeekInterval)
+        let outcome = goalOutcomeSummary(in: currentWeekInterval)
+        let completedThisWeek = appModel.completedGoals(in: currentWeekInterval).prefix(3)
+
+        return VStack(alignment: .leading, spacing: 12) {
+            sectionTitle("Goal progress")
+            Text(readableReviewText(appModel.weeklyReview.goalFollowThrough.isEmpty ? appModel.weeklyReview.suggestion : appModel.weeklyReview.goalFollowThrough))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            goalChartsLayout(metrics: cadenceMetrics, outcome: outcome)
+
+            if completedThisWeek.isEmpty == false {
+                insightList(
+                    title: "Completed this week",
+                    items: completedThisWeek.map {
+                        "\($0.title) (\(($0.feedbackAt ?? $0.createdAt).formatted(.dateTime.weekday(.wide).day().month(.abbreviated))))"
+                    }
+                )
+            }
+        }
+    }
+
+    private var weeklyCalmInsights: some View {
+        calmInsightsSection(
+            title: "Calm response",
+            interval: currentWeekInterval,
+            leadingText: calmLeadText(in: currentWeekInterval, timeframe: "this week"),
+            emptyText: "No Calm sessions logged this week yet."
+        )
+    }
+
+    private func monthlyGoalInsights(_ review: MonthlyReview) -> some View {
+        let cadenceMetrics = goalCadenceMetrics(in: currentMonthInterval)
+        let outcome = goalOutcomeSummary(in: currentMonthInterval)
+        let completedThisMonth = appModel.completedGoals(in: currentMonthInterval).prefix(4)
+        let lead = [
+            review.goalFollowThrough,
+            review.progressSignal ?? "",
+            review.progress
+        ]
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .first(where: { $0.isEmpty == false }) ?? "Anchor is reading the month against your long-term goal and the steps you actually completed."
+
+        return VStack(alignment: .leading, spacing: 12) {
+            sectionTitle("Goal progress")
+            Text(readableReviewText(lead))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            goalChartsLayout(metrics: cadenceMetrics, outcome: outcome)
+
+            if completedThisMonth.isEmpty == false {
+                insightList(
+                    title: "Completed this month",
+                    items: completedThisMonth.map {
+                        "\($0.title) (\(($0.feedbackAt ?? $0.createdAt).formatted(.dateTime.weekday(.wide).day().month(.abbreviated))))"
+                    }
+                )
+            }
+        }
+    }
+
+    private var monthlyCalmInsights: some View {
+        calmInsightsSection(
+            title: "Calm response",
+            interval: currentMonthInterval,
+            leadingText: calmLeadText(in: currentMonthInterval, timeframe: "this month"),
+            emptyText: "No Calm sessions logged this month yet."
+        )
+    }
+
+    private func goalChartsLayout(metrics: [GoalCadenceMetric], outcome: GoalOutcomeSummary) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ReferenceCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    DGGoalCadenceChart(metrics: metrics)
+                        .frame(height: 184)
+                    GoalOutcomeLegend(summary: outcome)
+                }
+            }
+
+            ReferenceCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text("Outcome mix")
+                            .font(.subheadline.weight(.semibold))
+                        Spacer()
+                        Text(goalOutcomeHeadline(outcome))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    DGGoalOutcomeDonutChart(summary: outcome)
+                        .frame(height: 188)
+                }
+            }
+        }
+    }
+
+    private func calmInsightsSection(title: String, interval: DateInterval, leadingText: String, emptyText: String) -> some View {
+        let sessions = calmSessions(in: interval)
+        let pathwayMetrics = calmPathwayMetrics(in: interval)
+        let helpfulness = calmHelpfulnessSummary(in: interval)
+        let averageDuration = sessions.isEmpty ? 0 : sessions.reduce(0) { $0 + $1.duration } / Double(sessions.count)
+
+        return VStack(alignment: .leading, spacing: 12) {
+            sectionTitle(title)
+            Text(leadingText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            ReferenceCard {
+                if sessions.isEmpty {
+                    Text(emptyText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    VStack(alignment: .leading, spacing: 14) {
+                        HStack(spacing: 10) {
+                            insightMetric("Sessions", "\(sessions.count)")
+                            insightMetric("Helpful", "\(helpfulness.helpfulPercentage)%")
+                            insightMetric("Avg length", calmDurationLabel(averageDuration))
+                        }
+
+                        DGCalmPathwayChart(metrics: pathwayMetrics)
+                            .frame(height: 176)
+
+                        DGCalmHelpfulnessDonutChart(summary: helpfulness)
+                            .frame(height: 176)
+                    }
+                }
+            }
+        }
+    }
+
     private func monthlyReviewSummary(_ review: MonthlyReview) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let completedGoals = appModel.completedGoalsLast(days: 31)
+        return VStack(alignment: .leading, spacing: 10) {
             InsightSummaryBlock(
                 title: "Month in review",
                 value: String(format: "%.1f avg", review.averageMood),
@@ -329,15 +529,29 @@ private struct ProfessionalInsightsDashboard: View {
                 symbol: "calendar",
                 tint: MoodLevel.great.companionColor
             )
+            insightList(title: "Progress toward your goal", items: [
+                review.goalFollowThrough,
+                review.progressSignal ?? review.progress,
+                review.baselineComparison ?? review.moodRange
+            ].filter { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false })
+
+            if completedGoals.isEmpty == false {
+                insightList(
+                    title: "Completed this month",
+                    items: completedGoals.prefix(4).map {
+                        "\($0.title) (\(($0.feedbackAt ?? $0.createdAt).formatted(.dateTime.weekday(.wide).day().month(.abbreviated))))"
+                    }
+                )
+            }
+
             insightList(
                 title: review.monthTitle,
                 items: [
-                    review.moodRange,
                     review.strongestPattern,
-                    review.progress,
-                    "Next: \(review.nextExperiment)"
+                    review.primaryLoop ?? "",
+                    review.patternShift,
+                    "Next focus: \(review.nextExperiment)"
                 ].filter { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false } + Array(review.topThemes.prefix(3))
-                .map { $0.replacingOccurrences(of: "Next:", with: "Next focus:") }
             )
         }
     }
@@ -403,6 +617,126 @@ private struct ProfessionalInsightsDashboard: View {
             }
         }
         return appModel.weeklyUnlockProgressText
+    }
+
+    private var dailyGoalMomentumPoints: [GoalMomentumPoint] {
+        let calendar = Calendar.current
+        return (0..<7).compactMap { offset in
+            guard let date = calendar.date(byAdding: .day, value: offset, to: last7DayInterval.start) else { return nil }
+            let dayStart = calendar.startOfDay(for: date)
+            let nextDay = calendar.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart
+            let dayInterval = DateInterval(start: dayStart, end: nextDay)
+            let completed = appModel.completedGoals(in: dayInterval, cadence: .daily).count
+            return GoalMomentumPoint(
+                label: date.formatted(.dateTime.weekday(.abbreviated)),
+                completed: completed
+            )
+        }
+    }
+
+    private func calmSessions(in interval: DateInterval) -> [CalmSessionLog] {
+        appModel.calmSessions
+            .filter { interval.contains($0.endedAt) }
+            .sorted { $0.endedAt < $1.endedAt }
+    }
+
+    private func calmPathwayMetrics(in interval: DateInterval) -> [CalmPathwayMetric] {
+        let sessions = calmSessions(in: interval)
+        return CalmPathway.allCases.map { pathway in
+            let matching = sessions.filter { $0.pathway == pathway }
+            let totalDuration = matching.reduce(0) { $0 + $1.duration }
+            return CalmPathwayMetric(
+                pathway: pathway,
+                count: matching.count,
+                averageDuration: matching.isEmpty ? 0 : totalDuration / Double(matching.count)
+            )
+        }
+        .filter { $0.count > 0 }
+    }
+
+    private func calmHelpfulnessSummary(in interval: DateInterval) -> CalmHelpfulnessSummary {
+        let sessions = calmSessions(in: interval)
+        let yes = sessions.filter { $0.helpfulness == .yes }.count
+        let aBit = sessions.filter { $0.helpfulness == .aBit }.count
+        let notReally = sessions.filter { $0.helpfulness == .notReally }.count
+        return CalmHelpfulnessSummary(yes: yes, aBit: aBit, notReally: notReally)
+    }
+
+    private func calmLeadText(in interval: DateInterval, timeframe: String) -> String {
+        let sessions = calmSessions(in: interval)
+        guard sessions.isEmpty == false else { return "No Calm signal yet for \(timeframe)." }
+
+        let helpfulness = calmHelpfulnessSummary(in: interval)
+        let pathwayMetrics = calmPathwayMetrics(in: interval)
+        let topPathway = pathwayMetrics.max(by: { $0.count < $1.count })?.pathway.title.lowercased() ?? "reset"
+
+        if helpfulness.yes > 0 {
+            return "You used Calm \(sessions.count) time\(sessions.count == 1 ? "" : "s") \(timeframe), and \(helpfulness.yes) session\(helpfulness.yes == 1 ? "" : "s") clearly helped. \(topPathway.capitalized) is the most-used reset."
+        }
+        if helpfulness.aBit > 0 {
+            return "You used Calm \(sessions.count) time\(sessions.count == 1 ? "" : "s") \(timeframe). The clearest signal so far is partial help, with \(topPathway) showing up most."
+        }
+        return "You used Calm \(sessions.count) time\(sessions.count == 1 ? "" : "s") \(timeframe), but you have not marked a session as clearly helpful yet."
+    }
+
+    private func calmDurationLabel(_ duration: TimeInterval) -> String {
+        let seconds = Int(duration.rounded())
+        if seconds >= 60 {
+            let minutes = seconds / 60
+            let remainder = seconds % 60
+            return remainder == 0 ? "\(minutes)m" : "\(minutes)m \(remainder)s"
+        }
+        return "\(seconds)s"
+    }
+
+    private func goalCadenceMetrics(in interval: DateInterval) -> [GoalCadenceMetric] {
+        GoalCadence.allCases.map { cadence in
+            let relevant = appModel.reflectionGoals.filter { ($0.cadence ?? .daily) == cadence }
+            let completed = relevant.filter { goal in
+                goal.status == .completed &&
+                goal.feedbackAt.map(interval.contains) == true
+            }.count
+            let cleared = relevant.filter { goal in
+                goal.status == .archived &&
+                goal.feedbackAt.map(interval.contains) == true
+            }.count
+            let active = relevant.filter { goal in
+                guard goal.status == .active else { return false }
+                if let dueDate = goal.dueDate {
+                    return goal.createdAt < interval.end && dueDate >= interval.start
+                }
+                return goal.createdAt < interval.end
+            }.count
+            return GoalCadenceMetric(cadence: cadence, completed: completed, active: active, cleared: cleared)
+        }
+    }
+
+    private func goalOutcomeSummary(in interval: DateInterval) -> GoalOutcomeSummary {
+        let metrics = goalCadenceMetrics(in: interval)
+        return GoalOutcomeSummary(
+            completed: metrics.reduce(0) { $0 + $1.completed },
+            active: metrics.reduce(0) { $0 + $1.active },
+            cleared: metrics.reduce(0) { $0 + $1.cleared }
+        )
+    }
+
+    private func dailyGoalLeadText(completed: Int, active: Int, cleared: Int) -> String {
+        if completed > 0 {
+            return "You completed \(completed) daily \(completed == 1 ? "next step" : "next steps") in the last 7 days. Anchor uses that follow-through as evidence when it suggests what to do next."
+        }
+        if active > 0 {
+            return "You have \(active) active \(active == 1 ? "next step" : "next steps") in play. Completing even one gives Anchor a clearer signal about what is actually helping."
+        }
+        if cleared > 0 {
+            return "Some recent next steps were cleared before completion. That still matters because Anchor can learn which suggestions were too broad or easy to drop."
+        }
+        return "Daily next steps become more useful once Anchor can see whether they were completed, cleared, or left active."
+    }
+
+    private func goalOutcomeHeadline(_ summary: GoalOutcomeSummary) -> String {
+        let total = max(1, summary.total)
+        let completion = Int((Double(summary.completed) / Double(total) * 100).rounded())
+        return "\(completion)% completed"
     }
 
     private var moodCalendar: some View {
@@ -968,6 +1302,400 @@ private struct CalendarSelectionSummary {
     let mood: MoodLevel?
 }
 
+private struct GoalMomentumPoint: Identifiable {
+    let id = UUID()
+    let label: String
+    let completed: Int
+}
+
+private struct GoalCadenceMetric: Identifiable {
+    let cadence: GoalCadence
+    let completed: Int
+    let active: Int
+    let cleared: Int
+
+    var id: GoalCadence { cadence }
+}
+
+private struct GoalOutcomeSummary {
+    let completed: Int
+    let active: Int
+    let cleared: Int
+
+    var total: Int {
+        completed + active + cleared
+    }
+}
+
+private struct CalmPathwayMetric: Identifiable {
+    let pathway: CalmPathway
+    let count: Int
+    let averageDuration: TimeInterval
+
+    var id: CalmPathway { pathway }
+}
+
+private struct CalmHelpfulnessSummary {
+    let yes: Int
+    let aBit: Int
+    let notReally: Int
+
+    var total: Int {
+        yes + aBit + notReally
+    }
+
+    var helpfulPercentage: Int {
+        guard total > 0 else { return 0 }
+        return Int((Double(yes + aBit) / Double(total) * 100).rounded())
+    }
+}
+
+private struct GoalOutcomeLegend: View {
+    let summary: GoalOutcomeSummary
+
+    var body: some View {
+        HStack(spacing: 14) {
+            goalLegendItem("Completed", value: summary.completed, color: .goalCompleted)
+            goalLegendItem("Active", value: summary.active, color: .goalActive)
+            goalLegendItem("Cleared", value: summary.cleared, color: .goalCleared)
+        }
+    }
+
+    private func goalLegendItem(_ title: String, value: Int, color: Color) -> some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text("\(value)")
+                .font(.caption2.weight(.bold))
+        }
+    }
+}
+
+private struct DGGoalMomentumChart: UIViewRepresentable {
+    let points: [GoalMomentumPoint]
+
+    func makeUIView(context: Context) -> BarChartView {
+        let chart = BarChartView()
+        chart.backgroundColor = .clear
+        chart.legend.enabled = false
+        chart.doubleTapToZoomEnabled = false
+        chart.scaleXEnabled = false
+        chart.scaleYEnabled = false
+        chart.pinchZoomEnabled = false
+        chart.dragEnabled = false
+        chart.setScaleEnabled(false)
+        chart.highlightPerTapEnabled = false
+        chart.highlightPerDragEnabled = false
+        chart.drawValueAboveBarEnabled = false
+        chart.drawBarShadowEnabled = false
+        chart.drawGridBackgroundEnabled = false
+        chart.minOffset = 0
+
+        let xAxis = chart.xAxis
+        xAxis.drawGridLinesEnabled = false
+        xAxis.labelPosition = .bottom
+        xAxis.labelTextColor = .secondaryLabel
+        xAxis.axisLineColor = .clear
+        xAxis.granularity = 1
+
+        let leftAxis = chart.leftAxis
+        leftAxis.axisMinimum = 0
+        leftAxis.granularity = 1
+        leftAxis.drawGridLinesEnabled = true
+        leftAxis.gridColor = UIColor.white.withAlphaComponent(0.08)
+        leftAxis.labelTextColor = .secondaryLabel
+        leftAxis.axisLineColor = .clear
+
+        chart.rightAxis.enabled = false
+        return chart
+    }
+
+    func updateUIView(_ chart: BarChartView, context: Context) {
+        let entries = points.enumerated().map { index, point in
+            BarChartDataEntry(x: Double(index), y: Double(point.completed))
+        }
+        let set = BarChartDataSet(entries: entries, label: "")
+        set.colors = [UIColor.goalCompleted]
+        set.drawValuesEnabled = false
+        set.highlightEnabled = false
+
+        let data = BarChartData(dataSet: set)
+        data.barWidth = 0.58
+        chart.data = data
+        chart.xAxis.valueFormatter = IndexAxisValueFormatter(values: points.map(\.label))
+        let maxValue = max(2, points.map(\.completed).max() ?? 0)
+        chart.leftAxis.axisMaximum = Double(maxValue) + 0.5
+        chart.animate(yAxisDuration: 0.55, easingOption: .easeOutQuart)
+    }
+}
+
+private struct DGGoalCadenceChart: UIViewRepresentable {
+    let metrics: [GoalCadenceMetric]
+
+    func makeUIView(context: Context) -> BarChartView {
+        let chart = BarChartView()
+        chart.backgroundColor = .clear
+        chart.legend.enabled = false
+        chart.doubleTapToZoomEnabled = false
+        chart.scaleXEnabled = false
+        chart.scaleYEnabled = false
+        chart.pinchZoomEnabled = false
+        chart.dragEnabled = false
+        chart.setScaleEnabled(false)
+        chart.highlightPerTapEnabled = false
+        chart.highlightPerDragEnabled = false
+        chart.drawValueAboveBarEnabled = false
+        chart.drawBarShadowEnabled = false
+        chart.drawGridBackgroundEnabled = false
+        chart.minOffset = 0
+
+        let xAxis = chart.xAxis
+        xAxis.drawGridLinesEnabled = false
+        xAxis.labelPosition = .bottom
+        xAxis.labelTextColor = .secondaryLabel
+        xAxis.axisLineColor = .clear
+        xAxis.granularity = 1
+
+        let leftAxis = chart.leftAxis
+        leftAxis.axisMinimum = 0
+        leftAxis.granularity = 1
+        leftAxis.drawGridLinesEnabled = true
+        leftAxis.gridColor = UIColor.white.withAlphaComponent(0.08)
+        leftAxis.labelTextColor = .secondaryLabel
+        leftAxis.axisLineColor = .clear
+
+        chart.rightAxis.enabled = false
+        return chart
+    }
+
+    func updateUIView(_ chart: BarChartView, context: Context) {
+        let entries = metrics.enumerated().map { index, item in
+            BarChartDataEntry(
+                x: Double(index),
+                yValues: [
+                    Double(item.completed),
+                    Double(item.active),
+                    Double(item.cleared)
+                ]
+            )
+        }
+
+        let set = BarChartDataSet(entries: entries, label: "")
+        set.colors = [
+            UIColor.goalCompleted,
+            UIColor.goalActive,
+            UIColor.goalCleared
+        ]
+        set.stackLabels = ["Completed", "Active", "Cleared"]
+        set.drawValuesEnabled = false
+        set.highlightEnabled = false
+
+        let data = BarChartData(dataSet: set)
+        data.barWidth = 0.48
+        chart.data = data
+        chart.xAxis.valueFormatter = IndexAxisValueFormatter(values: metrics.map { $0.cadence.label })
+        let maxValue = max(2, metrics.map { $0.completed + $0.active + $0.cleared }.max() ?? 0)
+        chart.leftAxis.axisMaximum = Double(maxValue) + 0.5
+        chart.animate(yAxisDuration: 0.6, easingOption: .easeOutQuart)
+    }
+}
+
+private struct DGGoalOutcomeDonutChart: UIViewRepresentable {
+    let summary: GoalOutcomeSummary
+
+    func makeUIView(context: Context) -> PieChartView {
+        let chart = PieChartView()
+        chart.backgroundColor = .clear
+        chart.legend.enabled = false
+        chart.usePercentValuesEnabled = false
+        chart.drawEntryLabelsEnabled = false
+        chart.rotationEnabled = false
+        chart.highlightPerTapEnabled = false
+        chart.transparentCircleColor = .clear
+        chart.holeColor = .clear
+        chart.holeRadiusPercent = 0.64
+        chart.transparentCircleRadiusPercent = 0
+        chart.drawCenterTextEnabled = true
+        chart.minOffset = 0
+        return chart
+    }
+
+    func updateUIView(_ chart: PieChartView, context: Context) {
+        let entries = [
+            PieChartDataEntry(value: Double(max(summary.completed, 0)), label: "Completed"),
+            PieChartDataEntry(value: Double(max(summary.active, 0)), label: "Active"),
+            PieChartDataEntry(value: Double(max(summary.cleared, 0)), label: "Cleared")
+        ]
+        .filter { $0.value > 0 }
+
+        if entries.isEmpty {
+            chart.data = nil
+            chart.centerAttributedText = centerText(title: "No goals", subtitle: "yet")
+            return
+        }
+
+        let set = PieChartDataSet(entries: entries, label: "")
+        set.colors = [UIColor.goalCompleted, UIColor.goalActive, UIColor.goalCleared]
+        set.sliceSpace = 3
+        set.selectionShift = 0
+        set.drawValuesEnabled = false
+
+        let data = PieChartData(dataSet: set)
+        data.setDrawValues(false)
+        chart.data = data
+
+        let completionRate = summary.total == 0 ? 0 : Int((Double(summary.completed) / Double(summary.total) * 100).rounded())
+        chart.centerAttributedText = centerText(title: "\(completionRate)%", subtitle: "completed")
+        chart.animate(xAxisDuration: 0.55, easingOption: .easeOutQuart)
+    }
+
+    private func centerText(title: String, subtitle: String) -> NSAttributedString {
+        let valueAttributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: 20, weight: .bold),
+            .foregroundColor: UIColor.white
+        ]
+        let subtitleAttributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: 11, weight: .semibold),
+            .foregroundColor: UIColor.secondaryLabel
+        ]
+        let result = NSMutableAttributedString(string: title, attributes: valueAttributes)
+        result.append(NSAttributedString(string: "\n\(subtitle)", attributes: subtitleAttributes))
+        return result
+    }
+}
+
+private struct DGCalmPathwayChart: UIViewRepresentable {
+    let metrics: [CalmPathwayMetric]
+
+    func makeUIView(context: Context) -> BarChartView {
+        let chart = BarChartView()
+        chart.backgroundColor = .clear
+        chart.legend.enabled = false
+        chart.doubleTapToZoomEnabled = false
+        chart.scaleXEnabled = false
+        chart.scaleYEnabled = false
+        chart.pinchZoomEnabled = false
+        chart.dragEnabled = false
+        chart.setScaleEnabled(false)
+        chart.highlightPerTapEnabled = false
+        chart.highlightPerDragEnabled = false
+        chart.drawValueAboveBarEnabled = false
+        chart.drawBarShadowEnabled = false
+        chart.drawGridBackgroundEnabled = false
+        chart.minOffset = 0
+
+        let xAxis = chart.xAxis
+        xAxis.drawGridLinesEnabled = false
+        xAxis.labelPosition = .bottom
+        xAxis.labelTextColor = .secondaryLabel
+        xAxis.axisLineColor = .clear
+        xAxis.granularity = 1
+        xAxis.labelCount = metrics.count
+
+        let leftAxis = chart.leftAxis
+        leftAxis.axisMinimum = 0
+        leftAxis.granularity = 1
+        leftAxis.drawGridLinesEnabled = true
+        leftAxis.gridColor = UIColor.white.withAlphaComponent(0.08)
+        leftAxis.labelTextColor = .secondaryLabel
+        leftAxis.axisLineColor = .clear
+
+        chart.rightAxis.enabled = false
+        return chart
+    }
+
+    func updateUIView(_ chart: BarChartView, context: Context) {
+        let entries = metrics.enumerated().map { index, item in
+            BarChartDataEntry(x: Double(index), y: Double(item.count))
+        }
+        let set = BarChartDataSet(entries: entries, label: "")
+        set.colors = metrics.map { UIColor($0.pathway.accentMood.interfaceAccentColor) }
+        set.drawValuesEnabled = false
+        set.highlightEnabled = false
+
+        let data = BarChartData(dataSet: set)
+        data.barWidth = 0.52
+        chart.data = data
+        chart.xAxis.valueFormatter = IndexAxisValueFormatter(values: metrics.map { $0.pathway.shortLabel })
+        chart.leftAxis.axisMaximum = Double(max(2, metrics.map(\.count).max() ?? 0)) + 0.5
+        chart.animate(yAxisDuration: 0.55, easingOption: .easeOutQuart)
+    }
+}
+
+private struct DGCalmHelpfulnessDonutChart: UIViewRepresentable {
+    let summary: CalmHelpfulnessSummary
+
+    func makeUIView(context: Context) -> PieChartView {
+        let chart = PieChartView()
+        chart.backgroundColor = .clear
+        chart.holeRadiusPercent = 0.58
+        chart.transparentCircleRadiusPercent = 0
+        chart.drawEntryLabelsEnabled = false
+        chart.usePercentValuesEnabled = false
+        chart.legend.enabled = false
+        chart.rotationEnabled = false
+        chart.highlightPerTapEnabled = false
+        chart.chartDescription.enabled = false
+        return chart
+    }
+
+    func updateUIView(_ chart: PieChartView, context: Context) {
+        let entries = [
+            PieChartDataEntry(value: Double(summary.yes), label: "Yes"),
+            PieChartDataEntry(value: Double(summary.aBit), label: "A bit"),
+            PieChartDataEntry(value: Double(summary.notReally), label: "Not really")
+        ]
+        .filter { $0.value > 0 }
+
+        if entries.isEmpty {
+            chart.data = nil
+            chart.centerAttributedText = NSAttributedString(
+                string: "No feedback yet",
+                attributes: [
+                    .foregroundColor: UIColor.secondaryLabel,
+                    .font: UIFont.systemFont(ofSize: 14, weight: .medium)
+                ]
+            )
+            return
+        }
+
+        let set = PieChartDataSet(entries: entries, label: "")
+        set.colors = [
+            UIColor(MoodLevel.great.interfaceAccentColor),
+            UIColor(MoodLevel.good.interfaceAccentColor),
+            UIColor(MoodLevel.low.interfaceAccentColor)
+        ]
+        set.drawValuesEnabled = false
+        set.selectionShift = 0
+
+        chart.data = PieChartData(dataSet: set)
+        chart.centerAttributedText = NSAttributedString(
+            string: "\(summary.helpfulPercentage)%\nhelpful",
+            attributes: [
+                .foregroundColor: UIColor.white,
+                .font: UIFont.systemFont(ofSize: 16, weight: .semibold)
+            ]
+        )
+        chart.animate(yAxisDuration: 0.5, easingOption: .easeOutQuart)
+    }
+}
+
+private extension UIColor {
+    static let goalCompleted = UIColor(red: 0.36, green: 0.76, blue: 0.56, alpha: 1)
+    static let goalActive = UIColor(red: 0.78, green: 0.80, blue: 0.84, alpha: 1)
+    static let goalCleared = UIColor(red: 0.86, green: 0.60, blue: 0.34, alpha: 1)
+}
+
+private extension Color {
+    static let goalCompleted = Color(uiColor: .goalCompleted)
+    static let goalActive = Color(uiColor: .goalActive)
+    static let goalCleared = Color(uiColor: .goalCleared)
+}
+
 private struct LockedTrendPoint: Identifiable {
     let id = UUID()
     let day: Int
@@ -1433,6 +2161,25 @@ struct WeeklyReviewView: View {
     let review: WeeklyReview
     var embedded = false
 
+    private var completedWeeklyGoals: [ReflectionGoal] {
+        appModel.completedGoalsLast(days: 7)
+    }
+
+    private var premiumProgressText: String? {
+        let candidates = [
+            review.goalFollowThrough,
+            review.progressSignal ?? "",
+            review.baselineComparison ?? ""
+        ]
+        for candidate in candidates {
+            let cleaned = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+            if cleaned.isEmpty == false {
+                return readableReviewCopy(cleaned)
+            }
+        }
+        return nil
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 14) {
@@ -1483,33 +2230,52 @@ struct WeeklyReviewView: View {
             }
             Divider().background(AppSurface.stroke.opacity(0.55))
 
-            if appModel.isPremium {
-                InsightSectionView(title: "Watch next", bodyText: readableReviewCopy(review.risk), symbol: InsightType.risk.symbol)
+            if let premiumProgressText, appModel.isPremium {
+                InsightSectionView(title: "Goal progress", bodyText: premiumProgressText, symbol: "flag.checkered")
                 Divider().background(AppSurface.stroke.opacity(0.55))
             }
+
+            if appModel.isPremium, completedWeeklyGoals.isEmpty == false {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Completed this week")
+                        .font(.subheadline.weight(.semibold))
+                    ForEach(completedWeeklyGoals.prefix(3)) { goal in
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.green)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(goal.title)
+                                    .font(.subheadline.weight(.semibold))
+                                Text(goal.feedbackAt?.formatted(.dateTime.weekday(.wide).day().month(.abbreviated)) ?? "Completed")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+                Divider().background(AppSurface.stroke.opacity(0.55))
+            }
+
             if appModel.isPremium, review.patternShift.isEmpty == false {
                 InsightSectionView(title: "What changed", bodyText: readableReviewCopy(review.patternShift), symbol: "arrow.left.arrow.right")
                 Divider().background(AppSurface.stroke.opacity(0.55))
             }
-            if appModel.isPremium, let primaryLoop = review.primaryLoop, primaryLoop.isEmpty == false {
-                InsightSectionView(title: "Primary loop", bodyText: readableReviewCopy(primaryLoop), symbol: "point.3.connected.trianglepath.dotted")
-                Divider().background(AppSurface.stroke.opacity(0.55))
-            }
-            if appModel.isPremium, let progressSignal = review.progressSignal, progressSignal.isEmpty == false {
-                InsightSectionView(title: "Progress", bodyText: readableReviewCopy(progressSignal), symbol: "arrow.up.right.circle")
-                Divider().background(AppSurface.stroke.opacity(0.55))
-            }
-            if appModel.isPremium, review.goalFollowThrough.isEmpty == false {
-                InsightSectionView(title: "How goals went", bodyText: readableReviewCopy(review.goalFollowThrough), symbol: "flag.checkered")
-                Divider().background(AppSurface.stroke.opacity(0.55))
-            }
             if appModel.isPremium, let baselineComparison = review.baselineComparison, baselineComparison.isEmpty == false {
-                InsightSectionView(title: "Baseline comparison", bodyText: readableReviewCopy(baselineComparison), symbol: "chart.line.uptrend.xyaxis")
+                InsightSectionView(title: "Compared with your baseline", bodyText: readableReviewCopy(baselineComparison), symbol: "chart.line.uptrend.xyaxis")
+                Divider().background(AppSurface.stroke.opacity(0.55))
+            }
+            if appModel.isPremium, let primaryLoop = review.primaryLoop, primaryLoop.isEmpty == false {
+                InsightSectionView(title: "Main loop to watch", bodyText: readableReviewCopy(primaryLoop), symbol: "point.3.connected.trianglepath.dotted")
+                Divider().background(AppSurface.stroke.opacity(0.55))
+            }
+            if appModel.isPremium, review.risk.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                InsightSectionView(title: "Watch next", bodyText: readableReviewCopy(review.risk), symbol: InsightType.risk.symbol)
                 Divider().background(AppSurface.stroke.opacity(0.55))
             }
             if appModel.isPremium, review.healthPatterns.isEmpty == false {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Health patterns")
+                    Text("Health-aware signals")
                         .font(.subheadline.weight(.semibold))
                     ForEach(review.healthPatterns, id: \.self) { pattern in
                         HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -1538,13 +2304,13 @@ struct WeeklyReviewView: View {
                         Label("Premium preview", systemImage: "lock.fill")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
-                        Text("Pattern shifts week-to-week")
+                        Text("Goal progress over time")
                             .font(.subheadline.weight(.semibold))
                             .redacted(reason: .placeholder)
-                        Text("Goal follow-through summary")
+                        Text("What changed from your baseline")
                             .font(.subheadline.weight(.semibold))
                             .redacted(reason: .placeholder)
-                        Text("Unlock baseline comparison, deeper goal follow-through, and a richer weekly pattern report.")
+                        Text("Unlock completed-goal references, baseline comparison, and deeper weekly progress tracking.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Button("Unlock Premium") {
@@ -1676,6 +2442,7 @@ private struct AnalyticsView: View {
     private var monthlyReviewSection: some View {
         Group {
             if let review = appModel.currentMonthlyReview {
+                let completedGoals = appModel.completedGoalsLast(days: 31)
                 VStack(alignment: .leading, spacing: 8) {
                     SectionLabel(title: "Month in review")
                     ReferenceCard {
@@ -1688,9 +2455,18 @@ private struct AnalyticsView: View {
                                     .font(.caption.weight(.semibold))
                                     .foregroundStyle(.secondary)
                             }
-                            Text(review.strongestPattern)
-                                .font(.subheadline)
-                            if review.moodRange.isEmpty == false {
+                            if review.goalFollowThrough.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                                Text(review.goalFollowThrough)
+                                    .font(.subheadline)
+                            } else {
+                                Text(review.strongestPattern)
+                                    .font(.subheadline)
+                            }
+                            if let baselineComparison = review.baselineComparison, baselineComparison.isEmpty == false {
+                                Text(baselineComparison)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            } else if review.moodRange.isEmpty == false {
                                 Text(review.moodRange)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -1698,7 +2474,12 @@ private struct AnalyticsView: View {
                             Text(review.progress)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                            Text("Try next: \(review.nextExperiment)")
+                            if completedGoals.isEmpty == false {
+                                Text("Completed this month: \(completedGoals.prefix(3).map(\.title).joined(separator: ", "))")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Text("Next focus: \(review.nextExperiment)")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(AppTheme.accent)
                             if review.topThemes.isEmpty == false {

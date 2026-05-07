@@ -105,6 +105,16 @@ enum MoodLevel: String, CaseIterable, Identifiable, Codable {
         default: companionColor
         }
     }
+
+    var calmerCompanionMood: MoodLevel {
+        switch self {
+        case .terrible: .low
+        case .low: .okay
+        case .okay: .good
+        case .good: .great
+        case .great: .great
+        }
+    }
 }
 
 enum EntryType: String, CaseIterable, Identifiable, Codable {
@@ -303,6 +313,142 @@ struct CalmSound: Identifiable, Codable, Hashable {
     var subtitle: String
     var icon: String
     var duration: String
+}
+
+enum CalmPathway: String, CaseIterable, Identifiable, Codable, Hashable {
+    case slowDown
+    case clearHead
+    case sleepOffRamp
+    case workClosure
+    case bodyGrounding
+    case panicSettle
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .slowDown: "Slow down"
+        case .clearHead: "Clear your head"
+        case .sleepOffRamp: "Sleep off-ramp"
+        case .workClosure: "Work closure"
+        case .bodyGrounding: "Ground in your body"
+        case .panicSettle: "Panic settle"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .slowDown: "Steady your breathing and lower body tension."
+        case .clearHead: "Reduce loops and settle one crowded thought."
+        case .sleepOffRamp: "Make the evening quieter and easier to leave."
+        case .workClosure: "Close the work loop before it follows you home."
+        case .bodyGrounding: "Anchor attention in sensation when your head is too loud."
+        case .panicSettle: "Lower urgency fast when your body spikes."
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .slowDown: "wind"
+        case .clearHead: "sparkle.magnifyingglass"
+        case .sleepOffRamp: "moon.stars"
+        case .workClosure: "briefcase"
+        case .bodyGrounding: "figure.mind.and.body"
+        case .panicSettle: "bolt.heart"
+        }
+    }
+
+    var helperLine: String {
+        switch self {
+        case .slowDown: "Best when your body feels switched on."
+        case .clearHead: "Best when your head keeps circling the same thing."
+        case .sleepOffRamp: "Best when work or worry keeps following you into the evening."
+        case .workClosure: "Best when unfinished work keeps staying mentally open."
+        case .bodyGrounding: "Best when you need to get out of analysis and into sensation."
+        case .panicSettle: "Best when urgency spikes and you need a fast landing."
+        }
+    }
+
+    var shortLabel: String {
+        switch self {
+        case .slowDown: "Slow"
+        case .clearHead: "Head"
+        case .sleepOffRamp: "Sleep"
+        case .workClosure: "Close"
+        case .bodyGrounding: "Body"
+        case .panicSettle: "Panic"
+        }
+    }
+
+    var defaultMode: BreathingMode {
+        switch self {
+        case .slowDown: .box
+        case .clearHead: .reset
+        case .sleepOffRamp: .fourSevenEight
+        case .workClosure: .extendedExhale
+        case .bodyGrounding: .coherent
+        case .panicSettle: .physiologicalSigh
+        }
+    }
+
+    var targetDuration: TimeInterval {
+        switch self {
+        case .slowDown: 120
+        case .clearHead: 90
+        case .sleepOffRamp: 180
+        case .workClosure: 150
+        case .bodyGrounding: 240
+        case .panicSettle: 75
+        }
+    }
+
+    var durationLabel: String {
+        switch self {
+        case .slowDown: "2 min"
+        case .clearHead: "90 sec"
+        case .sleepOffRamp: "3 min"
+        case .workClosure: "2.5 min"
+        case .bodyGrounding: "4 min"
+        case .panicSettle: "75 sec"
+        }
+    }
+
+    var accentMood: MoodLevel {
+        switch self {
+        case .slowDown: .low
+        case .clearHead: .good
+        case .sleepOffRamp: .great
+        case .workClosure: .okay
+        case .bodyGrounding: .good
+        case .panicSettle: .low
+        }
+    }
+}
+
+enum CalmHelpfulness: String, CaseIterable, Codable, Hashable {
+    case notReally
+    case aBit
+    case yes
+
+    var label: String {
+        switch self {
+        case .notReally: "Not really"
+        case .aBit: "A bit"
+        case .yes: "Yes"
+        }
+    }
+}
+
+struct CalmSessionLog: Identifiable, Codable, Hashable {
+    let id: UUID
+    var pathway: CalmPathway
+    var breathingMode: String
+    var startedAt: Date
+    var endedAt: Date
+    var duration: TimeInterval
+    var startingMood: MoodLevel
+    var targetMood: MoodLevel
+    var helpfulness: CalmHelpfulness?
 }
 
 struct WeeklyReview: Identifiable, Codable, Hashable {

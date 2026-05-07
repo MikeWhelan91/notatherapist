@@ -4,6 +4,7 @@ const { handleEndpoint, readJSON, sendError, sendJSON } = require("../lib/api/re
 const {
   normalizeDate,
   normalizeEntries,
+  normalizeCalmSessions,
   normalizeGoals,
   normalizeHealthSummary,
   normalizeProfile
@@ -27,6 +28,7 @@ module.exports = (req, res) => handleEndpoint(req, res, ["POST"], async () => {
     profile: normalizeProfile(body.profile),
     healthSummary: normalizeHealthSummary(body.healthSummary),
     goals: normalizeGoals(body.goals),
+    calmSessions: normalizeCalmSessions(body.calmSessions),
     context: {
       onboardingFirstCheckIn: body?.context?.onboardingFirstCheckIn === true
     }

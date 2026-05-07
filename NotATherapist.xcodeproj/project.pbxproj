@@ -3,10 +3,11 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 63;
+	objectVersion = 77;
 	objects = {
 
 /* Begin PBXBuildFile section */
+		010B42FE00B85F65A4AD8DDE /* PaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA74C666F5C3740EA438289A /* PaywallView.swift */; };
 		05318CCA12581DD266B17D5B /* JournalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F48090E8FBC274AA5AC7FEF0 /* JournalView.swift */; };
 		08BC963723BD6C33707EAADF /* VoiceModelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67226F0879E563CCE13765F5 /* VoiceModelManager.swift */; };
 		15B56F4F277B74CA35082415 /* MockData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 688255F7CDA2BEFF17229452 /* MockData.swift */; };
@@ -17,8 +18,8 @@
 		2A04BF44AB8308AE1391EE17 /* AppRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CAF6C1F4D234A997D6EC891 /* AppRouter.swift */; };
 		2B9DC282FB0999E0BBE93305 /* HealthKitManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE282B22439564477927FDB4 /* HealthKitManager.swift */; };
 		317C03C49922F0EE8510B3E8 /* Confetti.json in Resources */ = {isa = PBXBuildFile; fileRef = D27EB05EFDA181C4DF39E859 /* Confetti.json */; };
+		39CD82B7039F645E1F88F3AA /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = F903D5A8FB55B78816E36500 /* GoogleService-Info.plist */; };
 		44DFAD53D5424FC9BF7AFE18 /* MessagesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 806DEB02C67230523F0AA151 /* MessagesView.swift */; };
-		45F2B1A64F4A4C01A20C9001 /* PaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45F2B1A54F4A4C01A20C9001 /* PaywallView.swift */; };
 		46F08413653AF2DED74578DD /* MockServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = C75BC9CA126A05BF22517BEC /* MockServices.swift */; };
 		490A0CA5BBB8AA1E75CD71FB /* AppViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 468F4E2B1C96DE08C27E8932 /* AppViewModel.swift */; };
 		4A88039FEB9C25179005E169 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECEEDCC536C1CF382A1A0BC1 /* OnboardingView.swift */; };
@@ -31,6 +32,8 @@
 		727BD42F3D031075B07B83A3 /* APIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A041E831CBDEEC99815BE259 /* APIService.swift */; };
 		77BE28E7E63CF8229DAE7C95 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DE6E81A3EC973E2AC9DF78C /* NotificationService.swift */; };
 		7F1ED5B7543E7316118E8B87 /* WidgetShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EC1FCDA511960C4285A6A2C /* WidgetShared.swift */; };
+		89942B43200ECB0921AE9967 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 60A0803C5A6F7EF07E07FA65 /* FirebaseAnalytics */; };
+		92354D99EF2A32736C052D6B /* AnalyticsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99CAC0A5179F1C4B90986B5A /* AnalyticsService.swift */; };
 		930A745C1E157C1E0D3CD7E3 /* CalmView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8623EAE818E0A35718FAD110 /* CalmView.swift */; };
 		9D19D981C15874DAFD3CE618 /* DailyReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B29BFF9D7AE483A323F3EFE /* DailyReviewView.swift */; };
 		9D660BFCC825AD50CAA06DA8 /* JournalHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A846E85A6F6C9E4BF0EF638 /* JournalHistoryView.swift */; };
@@ -38,10 +41,12 @@
 		ACE515FE6CBF1109C9C30ED4 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97B9AA6C3315067AAD058A50 /* Models.swift */; };
 		C15B7D62FC2F6B3EC607C6DB /* InsightsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B2A86DD82E5AEA38D2581EF /* InsightsView.swift */; };
 		C815FC984034D94CA3802209 /* Design.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3494D6D6C7904FF91E44735E /* Design.swift */; };
-		D41313FCDA191E6EC60DB406 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 0BD54767EF7D982052E949FB /* WhisperKit */; };
+		D41313FCDA191E6EC60DB406 /* DGCharts in Frameworks */ = {isa = PBXBuildFile; productRef = 36CD4743C1375DED7A540272 /* DGCharts */; };
 		E42919934258310CDD158F2F /* AnchorIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4C6510E00CEEBB62202EF75 /* AnchorIntents.swift */; };
 		E65FA178DA7CB5CA7E642D70 /* ConfettiView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 076262E4224D8B53EAB7F190 /* ConfettiView.swift */; };
 		EDD1A77B06A5BB2AF70237B9 /* WidgetShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EC1FCDA511960C4285A6A2C /* WidgetShared.swift */; };
+		F501BD90F33E8AF505502EDD /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = D0D6FABCEF4606F8E938C48C /* FirebaseCore */; };
+		F8FC57631CB8D1F91185F2F1 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 0BD54767EF7D982052E949FB /* WhisperKit */; };
 		FFE50A52DE54EB089845DF53 /* HealthConnectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB7F4C6E8831537A418BD44E /* HealthConnectView.swift */; };
 /* End PBXBuildFile section */
 
@@ -81,10 +86,10 @@
 		3494D6D6C7904FF91E44735E /* Design.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Design.swift; sourceTree = "<group>"; };
 		4526177357FDDD334C4B7A82 /* ICloudSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ICloudSyncService.swift; sourceTree = "<group>"; };
 		468F4E2B1C96DE08C27E8932 /* AppViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppViewModel.swift; sourceTree = "<group>"; };
-		47AFDDF38EB4DD7FDB8A2441 /* AnchorWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AnchorWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		47AFDDF38EB4DD7FDB8A2441 /* AnchorWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = AnchorWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		4B2A86DD82E5AEA38D2581EF /* InsightsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsightsView.swift; sourceTree = "<group>"; };
 		4EC1FCDA511960C4285A6A2C /* WidgetShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetShared.swift; sourceTree = "<group>"; };
-		59389A36ADA0EEE4C28117C9 /* Anchor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Anchor.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		59389A36ADA0EEE4C28117C9 /* NotATherapist.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = NotATherapist.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5A4B528419784EBC6ADC1296 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		67226F0879E563CCE13765F5 /* VoiceModelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceModelManager.swift; sourceTree = "<group>"; };
 		688255F7CDA2BEFF17229452 /* MockData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockData.swift; sourceTree = "<group>"; };
@@ -92,12 +97,13 @@
 		79D6D423A903CEE62D528BA1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		7AA44B6C9A3D9AE9B2ECEE80 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		806DEB02C67230523F0AA151 /* MessagesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagesView.swift; sourceTree = "<group>"; };
-		45F2B1A54F4A4C01A20C9001 /* PaywallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaywallView.swift; sourceTree = "<group>"; };
 		82855229C977B660683AA568 /* LocalAppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAppStore.swift; sourceTree = "<group>"; };
 		8623EAE818E0A35718FAD110 /* CalmView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalmView.swift; sourceTree = "<group>"; };
 		8B0B142BADCE1059B06422DD /* AppAttestService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAttestService.swift; sourceTree = "<group>"; };
 		97B9AA6C3315067AAD058A50 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		99CAC0A5179F1C4B90986B5A /* AnalyticsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsService.swift; sourceTree = "<group>"; };
 		A041E831CBDEEC99815BE259 /* APIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIService.swift; sourceTree = "<group>"; };
+		BA74C666F5C3740EA438289A /* PaywallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaywallView.swift; sourceTree = "<group>"; };
 		BE282B22439564477927FDB4 /* HealthKitManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitManager.swift; sourceTree = "<group>"; };
 		C75BC9CA126A05BF22517BEC /* MockServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockServices.swift; sourceTree = "<group>"; };
 		CF4164741B6CEEAF043F3B68 /* NotATherapistApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotATherapistApp.swift; sourceTree = "<group>"; };
@@ -107,6 +113,7 @@
 		F48090E8FBC274AA5AC7FEF0 /* JournalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JournalView.swift; sourceTree = "<group>"; };
 		F4C6510E00CEEBB62202EF75 /* AnchorIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnchorIntents.swift; sourceTree = "<group>"; };
 		F8A850C4E98B449C9F2599F1 /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
+		F903D5A8FB55B78816E36500 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -115,7 +122,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				5BBBC8A86BDEDDCD82B938BB /* Lottie in Frameworks */,
-				D41313FCDA191E6EC60DB406 /* WhisperKit in Frameworks */,
+				D41313FCDA191E6EC60DB406 /* DGCharts in Frameworks */,
+				F501BD90F33E8AF505502EDD /* FirebaseCore in Frameworks */,
+				89942B43200ECB0921AE9967 /* FirebaseAnalytics in Frameworks */,
+				F8FC57631CB8D1F91185F2F1 /* WhisperKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -136,7 +146,7 @@
 			isa = PBXGroup;
 			children = (
 				47AFDDF38EB4DD7FDB8A2441 /* AnchorWidgets.appex */,
-				59389A36ADA0EEE4C28117C9 /* Anchor.app */,
+				59389A36ADA0EEE4C28117C9 /* NotATherapist.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -162,6 +172,7 @@
 		E71753DD28C86F1F2D786E8E /* NotATherapist */ = {
 			isa = PBXGroup;
 			children = (
+				99CAC0A5179F1C4B90986B5A /* AnalyticsService.swift */,
 				F4C6510E00CEEBB62202EF75 /* AnchorIntents.swift */,
 				A041E831CBDEEC99815BE259 /* APIService.swift */,
 				8B0B142BADCE1059B06422DD /* AppAttestService.swift */,
@@ -174,6 +185,7 @@
 				076262E4224D8B53EAB7F190 /* ConfettiView.swift */,
 				1B29BFF9D7AE483A323F3EFE /* DailyReviewView.swift */,
 				3494D6D6C7904FF91E44735E /* Design.swift */,
+				F903D5A8FB55B78816E36500 /* GoogleService-Info.plist */,
 				DB7F4C6E8831537A418BD44E /* HealthConnectView.swift */,
 				BE282B22439564477927FDB4 /* HealthKitManager.swift */,
 				4526177357FDDD334C4B7A82 /* ICloudSyncService.swift */,
@@ -189,7 +201,7 @@
 				CF4164741B6CEEAF043F3B68 /* NotATherapistApp.swift */,
 				1DE6E81A3EC973E2AC9DF78C /* NotificationService.swift */,
 				ECEEDCC536C1CF382A1A0BC1 /* OnboardingView.swift */,
-				45F2B1A54F4A4C01A20C9001 /* PaywallView.swift */,
+				BA74C666F5C3740EA438289A /* PaywallView.swift */,
 				F8A850C4E98B449C9F2599F1 /* TodayView.swift */,
 				7951D921ECA3D863378BA5FB /* VoiceJournalRecorder.swift */,
 				67226F0879E563CCE13765F5 /* VoiceModelManager.swift */,
@@ -217,10 +229,13 @@
 			name = NotATherapist;
 			packageProductDependencies = (
 				972FA017E24658E48B6793EB /* Lottie */,
+				36CD4743C1375DED7A540272 /* DGCharts */,
+				D0D6FABCEF4606F8E938C48C /* FirebaseCore */,
+				60A0803C5A6F7EF07E07FA65 /* FirebaseAnalytics */,
 				0BD54767EF7D982052E949FB /* WhisperKit */,
 			);
 			productName = NotATherapist;
-			productReference = 59389A36ADA0EEE4C28117C9 /* Anchor.app */;
+			productReference = 59389A36ADA0EEE4C28117C9 /* NotATherapist.app */;
 			productType = "com.apple.product-type.application";
 		};
 		F56FFDA4BD80FCE34C0EF511 /* AnchorWidgets */ = {
@@ -261,8 +276,11 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				EF4DE0BE787974F1CC4B369A /* XCRemoteSwiftPackageReference "argmax-oss-swift" */,
+				97DCC91A29E11DC9D48120CF /* XCRemoteSwiftPackageReference "Charts" */,
+				A0167D5CDE1978F97CB16A6F /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 				BB9889830FA3B3E931CEFBB5 /* XCRemoteSwiftPackageReference "lottie-ios" */,
 			);
+			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -279,6 +297,7 @@
 			files = (
 				15D4B0EC2CAF818C19BA5636 /* Assets.xcassets in Resources */,
 				317C03C49922F0EE8510B3E8 /* Confetti.json in Resources */,
+				39CD82B7039F645E1F88F3AA /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -290,6 +309,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				727BD42F3D031075B07B83A3 /* APIService.swift in Sources */,
+				92354D99EF2A32736C052D6B /* AnalyticsService.swift in Sources */,
 				E42919934258310CDD158F2F /* AnchorIntents.swift in Sources */,
 				5CB4E1E98B52800A1060DCCC /* AppAttestService.swift in Sources */,
 				2A04BF44AB8308AE1391EE17 /* AppRouter.swift in Sources */,
@@ -313,7 +333,7 @@
 				185BB7FD01E8C2197A29F58D /* NotATherapistApp.swift in Sources */,
 				77BE28E7E63CF8229DAE7C95 /* NotificationService.swift in Sources */,
 				4A88039FEB9C25179005E169 /* OnboardingView.swift in Sources */,
-				45F2B1A64F4A4C01A20C9001 /* PaywallView.swift in Sources */,
+				010B42FE00B85F65A4AD8DDE /* PaywallView.swift in Sources */,
 				1EE768C413114529764E4D84 /* TodayView.swift in Sources */,
 				4AD903C2B8BA5C9BD432D316 /* VoiceJournalRecorder.swift in Sources */,
 				08BC963723BD6C33707EAADF /* VoiceModelManager.swift in Sources */,
@@ -412,9 +432,10 @@
 				CODE_SIGN_ENTITLEMENTS = NotATherapist/NotATherapist.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 5976U4WSJN;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Anchor;
+				INFOPLIST_KEY_FirebaseAppDelegateProxyEnabled = NO;
+				INFOPLIST_KEY_FirebaseAutomaticScreenReportingEnabled = NO;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Optional Apple Health access helps spot simple patterns between sleep, steps, mood, and journal entries.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Voice journaling uses the microphone only while you record an entry.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -426,6 +447,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = "$(inherited) -ObjC";
 				PRODUCT_BUNDLE_IDENTIFIER = com.mikewhelan.anchor;
 				PRODUCT_NAME = Anchor;
 				SDKROOT = iphoneos;
@@ -439,7 +461,6 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = AnchorWidgets/AnchorWidgets.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 5976U4WSJN;
 				INFOPLIST_FILE = AnchorWidgets/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -462,7 +483,6 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = AnchorWidgets/AnchorWidgets.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 5976U4WSJN;
 				INFOPLIST_FILE = AnchorWidgets/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -487,9 +507,10 @@
 				CODE_SIGN_ENTITLEMENTS = NotATherapist/NotATherapist.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 5976U4WSJN;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Anchor;
+				INFOPLIST_KEY_FirebaseAppDelegateProxyEnabled = NO;
+				INFOPLIST_KEY_FirebaseAutomaticScreenReportingEnabled = NO;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Optional Apple Health access helps spot simple patterns between sleep, steps, mood, and journal entries.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Voice journaling uses the microphone only while you record an entry.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -501,6 +522,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = "$(inherited) -ObjC";
 				PRODUCT_BUNDLE_IDENTIFIER = com.mikewhelan.anchor;
 				PRODUCT_NAME = Anchor;
 				SDKROOT = iphoneos;
@@ -597,6 +619,22 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		97DCC91A29E11DC9D48120CF /* XCRemoteSwiftPackageReference "Charts" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ChartsOrg/Charts";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.1.0;
+			};
+		};
+		A0167D5CDE1978F97CB16A6F /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 11.15.0;
+			};
+		};
 		BB9889830FA3B3E931CEFBB5 /* XCRemoteSwiftPackageReference "lottie-ios" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/airbnb/lottie-ios";
@@ -621,10 +659,25 @@
 			package = EF4DE0BE787974F1CC4B369A /* XCRemoteSwiftPackageReference "argmax-oss-swift" */;
 			productName = WhisperKit;
 		};
+		36CD4743C1375DED7A540272 /* DGCharts */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 97DCC91A29E11DC9D48120CF /* XCRemoteSwiftPackageReference "Charts" */;
+			productName = DGCharts;
+		};
+		60A0803C5A6F7EF07E07FA65 /* FirebaseAnalytics */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A0167D5CDE1978F97CB16A6F /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAnalytics;
+		};
 		972FA017E24658E48B6793EB /* Lottie */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = BB9889830FA3B3E931CEFBB5 /* XCRemoteSwiftPackageReference "lottie-ios" */;
 			productName = Lottie;
+		};
+		D0D6FABCEF4606F8E938C48C /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A0167D5CDE1978F97CB16A6F /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

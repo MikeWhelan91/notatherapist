@@ -652,9 +652,9 @@ struct TodayView: View {
     private var nextStepsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                SectionLabel(title: "Goals")
+                SectionLabel(title: "Goal focus")
                 Spacer()
-                Text(appModel.longTermGoalTitle)
+                Text(selectedGoalScopeTitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -668,8 +668,40 @@ struct TodayView: View {
             .pickerStyle(.segmented)
 
             ReferenceCard {
-                goalsTabContent
+                VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(selectedGoalScopeTitle)
+                            .font(.subheadline.weight(.semibold))
+                        Text(selectedGoalScopeDetail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    goalsTabContent
+                }
             }
+        }
+    }
+
+    private var selectedGoalScopeTitle: String {
+        switch selectedGoalScope {
+        case .daily:
+            "Daily next steps"
+        case .weekly:
+            "Weekly focus"
+        case .monthly:
+            "Monthly focus"
+        }
+    }
+
+    private var selectedGoalScopeDetail: String {
+        switch selectedGoalScope {
+        case .daily:
+            return "Small actions you can finish today."
+        case .weekly:
+            return "The one focus this week is built around."
+        case .monthly:
+            return "The broader direction this month is working toward."
         }
     }
 
@@ -972,6 +1004,16 @@ private struct ReflectionGoalRow: View {
                         .foregroundStyle(.primary)
 
                     VStack(alignment: .leading, spacing: 3) {
+                        Text(goalCadenceTitle)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(AppSurface.fill, in: Capsule())
+                            .overlay {
+                                Capsule()
+                                    .stroke(AppSurface.stroke, lineWidth: 0.5)
+                            }
                         Text(goal.title)
                             .font(.subheadline.weight(.semibold))
                             .strikethrough(goal.status == .completed)
@@ -999,11 +1041,23 @@ private struct ReflectionGoalRow: View {
         }
         .padding(.vertical, 9)
     }
+
+    private var goalCadenceTitle: String {
+        switch goal.cadence ?? .daily {
+        case .daily:
+            "Daily"
+        case .weekly:
+            "Weekly"
+        case .monthly:
+            "Monthly"
+        }
+    }
 }
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var appModel: AppViewModel
+    @EnvironmentObject private var router: AppRouter
     @EnvironmentObject private var healthKitManager: HealthKitManager
     @EnvironmentObject private var notificationService: NotificationService
     @StateObject private var voiceModelManager = VoiceModelManager.shared
@@ -1117,13 +1171,13 @@ struct SettingsView: View {
 
                     LabeledContent("Status", value: appModel.iCloudSyncState.label)
 
-                    Text("Uses your Apple Account and the app's private iCloud database. No app account is created.")
+                    Text("Uses your Apple Account and the app's private iCloud database for journal data only. Health data stays on this device. No app account is created.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
                 Section("Privacy") {
-                    Text("Your journal is stored on this device. Reviews are sent only when you ask for one.")
+                    Text("Your journal stays on this device unless you turn on iCloud sync. Health data stays on-device. Reviews are sent only when you ask for one.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
@@ -1131,8 +1185,14 @@ struct SettingsView: View {
                         exportURL = appModel.exportLocalData()
                     }
 
-                    Button("Export wellbeing report") {
-                        exportURL = appModel.exportTherapistReport()
+                    if appModel.isPremium {
+                        Button("Export wellbeing report") {
+                            exportURL = appModel.exportTherapistReport()
+                        }
+                    } else {
+                        Button("Unlock wellbeing report export") {
+                            router.presentPaywall(.settings)
+                        }
                     }
 
                     if let exportURL {
@@ -1301,6 +1361,7 @@ private struct ProfileSettingsPage: View {
 private struct PlanSettingsPage: View {
     @EnvironmentObject private var appModel: AppViewModel
     @EnvironmentObject private var router: AppRouter
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         List {
@@ -1310,6 +1371,9 @@ private struct PlanSettingsPage: View {
         .tint(.green)
         .navigationTitle("Plan")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            await appModel.prepareSubscriptions()
+        }
     }
 
     private var planStatusSection: some View {
@@ -1318,21 +1382,37 @@ private struct PlanSettingsPage: View {
             LabeledContent("Billing", value: billingLabel)
 
             Button(appModel.isPremium ? "Manage premium" : "See premium plans") {
-                router.presentPaywall(.settings)
+                if appModel.isPremium, let url = appModel.manageSubscriptionsURL {
+                    openURL(url)
+                } else {
+                    router.presentPaywall(.settings)
+                }
             }
+
+            Button(appModel.restoreInFlight ? "Restoring purchase..." : "Restore purchases") {
+                Task {
+                    await appModel.restorePurchases()
+                }
+            }
+            .disabled(appModel.restoreInFlight)
         } header: {
             Text("Subscription")
         } footer: {
-            Text("StoreKit products are placeholders for now. This screen is already wired to the app's Premium state.")
+            if let message = appModel.subscriptionErrorMessage, message.isEmpty == false {
+                Text(message)
+            } else {
+                Text("Subscriptions are managed through the App Store. Restores refresh your current entitlement on this device.")
+            }
         }
     }
 
     private var planDetailsSection: some View {
         Section("Included in Premium") {
-            planRow("Deep daily AI review", "Free daily review stays local. Premium adds one deeper AI review per day.")
-            planRow("Expanded weekly AI report", "Weekly AI review is included for everyone. Premium adds baseline comparison, richer goal follow-through, and more context.")
-            planRow("Monthly review", "A 4-week review plus monthly AI conversation.")
-            planRow("Health-aware patterns", "Sleep and step trends folded into the review when helpful.")
+            planRow("Deeper AI daily review", "One stronger AI read per day with better evidence and a clearer next step.")
+            planRow("Expanded weekly AI report", "See what changed, what got completed, and whether you moved toward your goal.")
+            planRow("Monthly review and conversation", "A wider 4-week pattern read with a deeper follow-up conversation.")
+            planRow("Health-aware patterns", "Sleep and step trends folded in when they actually help explain the pattern.")
+            planRow("Structured wellbeing report export", "Share a cleaner summary of entries, reviews, goals, and recurring signals.")
         }
     }
 

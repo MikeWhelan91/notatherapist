@@ -516,6 +516,17 @@ struct OpenJournalIntent: AppIntent {
     }
 }
 
+struct StartCalmIntent: AppIntent {
+    static var title: LocalizedStringResource = "Start Calm Session"
+    static var description = IntentDescription("Open Anchor directly into a guided calm reset.")
+    static var openAppWhenRun: Bool = true
+
+    func perform() async throws -> some IntentResult {
+        AppCommandStore().set(.startCalmSession)
+        return .result()
+    }
+}
+
 struct AnchorWidget: Widget {
     let kind = "AnchorWidget"
 
@@ -540,6 +551,20 @@ struct AnchorAffirmationWidget: Widget {
         .configurationDisplayName("Affirmation of the Day")
         .description("A single affirmation card.")
         .supportedFamilies([.systemMedium])
+        .contentMarginsDisabled()
+    }
+}
+
+struct AnchorCalmWidget: Widget {
+    let kind = "AnchorCalmWidget"
+
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: AnchorWidgetProvider()) { entry in
+            AnchorCalmEntryView(entry: entry)
+        }
+        .configurationDisplayName("Calm Reset")
+        .description("Open Anchor and start a guided reset in one tap.")
+        .supportedFamilies([.systemSmall])
         .contentMarginsDisabled()
     }
 }
@@ -578,10 +603,112 @@ private struct AnchorAffirmationEntryView: View {
     }
 }
 
+private struct AnchorCalmEntryView: View {
+    let entry: AnchorWidgetEntry
+
+    var body: some View {
+        Button(intent: StartCalmIntent()) {
+            GeometryReader { geo in
+                let size = geo.size
+                VStack(spacing: max(10, size.height * 0.06)) {
+                    Spacer(minLength: 0)
+
+                    ZStack {
+                        Circle()
+                            .fill(calmTint.opacity(0.1))
+                            .frame(width: size.width * 0.42, height: size.width * 0.42)
+                            .blur(radius: 12)
+                        Circle()
+                            .stroke(.white.opacity(0.92), lineWidth: 7)
+                            .frame(width: size.width * 0.34, height: size.width * 0.34)
+                        Circle()
+                            .stroke(calmTint.opacity(0.55), lineWidth: 2.5)
+                            .frame(width: size.width * 0.25, height: size.width * 0.25)
+                        HStack(spacing: size.width * 0.045) {
+                            Capsule()
+                                .fill(.white)
+                                .frame(width: size.width * 0.038, height: size.width * 0.08)
+                            Capsule()
+                                .fill(.white)
+                                .frame(width: size.width * 0.038, height: size.width * 0.08)
+                        }
+                    }
+
+                    VStack(spacing: 5) {
+                        Text("Start a reset")
+                            .font(.system(size: min(size.width * 0.11, 19), weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                        Text(calmSubtitle)
+                            .font(.system(size: min(size.width * 0.067, 12.5), weight: .medium))
+                            .foregroundStyle(.white.opacity(0.66))
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.85)
+                    }
+
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.horizontal, size.width * 0.09)
+                .background(
+                    LinearGradient(
+                        colors: [Color.black, Color(red: 0.11, green: 0.11, blue: 0.14)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var calmTint: Color {
+        switch entry.payload.latestMood.lowercased() {
+        case "terrible":
+            return calmMoodColor(for: "low")
+        case "low":
+            return calmMoodColor(for: "okay")
+        case "good":
+            return calmMoodColor(for: "great")
+        case "great":
+            return calmMoodColor(for: "great")
+        default:
+            return calmMoodColor(for: "good")
+        }
+    }
+
+    private var calmSubtitle: String {
+        let context = entry.payload.issueContext.lowercased()
+        if context.contains("sleep") || context.contains("rest") {
+            return "Wind down and leave the day"
+        }
+        if context.contains("work") || context.contains("stress") {
+            return "Close the loop and settle"
+        }
+        return "Breathe first, then keep going"
+    }
+
+    private func calmMoodColor(for mood: String) -> Color {
+        switch mood.lowercased() {
+        case "terrible":
+            return Color(red: 0.78, green: 0.44, blue: 0.41)
+        case "low":
+            return Color(red: 0.86, green: 0.66, blue: 0.38)
+        case "good":
+            return Color(red: 0.37, green: 0.60, blue: 0.93)
+        case "great":
+            return Color(red: 0.48, green: 0.78, blue: 0.61)
+        default:
+            return Color(red: 0.41, green: 0.74, blue: 0.73)
+        }
+    }
+}
+
 @main
 struct AnchorWidgetsBundle: WidgetBundle {
     var body: some Widget {
         AnchorWidget()
         AnchorAffirmationWidget()
+        AnchorCalmWidget()
     }
 }

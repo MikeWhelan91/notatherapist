@@ -189,6 +189,7 @@ enum AnchorAppCommand: String, Codable {
     case newQuickThought
     case runDailyReview
     case startWeeklyCheckIn
+    case startCalmSession
     case nextAffirmation
 }
 
